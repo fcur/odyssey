@@ -3,7 +3,6 @@ using FluentAssertions.Execution;
 
 namespace Calendar.Tests;
 
-
 public class UnitTest1
 {
     [Fact]
@@ -35,7 +34,7 @@ public class UnitTest1
         };
 
         var atTime = DateTimeOffset.Parse("2024-12-05");
-        
+
         var engine = Engine.Create(actor, timeOffRequests);
 
         var timeOff = engine.CalculateTimeOff(atTime);
@@ -44,6 +43,5 @@ public class UnitTest1
         timeOff.PaidTimeOff.Duration.Days.Should().BeGreaterThan(0);
         timeOff.UnPaidTimeOff.Duration.Days.Should().Be(0);
         timeOff.FamilyTimeOff.Duration.Days.Should().Be(0);
-
     }
 }
