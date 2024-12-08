@@ -8,6 +8,10 @@ public sealed class Actor
     public StartDate StartDate { get; init; }
     public TimeOffSettings TimeOffSettings { get; init; }
 
+    private static readonly TimeSpan LeapYear = TimeSpan.FromDays(366);
+    private static readonly TimeSpan RegularYear = TimeSpan.FromDays(365);
+
+
     public static Actor Crete(User user, StartDate startDate, TimeOffSettings timeOffSettings)
     {
         return new Actor
@@ -16,6 +20,42 @@ public sealed class Actor
             StartDate = startDate,
             TimeOffSettings = timeOffSettings
         };
+    }
+
+    public IReadOnlyCollection<ITimeOffAdditionEvent> GetTimeOffAdditionEvents(DateTimeOffset atTime)
+    {
+        var timeOffAdditionEvents = new List<ITimeOffAdditionEvent>();
+
+        var nextMonth = StartDate.Date.AddMonths(1);
+        var time = new DateTimeOffset(nextMonth.Year, nextMonth.Month, 1, 0, 0, 0, StartDate.Date.Offset);
+
+        if (time > atTime)
+        {
+            time = atTime;
+        }
+
+        var checkpoints = new List<DateTimeOffset> { StartDate.Date };
+
+        while (time < atTime)
+        {
+            checkpoints.Add(time);
+            time = time.AddMonths(1);
+        }
+
+        checkpoints.Add(atTime);
+
+        for (int i = 0, j = 1; j < checkpoints.Count; i++, j++)
+        {
+            var duration = checkpoints[j] - checkpoints[i];
+            double ticksInYear = DateTime.IsLeapYear(checkpoints[i].Year) ? LeapYear.Ticks : RegularYear.Ticks;
+
+            var timeOffTicks = double.Round(duration.Ticks / ticksInYear, 10) *
+                               TimeOffSettings.PaidTimeOffDuration.Duration.Ticks;
+
+            timeOffAdditionEvents.Add(PaidTimeOffAdditionEvent.Create(new TimeSpan((long)timeOffTicks)));
+        }
+
+        return timeOffAdditionEvents.ToArray();
     }
 }
 
@@ -51,7 +91,16 @@ public sealed record TimeOffSettings(
     }
 }
 
-public sealed record PaidTimeOffDuration(TimeSpan Duration); // For PTO request
+// For PTO request
+public sealed record PaidTimeOffDuration(TimeSpan Duration)
+{
+    // public static PaidTimeOffDuration Create(TimeSpan duration)
+    // {
+    //     // var step = float.Round(duration.Days / 365.0F, 3);
+    //     
+    //     return new PaidTimeOffDuration(duration, step);
+    // }        
+}
 
 public sealed record UnPaidTimeOffDuration(TimeSpan Duration);
 

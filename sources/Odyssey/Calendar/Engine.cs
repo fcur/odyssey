@@ -2,11 +2,13 @@ using System.Runtime.InteropServices.JavaScript;
 
 namespace Calendar;
 
-public sealed class Engine(Actor actor, IReadOnlyCollection<ITimeOffRequest> TimeOffRequests)
+public sealed class Engine(Actor actor,IReadOnlyCollection<ITimeOffAdditionEvent> timeOffAdditionEvents, IReadOnlyCollection<ITimeOffRequest> TimeOffRequests)
 {
-    public static Engine Create(Actor actor, IReadOnlyCollection<ITimeOffRequest> timeOffRequests)
+    public static Engine Create(Actor actor, 
+        IReadOnlyCollection<ITimeOffAdditionEvent> timeOffAdditionEvents,
+        IReadOnlyCollection<ITimeOffRequest> timeOffRequests)
     {
-        return new Engine(actor, timeOffRequests);
+        return new Engine(actor,timeOffAdditionEvents, timeOffRequests);
     }
 
     public TimeOffResult CalculateTimeOff(DateTimeOffset atTime)
@@ -21,39 +23,39 @@ public sealed class Engine(Actor actor, IReadOnlyCollection<ITimeOffRequest> Tim
 public sealed record PaidTimeOffRequest(
     TimeOffRequestSettings TimeOffSettings,
     DateTimeOffset CreatedAt,
-    TimeOffRequestType RequestType) : ITimeOffRequest
+    TimeOffType Type) : ITimeOffRequest
 {
     public static ITimeOffRequest Create(TimeOffRequestSettings timeOffSettings, DateTimeOffset createdAt)
     {
-        var requestType = new TimeOffRequestType(nameof(PaidTimeOffRequest));
+        return new PaidTimeOffRequest(timeOffSettings, createdAt, TimeOffType.Paid);
+    }
 
-        return new PaidTimeOffRequest(timeOffSettings, createdAt, requestType);
+    public static ITimeOffRequest Create(TimeOffRequestSettings timeOffSettings)
+    {
+        var createdAt = timeOffSettings.StartAt.AddDays(-1);
+        return Create(timeOffSettings, createdAt);
     }
 }
 
 public sealed record UnPaidTimeOffRequest(
     TimeOffRequestSettings TimeOffSettings,
     DateTimeOffset CreatedAt,
-    TimeOffRequestType RequestType) : ITimeOffRequest
+    TimeOffType Type) : ITimeOffRequest
 {
     public static ITimeOffRequest Create(TimeOffRequestSettings timeOffSettings, DateTimeOffset createdAt)
     {
-        var requestType = new TimeOffRequestType(nameof(UnPaidTimeOffRequest));
-
-        return new UnPaidTimeOffRequest(timeOffSettings, createdAt, requestType);
+        return new UnPaidTimeOffRequest(timeOffSettings, createdAt, TimeOffType.UnPaid);
     }
 }
 
 public sealed record FamilyTimeOffRequest(
     TimeOffRequestSettings TimeOffSettings,
     DateTimeOffset CreatedAt,
-    TimeOffRequestType RequestType) : ITimeOffRequest
+    TimeOffType Type) : ITimeOffRequest
 {
     public static ITimeOffRequest Create(TimeOffRequestSettings timeOffSettings, DateTimeOffset createdAt)
     {
-        var requestType = new TimeOffRequestType(nameof(FamilyTimeOffRequest));
-
-        return new FamilyTimeOffRequest(timeOffSettings, createdAt, requestType);
+        return new FamilyTimeOffRequest(timeOffSettings, createdAt, TimeOffType.Family);
     }
 }
 
@@ -61,10 +63,15 @@ public interface ITimeOffRequest
 {
     TimeOffRequestSettings TimeOffSettings { get; }
     DateTimeOffset CreatedAt { get; }
-    TimeOffRequestType RequestType { get; }
+    TimeOffType Type { get; }
 }
 
-public record struct TimeOffRequestType(string RequestType);
+public readonly record struct TimeOffType(string TypeName)
+{
+    public static TimeOffType Paid => new TimeOffType(nameof(Paid));
+    public static TimeOffType UnPaid => new TimeOffType(nameof(UnPaid));
+    public static TimeOffType Family => new TimeOffType(nameof(Family));
+}
 
 public record struct TimeOffRequestSettings(DateTimeOffset StartAt, TimeSpan Duration);
 
@@ -72,3 +79,33 @@ public record struct TimeOffResult(
     PaidTimeOffDuration PaidTimeOff,
     UnPaidTimeOffDuration UnPaidTimeOff,
     FamilyTimeOffDuration FamilyTimeOff);
+
+public interface ITimeOffAdditionEvent
+{
+    TimeSpan Duration { get; }
+    TimeOffType Type { get; }
+}
+
+public sealed record PaidTimeOffAdditionEvent(TimeSpan Duration, TimeOffType Type) : ITimeOffAdditionEvent
+{
+    public static ITimeOffAdditionEvent Create(TimeSpan duration)
+    {
+        return new PaidTimeOffAdditionEvent(duration, TimeOffType.Paid);
+    }
+}
+
+public sealed record UnPaidTimeOffAdditionEvent(TimeSpan Duration, TimeOffType Type) : ITimeOffAdditionEvent
+{
+    public static ITimeOffAdditionEvent Create(TimeSpan duration)
+    {
+        return new UnPaidTimeOffAdditionEvent(duration, TimeOffType.UnPaid);
+    }
+}
+
+public sealed record FamilyTimeOffAdditionEvent(TimeSpan Duration, TimeOffType Type) : ITimeOffAdditionEvent
+{
+    public static ITimeOffAdditionEvent Create(TimeSpan duration)
+    {
+        return new FamilyTimeOffAdditionEvent(duration, TimeOffType.Family);
+    }
+}
