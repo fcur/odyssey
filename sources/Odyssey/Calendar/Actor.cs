@@ -1,5 +1,3 @@
-using System.Dynamic;
-
 namespace Calendar;
 
 public sealed class Actor
@@ -43,16 +41,20 @@ public sealed class Actor
         }
 
         checkpoints.Add(atTime);
-
+        
         for (int i = 0, j = 1; j < checkpoints.Count; i++, j++)
         {
-            var duration = checkpoints[j] - checkpoints[i];
-            double ticksInYear = DateTime.IsLeapYear(checkpoints[i].Year) ? LeapYear.Ticks : RegularYear.Ticks;
+            var periodStart = checkpoints[i];
+            var periodEnd = checkpoints[j];
+
+            var duration = periodEnd - periodStart;
+            double ticksInYear = DateTime.IsLeapYear(periodStart.Year) ? LeapYear.Ticks : RegularYear.Ticks;
 
             var timeOffTicks = double.Round(duration.Ticks / ticksInYear, 10) *
                                TimeOffSettings.PaidTimeOffDuration.Duration.Ticks;
 
-            timeOffAdditionEvents.Add(PaidTimeOffAdditionEvent.Create(new TimeSpan((long)timeOffTicks)));
+            var periodTimeOffDuration = new TimeSpan((long)timeOffTicks);
+            timeOffAdditionEvents.Add(PaidTimeOffAdditionEvent.Create(periodTimeOffDuration));
         }
 
         return timeOffAdditionEvents.ToArray();

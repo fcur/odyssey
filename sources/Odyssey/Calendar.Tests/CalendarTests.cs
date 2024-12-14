@@ -1,18 +1,21 @@
-﻿using FluentAssertions;
+﻿using System.Diagnostics.CodeAnalysis;
+using AutoFixture.Xunit2;
+using FluentAssertions;
 using FluentAssertions.Execution;
 
 namespace Calendar.Tests;
 
-public class UnitTest1
+[ExcludeFromCodeCoverage ]
+public sealed class CalendarTests
 {
     [Fact]
-    public void Test1()
+    public void InitialManualTest()
     {
         var userName = new UserName("John", "Fitzgerald", "Kennedy");
-        var startDate = new StartDate(DateTimeOffset.Parse("2023-02-13"));
         var email = new Email("foo@bar.com");
         var user = User.Create(userName, email);
         var timeOffSettings = TimeOffSettings.CreateDefault();
+        var startDate = new StartDate(DateTimeOffset.Parse("2023-02-13"));
 
         var actor = Actor.Crete(user, startDate, timeOffSettings);
 
@@ -41,5 +44,13 @@ public class UnitTest1
         timeOff.PaidTimeOff.Duration.Days.Should().BeGreaterThan(0);
         timeOff.UnPaidTimeOff.Duration.Days.Should().Be(0);
         timeOff.FamilyTimeOff.Duration.Days.Should().Be(0);
+    }
+    
+    [Theory, AutoData]
+    public void UserAutoDataTest(User user)
+    {
+        using var scope = new AssertionScope();
+        user.UserName.Name.Should().NotBeEmpty();
+        user.Email.Value.Should().NotBeNullOrEmpty();
     }
 }

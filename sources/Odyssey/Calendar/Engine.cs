@@ -1,19 +1,29 @@
-using System.Runtime.InteropServices.JavaScript;
-
 namespace Calendar;
 
-public sealed class Engine(Actor actor,IReadOnlyCollection<ITimeOffAdditionEvent> timeOffAdditionEvents, IReadOnlyCollection<ITimeOffRequest> TimeOffRequests)
+public sealed record Engine(
+    Actor Actor,
+    IReadOnlyCollection<ITimeOffAdditionEvent> TimeOffAdditionEvents,
+    IReadOnlyCollection<ITimeOffRequest> TimeOffRequests)
 {
-    public static Engine Create(Actor actor, 
+    public static Engine Create(Actor actor,
         IReadOnlyCollection<ITimeOffAdditionEvent> timeOffAdditionEvents,
         IReadOnlyCollection<ITimeOffRequest> timeOffRequests)
     {
-        return new Engine(actor,timeOffAdditionEvents, timeOffRequests);
+        return new Engine(actor, timeOffAdditionEvents, timeOffRequests);
     }
 
     public TimeOffResult CalculateTimeOff(DateTimeOffset atTime)
     {
-        var paidTimeOff = new PaidTimeOffDuration(TimeSpan.Zero);
+        var paidTimeOffDuration = TimeOffAdditionEvents.Aggregate(TimeSpan.Zero,
+            (current, timeOffAdditionEvent) => current.Add(timeOffAdditionEvent.Duration));
+
+        var requestedPaidTimeOffDuration = TimeOffRequests.Where(v => v.Type == TimeOffType.Paid)
+            .ToArray().Aggregate(TimeSpan.Zero,
+                (current, timeOffRequest) => current.Add(timeOffRequest.TimeOffSettings.Duration));
+
+        var availablePaidTimeOffDuration = paidTimeOffDuration.Subtract(requestedPaidTimeOffDuration);
+
+        var paidTimeOff = new PaidTimeOffDuration(availablePaidTimeOffDuration);
         var unPaidTimeOff = new UnPaidTimeOffDuration(TimeSpan.Zero);
         var familyTimeOff = new FamilyTimeOffDuration(TimeSpan.Zero);
         return new TimeOffResult(paidTimeOff, unPaidTimeOff, familyTimeOff);
