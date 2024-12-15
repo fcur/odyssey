@@ -8,7 +8,7 @@ public sealed class Actor
 
     private static readonly TimeSpan LeapYear = TimeSpan.FromDays(366);
     private static readonly TimeSpan RegularYear = TimeSpan.FromDays(365);
-
+    private static readonly TimeSpan RoundingInterval = TimeSpan.FromSeconds(1);
 
     public static Actor Crete(User user, StartDate startDate, TimeOffSettings timeOffSettings)
     {
@@ -41,7 +41,7 @@ public sealed class Actor
         }
 
         checkpoints.Add(atTime);
-        
+
         for (int i = 0, j = 1; j < checkpoints.Count; i++, j++)
         {
             var periodStart = checkpoints[i];
@@ -50,10 +50,11 @@ public sealed class Actor
             var duration = periodEnd - periodStart;
             double ticksInYear = DateTime.IsLeapYear(periodStart.Year) ? LeapYear.Ticks : RegularYear.Ticks;
 
-            var timeOffTicks = double.Round(duration.Ticks / ticksInYear, 10) *
+            var timeOffTicks = duration.Ticks / ticksInYear *
                                TimeOffSettings.PaidTimeOffDuration.Duration.Ticks;
+            var roundedTicks = Math.Round(timeOffTicks/RoundingInterval.Ticks) * RoundingInterval.Ticks;
 
-            var periodTimeOffDuration = new TimeSpan((long)timeOffTicks);
+            var periodTimeOffDuration = new TimeSpan((long)roundedTicks);
             timeOffAdditionEvents.Add(PaidTimeOffAdditionEvent.Create(periodTimeOffDuration));
         }
 
@@ -90,6 +91,25 @@ public sealed record TimeOffSettings(
         var familyTimeOffDuration = new FamilyTimeOffDuration(TimeSpan.Zero);
 
         return new TimeOffSettings(paidTimeOffDuration, unPaidTimeOffDuration, familyTimeOffDuration);
+    }
+
+    public static TimeOffSettings Create(
+        PaidTimeOffDuration paidTimeOffDuration,
+        UnPaidTimeOffDuration unPaidTimeOffDuration,
+        FamilyTimeOffDuration familyTimeOffDuration)
+    {
+        return new TimeOffSettings(paidTimeOffDuration, unPaidTimeOffDuration, familyTimeOffDuration);
+    }
+
+    public static TimeOffSettings Create(
+        TimeSpan? paidTimeOffDuration = default,
+        TimeSpan? unPaidTimeOffDuration = default,
+        TimeSpan? familyTimeOffDuration = default)
+    {
+        return Create(
+            new PaidTimeOffDuration(paidTimeOffDuration ?? TimeSpan.Zero),
+            new UnPaidTimeOffDuration(unPaidTimeOffDuration ?? TimeSpan.Zero),
+            new FamilyTimeOffDuration(familyTimeOffDuration ?? TimeSpan.Zero));
     }
 }
 

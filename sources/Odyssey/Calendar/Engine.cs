@@ -12,14 +12,23 @@ public sealed record Engine(
         return new Engine(actor, timeOffAdditionEvents, timeOffRequests);
     }
 
+    public static TimeSpan CalculateDuration(IReadOnlyCollection<ITimeOffAdditionEvent> timeOffAdditionEvents)
+    {
+        return timeOffAdditionEvents.Aggregate(TimeSpan.Zero,
+            (current, timeOffAdditionEvent) => current.Add(timeOffAdditionEvent.Duration));
+    }
+
+    public static TimeSpan CalculateDuration(IReadOnlyCollection<ITimeOffRequest> timeOffRequests)
+    {
+        return timeOffRequests.Aggregate(TimeSpan.Zero,
+            (current, timeOffRequest) => current.Add(timeOffRequest.TimeOffSettings.Duration));
+    }
+
     public TimeOffResult CalculateTimeOff(DateTimeOffset atTime)
     {
-        var paidTimeOffDuration = TimeOffAdditionEvents.Aggregate(TimeSpan.Zero,
-            (current, timeOffAdditionEvent) => current.Add(timeOffAdditionEvent.Duration));
-
-        var requestedPaidTimeOffDuration = TimeOffRequests.Where(v => v.Type == TimeOffType.Paid)
-            .ToArray().Aggregate(TimeSpan.Zero,
-                (current, timeOffRequest) => current.Add(timeOffRequest.TimeOffSettings.Duration));
+        var paidTimeOffDuration = CalculateDuration(TimeOffAdditionEvents);
+        var requestedPaidTimeOffDuration =
+            CalculateDuration(TimeOffRequests.Where(v => v.Type == TimeOffType.Paid).ToArray());
 
         var availablePaidTimeOffDuration = paidTimeOffDuration.Subtract(requestedPaidTimeOffDuration);
 

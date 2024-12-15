@@ -2,14 +2,62 @@
 using AutoFixture.Xunit2;
 using FluentAssertions;
 using FluentAssertions.Execution;
+using Xunit.Sdk;
 
 namespace Calendar.Tests;
 
-[ExcludeFromCodeCoverage ]
+[ExcludeFromCodeCoverage]
 public sealed class CalendarTests
 {
+    [Theory, AutoData]
+    public void UserAutoDataTest(User user)
+    {
+        using var scope = new AssertionScope();
+        user.UserName.Name.Should().NotBeEmpty();
+        user.Email.Value.Should().NotBeNullOrEmpty();
+    }
+
+    [Theory]
+    [InlineAutoData("2023-01-01", "20.00:00:00")]
+    [InlineAutoData("2024-01-01", "20.00:00:00")]
+    public void YearlyPaidTimeOffTest(string dateFromData, string timeOffDurationData, User user)
+    {
+        var paidTimeOffDuration = TimeSpan.Parse(timeOffDurationData);
+        var timeOffSettings = TimeOffSettings.Create(paidTimeOffDuration);
+        var startDate = new StartDate(DateTimeOffset.Parse(dateFromData));
+        var actor = Actor.Crete(user, startDate, timeOffSettings);
+        var atTime = startDate.Date.AddYears(1);
+        
+        var timeOffAdditionEvents = actor.GetTimeOffAdditionEvents(atTime);
+        var paidTimeOffDurationResult = Engine.CalculateDuration(timeOffAdditionEvents);
+            
+        using var scope = new AssertionScope();
+        user.UserName.Name.Should().NotBeEmpty();
+        user.Email.Value.Should().NotBeNullOrEmpty();
+        paidTimeOffDurationResult.Days.Should().Be(paidTimeOffDuration.Days);
+        paidTimeOffDurationResult.Hours.Should().Be(0);
+        paidTimeOffDurationResult.Minutes.Should().Be(0);
+        paidTimeOffDurationResult.Seconds.Should().BeInRange(0, 1);
+    }
+
+    [Theory, AutoData]
+    public void LeapYearPaidTimeOffTest(User user)
+    {
+        using var scope = new AssertionScope();
+        user.UserName.Name.Should().NotBeEmpty();
+        user.Email.Value.Should().NotBeNullOrEmpty();
+    }
+
+    [Theory, AutoData]
+    public void RegularYearPaidTimeOffTest(User user)
+    {
+        using var scope = new AssertionScope();
+        user.UserName.Name.Should().NotBeEmpty();
+        user.Email.Value.Should().NotBeNullOrEmpty();
+    }
+
     [Fact]
-    public void InitialManualTest()
+    public void ManualTest()
     {
         var userName = new UserName("John", "Fitzgerald", "Kennedy");
         var email = new Email("foo@bar.com");
@@ -18,7 +66,6 @@ public sealed class CalendarTests
         var startDate = new StartDate(DateTimeOffset.Parse("2023-02-13"));
 
         var actor = Actor.Crete(user, startDate, timeOffSettings);
-
 
         var startTime1 = DateTimeOffset.Parse("2023-08-01");
         var startTime2 = DateTimeOffset.Parse("2023-10-01");
@@ -44,13 +91,5 @@ public sealed class CalendarTests
         timeOff.PaidTimeOff.Duration.Days.Should().BeGreaterThan(0);
         timeOff.UnPaidTimeOff.Duration.Days.Should().Be(0);
         timeOff.FamilyTimeOff.Duration.Days.Should().Be(0);
-    }
-    
-    [Theory, AutoData]
-    public void UserAutoDataTest(User user)
-    {
-        using var scope = new AssertionScope();
-        user.UserName.Name.Should().NotBeEmpty();
-        user.Email.Value.Should().NotBeNullOrEmpty();
     }
 }
