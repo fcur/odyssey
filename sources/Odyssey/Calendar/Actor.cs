@@ -8,7 +8,6 @@ public sealed class Actor
 
     private static readonly TimeSpan LeapYear = TimeSpan.FromDays(366);
     private static readonly TimeSpan RegularYear = TimeSpan.FromDays(365);
-    private static readonly TimeSpan RoundingInterval = TimeSpan.FromSeconds(1);
 
     public static Actor Crete(User user, StartDate startDate, TimeOffSettings timeOffSettings)
     {
@@ -22,7 +21,7 @@ public sealed class Actor
 
     public IReadOnlyCollection<ITimeOffAdditionEvent> GetTimeOffAdditionEvents(DateTimeOffset atTime)
     {
-        var timeOffAdditionEvents = new List<ITimeOffAdditionEvent>();
+        var roundingInterval = TimeOffSettings.TimeOffRounding.Interval.Ticks;
 
         var nextMonth = StartDate.Date.AddMonths(1);
         var time = new DateTimeOffset(nextMonth.Year, nextMonth.Month, 1, 0, 0, 0, StartDate.Date.Offset);
@@ -42,6 +41,8 @@ public sealed class Actor
 
         checkpoints.Add(atTime);
 
+        var timeOffAdditionEvents = new List<ITimeOffAdditionEvent>(checkpoints.Count - 1);
+
         for (int i = 0, j = 1; j < checkpoints.Count; i++, j++)
         {
             var periodStart = checkpoints[i];
@@ -52,7 +53,8 @@ public sealed class Actor
 
             var timeOffTicks = duration.Ticks / ticksInYear *
                                TimeOffSettings.PaidTimeOffDuration.Duration.Ticks;
-            var roundedTicks = Math.Round(timeOffTicks/RoundingInterval.Ticks) * RoundingInterval.Ticks;
+
+            var roundedTicks = Math.Round(timeOffTicks / roundingInterval) * roundingInterval;
 
             var periodTimeOffDuration = new TimeSpan((long)roundedTicks);
             timeOffAdditionEvents.Add(PaidTimeOffAdditionEvent.Create(periodTimeOffDuration));
@@ -82,48 +84,44 @@ public sealed record StartDate(DateTimeOffset Date);
 public sealed record TimeOffSettings(
     PaidTimeOffDuration PaidTimeOffDuration,
     UnPaidTimeOffDuration UnPaidTimeOffDuration,
-    FamilyTimeOffDuration FamilyTimeOffDuration)
+    FamilyTimeOffDuration FamilyTimeOffDuration,
+    TimeOffRounding TimeOffRounding)
 {
     public static TimeOffSettings CreateDefault()
     {
         var paidTimeOffDuration = new PaidTimeOffDuration(TimeSpan.FromDays(20));
         var unPaidTimeOffDuration = new UnPaidTimeOffDuration(TimeSpan.Zero);
         var familyTimeOffDuration = new FamilyTimeOffDuration(TimeSpan.Zero);
+        var timeOffRounding = new TimeOffRounding(TimeSpan.FromSeconds(1));
 
-        return new TimeOffSettings(paidTimeOffDuration, unPaidTimeOffDuration, familyTimeOffDuration);
+        return Create(paidTimeOffDuration, unPaidTimeOffDuration, familyTimeOffDuration, timeOffRounding);
     }
 
     public static TimeOffSettings Create(
         PaidTimeOffDuration paidTimeOffDuration,
         UnPaidTimeOffDuration unPaidTimeOffDuration,
-        FamilyTimeOffDuration familyTimeOffDuration)
+        FamilyTimeOffDuration familyTimeOffDuration,
+        TimeOffRounding timeOffRounding)
     {
-        return new TimeOffSettings(paidTimeOffDuration, unPaidTimeOffDuration, familyTimeOffDuration);
+        return new TimeOffSettings(paidTimeOffDuration, unPaidTimeOffDuration, familyTimeOffDuration, timeOffRounding);
     }
 
     public static TimeOffSettings Create(
-        TimeSpan? paidTimeOffDuration = default,
-        TimeSpan? unPaidTimeOffDuration = default,
-        TimeSpan? familyTimeOffDuration = default)
+        TimeSpan paidTimeOffDuration,
+        TimeSpan timeOffRounding)
     {
         return Create(
-            new PaidTimeOffDuration(paidTimeOffDuration ?? TimeSpan.Zero),
-            new UnPaidTimeOffDuration(unPaidTimeOffDuration ?? TimeSpan.Zero),
-            new FamilyTimeOffDuration(familyTimeOffDuration ?? TimeSpan.Zero));
+            new PaidTimeOffDuration(paidTimeOffDuration),
+            new UnPaidTimeOffDuration(TimeSpan.Zero),
+            new FamilyTimeOffDuration(TimeSpan.Zero),
+            new TimeOffRounding(timeOffRounding));
     }
 }
 
-// For PTO request
-public sealed record PaidTimeOffDuration(TimeSpan Duration)
-{
-    // public static PaidTimeOffDuration Create(TimeSpan duration)
-    // {
-    //     // var step = float.Round(duration.Days / 365.0F, 3);
-    //     
-    //     return new PaidTimeOffDuration(duration, step);
-    // }        
-}
+public sealed record PaidTimeOffDuration(TimeSpan Duration);
 
 public sealed record UnPaidTimeOffDuration(TimeSpan Duration);
 
 public sealed record FamilyTimeOffDuration(TimeSpan Duration);
+
+public sealed record TimeOffRounding(TimeSpan Interval);

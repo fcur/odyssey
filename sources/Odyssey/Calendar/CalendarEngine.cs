@@ -1,24 +1,24 @@
 namespace Calendar;
 
-public sealed record Engine(
+public sealed record CalendarEngine(
     Actor Actor,
     IReadOnlyCollection<ITimeOffAdditionEvent> TimeOffAdditionEvents,
     IReadOnlyCollection<ITimeOffRequest> TimeOffRequests)
 {
-    public static Engine Create(Actor actor,
+    public static CalendarEngine Create(Actor actor,
         IReadOnlyCollection<ITimeOffAdditionEvent> timeOffAdditionEvents,
         IReadOnlyCollection<ITimeOffRequest> timeOffRequests)
     {
-        return new Engine(actor, timeOffAdditionEvents, timeOffRequests);
+        return new CalendarEngine(actor, timeOffAdditionEvents, timeOffRequests);
     }
 
-    public static TimeSpan CalculateDuration(IReadOnlyCollection<ITimeOffAdditionEvent> timeOffAdditionEvents)
+    public static TimeSpan CalculateTimeOffDuration(IReadOnlyCollection<ITimeOffAdditionEvent> timeOffAdditionEvents)
     {
         return timeOffAdditionEvents.Aggregate(TimeSpan.Zero,
             (current, timeOffAdditionEvent) => current.Add(timeOffAdditionEvent.Duration));
     }
 
-    public static TimeSpan CalculateDuration(IReadOnlyCollection<ITimeOffRequest> timeOffRequests)
+    public static TimeSpan CalculateTimeOffDuration(IReadOnlyCollection<ITimeOffRequest> timeOffRequests)
     {
         return timeOffRequests.Aggregate(TimeSpan.Zero,
             (current, timeOffRequest) => current.Add(timeOffRequest.TimeOffSettings.Duration));
@@ -26,9 +26,9 @@ public sealed record Engine(
 
     public TimeOffResult CalculateTimeOff(DateTimeOffset atTime)
     {
-        var paidTimeOffDuration = CalculateDuration(TimeOffAdditionEvents);
+        var paidTimeOffDuration = CalculateTimeOffDuration(TimeOffAdditionEvents);
         var requestedPaidTimeOffDuration =
-            CalculateDuration(TimeOffRequests.Where(v => v.Type == TimeOffType.Paid).ToArray());
+            CalculateTimeOffDuration(TimeOffRequests.Where(v => v.Type == TimeOffType.Paid).ToArray());
 
         var availablePaidTimeOffDuration = paidTimeOffDuration.Subtract(requestedPaidTimeOffDuration);
 

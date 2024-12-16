@@ -2,7 +2,6 @@
 using AutoFixture.Xunit2;
 using FluentAssertions;
 using FluentAssertions.Execution;
-using Xunit.Sdk;
 
 namespace Calendar.Tests;
 
@@ -18,19 +17,26 @@ public sealed class CalendarTests
     }
 
     [Theory]
-    [InlineAutoData("2023-01-01", "20.00:00:00")]
-    [InlineAutoData("2024-01-01", "20.00:00:00")]
-    public void YearlyPaidTimeOffTest(string dateFromData, string timeOffDurationData, User user)
+    [InlineAutoData("2022-01-02")]
+    [InlineAutoData("2022-02-22")]
+    [InlineAutoData("2022-03-05")]
+    [InlineAutoData("2022-04-29")]
+    [InlineAutoData("2022-05-11")]
+    [InlineAutoData("2022-10-02")]
+    [InlineAutoData("2022-12-31")]
+    [InlineAutoData("2023-01-01")]
+    [InlineAutoData("2024-01-01")]
+    public void YearlyPaidTimeOffTest(string dateFromData, User user)
     {
-        var paidTimeOffDuration = TimeSpan.Parse(timeOffDurationData);
-        var timeOffSettings = TimeOffSettings.Create(paidTimeOffDuration);
+        var paidTimeOffDuration = TimeSpan.Parse("20.00:00:00");
+        var timeOffSettings = TimeOffSettings.Create(paidTimeOffDuration, TimeSpan.FromSeconds(1));
         var startDate = new StartDate(DateTimeOffset.Parse(dateFromData));
         var actor = Actor.Crete(user, startDate, timeOffSettings);
         var atTime = startDate.Date.AddYears(1);
-        
+
         var timeOffAdditionEvents = actor.GetTimeOffAdditionEvents(atTime);
-        var paidTimeOffDurationResult = Engine.CalculateDuration(timeOffAdditionEvents);
-            
+        var paidTimeOffDurationResult = CalendarEngine.CalculateTimeOffDuration(timeOffAdditionEvents);
+
         using var scope = new AssertionScope();
         user.UserName.Name.Should().NotBeEmpty();
         user.Email.Value.Should().NotBeNullOrEmpty();
@@ -83,7 +89,7 @@ public sealed class CalendarTests
         var atTime = DateTimeOffset.Parse("2024-12-05");
         var timeOffAdditionEvents = actor.GetTimeOffAdditionEvents(atTime);
 
-        var engine = Engine.Create(actor, timeOffAdditionEvents, timeOffRequests);
+        var engine = CalendarEngine.Create(actor, timeOffAdditionEvents, timeOffRequests);
 
         var timeOff = engine.CalculateTimeOff(atTime);
 
