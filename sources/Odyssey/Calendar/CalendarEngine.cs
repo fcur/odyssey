@@ -1,5 +1,13 @@
 namespace Calendar;
 
+public static class PredefinedPeriods
+{    
+    public static readonly TimeSpan LeapYear = TimeSpan.FromDays(366);
+    public static readonly TimeSpan RegularYear = TimeSpan.FromDays(365);
+
+    // public static IReadOnlyCollection<long, double> LeapYearTimeOffTicks = new Dictionary<long, double> { }; }
+}
+
 public sealed record CalendarEngine(
     Actor Actor,
     IReadOnlyCollection<ITimeOffAdditionEvent> TimeOffAdditionEvents,
@@ -14,11 +22,13 @@ public sealed record CalendarEngine(
 
     public static TimeSpan CalculateTimeOffDuration(IReadOnlyCollection<ITimeOffAdditionEvent> timeOffAdditionEvents)
     {
-        return timeOffAdditionEvents.Aggregate(TimeSpan.Zero,
-            (current, timeOffAdditionEvent) => current.Add(timeOffAdditionEvent.Duration));
+        var ticks = timeOffAdditionEvents.Aggregate(0D,
+            (current, timeOffAdditionEvent) => current + timeOffAdditionEvent.Duration.Ticks);
+        var roundedTicks = Math.Round(ticks);
+        return TimeSpan.FromTicks((long)roundedTicks);
     }
 
-    public static TimeSpan CalculateTimeOffDuration(IReadOnlyCollection<ITimeOffRequest> timeOffRequests)
+    public static TimeSpan CalculatePaidTimeOffDuration(IReadOnlyCollection<ITimeOffRequest> timeOffRequests)
     {
         return timeOffRequests.Aggregate(TimeSpan.Zero,
             (current, timeOffRequest) => current.Add(timeOffRequest.TimeOffSettings.Duration));
@@ -26,9 +36,10 @@ public sealed record CalendarEngine(
 
     public TimeOffResult CalculateTimeOff(DateTimeOffset atTime)
     {
-        var paidTimeOffDuration = CalculateTimeOffDuration(TimeOffAdditionEvents);
+        var paidTimeOffDuration =
+            CalculateTimeOffDuration(TimeOffAdditionEvents.Where(v => v.Type == TimeOffType.Paid).ToArray());
         var requestedPaidTimeOffDuration =
-            CalculateTimeOffDuration(TimeOffRequests.Where(v => v.Type == TimeOffType.Paid).ToArray());
+            CalculatePaidTimeOffDuration(TimeOffRequests.Where(v => v.Type == TimeOffType.Paid).ToArray());
 
         var availablePaidTimeOffDuration = paidTimeOffDuration.Subtract(requestedPaidTimeOffDuration);
 
@@ -101,29 +112,34 @@ public record struct TimeOffResult(
 
 public interface ITimeOffAdditionEvent
 {
-    TimeSpan Duration { get; }
     TimeOffType Type { get; }
+    TimeOffDuration Duration { get; }
 }
 
-public sealed record PaidTimeOffAdditionEvent(TimeSpan Duration, TimeOffType Type) : ITimeOffAdditionEvent
+public sealed record TimeOffDuration(double Ticks)
 {
-    public static ITimeOffAdditionEvent Create(TimeSpan duration)
+    private TimeSpan Duration => TimeSpan.FromTicks((long)Ticks);
+}
+
+public sealed record PaidTimeOffAdditionEvent(TimeOffDuration Duration, TimeOffType Type) : ITimeOffAdditionEvent
+{
+    public static ITimeOffAdditionEvent Create(TimeOffDuration duration)
     {
         return new PaidTimeOffAdditionEvent(duration, TimeOffType.Paid);
     }
 }
 
-public sealed record UnPaidTimeOffAdditionEvent(TimeSpan Duration, TimeOffType Type) : ITimeOffAdditionEvent
+public sealed record UnPaidTimeOffAdditionEvent(TimeOffDuration Duration, TimeOffType Type) : ITimeOffAdditionEvent
 {
-    public static ITimeOffAdditionEvent Create(TimeSpan duration)
+    public static ITimeOffAdditionEvent Create(TimeOffDuration duration)
     {
         return new UnPaidTimeOffAdditionEvent(duration, TimeOffType.UnPaid);
     }
 }
 
-public sealed record FamilyTimeOffAdditionEvent(TimeSpan Duration, TimeOffType Type) : ITimeOffAdditionEvent
+public sealed record FamilyTimeOffAdditionEvent(TimeOffDuration Duration, TimeOffType Type) : ITimeOffAdditionEvent
 {
-    public static ITimeOffAdditionEvent Create(TimeSpan duration)
+    public static ITimeOffAdditionEvent Create(TimeOffDuration duration)
     {
         return new FamilyTimeOffAdditionEvent(duration, TimeOffType.Family);
     }

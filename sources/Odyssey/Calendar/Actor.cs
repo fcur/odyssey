@@ -6,8 +6,6 @@ public sealed class Actor
     public StartDate StartDate { get; init; }
     public TimeOffSettings TimeOffSettings { get; init; }
 
-    private static readonly TimeSpan LeapYear = TimeSpan.FromDays(366);
-    private static readonly TimeSpan RegularYear = TimeSpan.FromDays(365);
 
     public static Actor Crete(User user, StartDate startDate, TimeOffSettings timeOffSettings)
     {
@@ -21,8 +19,6 @@ public sealed class Actor
 
     public IReadOnlyCollection<ITimeOffAdditionEvent> GetTimeOffAdditionEvents(DateTimeOffset atTime)
     {
-        var roundingInterval = TimeOffSettings.TimeOffRounding.Interval.Ticks;
-
         var nextMonth = StartDate.Date.AddMonths(1);
         var time = new DateTimeOffset(nextMonth.Year, nextMonth.Month, 1, 0, 0, 0, StartDate.Date.Offset);
 
@@ -49,15 +45,15 @@ public sealed class Actor
             var periodEnd = checkpoints[j];
 
             var duration = periodEnd - periodStart;
-            double ticksInYear = DateTime.IsLeapYear(periodStart.Year) ? LeapYear.Ticks : RegularYear.Ticks;
+            double ticksInYear = DateTime.IsLeapYear(periodStart.Year)
+                ? PredefinedPeriods.LeapYear.Ticks
+                : PredefinedPeriods.RegularYear.Ticks;
 
             var timeOffTicks = duration.Ticks / ticksInYear *
                                TimeOffSettings.PaidTimeOffDuration.Duration.Ticks;
 
-            var roundedTicks = Math.Round(timeOffTicks / roundingInterval) * roundingInterval;
-
-            var periodTimeOffDuration = new TimeSpan((long)roundedTicks);
-            timeOffAdditionEvents.Add(PaidTimeOffAdditionEvent.Create(periodTimeOffDuration));
+            var timeOffDuration = new TimeOffDuration(timeOffTicks);
+            timeOffAdditionEvents.Add(PaidTimeOffAdditionEvent.Create(timeOffDuration));
         }
 
         return timeOffAdditionEvents.ToArray();
