@@ -37,7 +37,6 @@ public sealed class CalendarTests
         var timeOffAdditionEvents = actor.GetTimeOffAdditionEvents(atTime);
         var paidTimeOffDurationResult = CalendarEngine.CalculateTimeOffDuration(timeOffAdditionEvents);
         
-        
         using var scope = new AssertionScope();
         user.UserName.Name.Should().NotBeEmpty();
         user.Email.Value.Should().NotBeNullOrEmpty();

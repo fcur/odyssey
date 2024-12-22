@@ -1,11 +1,9 @@
 namespace Calendar;
 
 public static class PredefinedPeriods
-{    
-    public static readonly TimeSpan LeapYear = TimeSpan.FromDays(366);
-    public static readonly TimeSpan RegularYear = TimeSpan.FromDays(365);
-
-    // public static IReadOnlyCollection<long, double> LeapYearTimeOffTicks = new Dictionary<long, double> { }; }
+{
+    public static readonly double LeapYearTicks = TimeSpan.FromDays(366).Ticks;
+    public static readonly double RegularYearTicks = TimeSpan.FromDays(365).Ticks;
 }
 
 public sealed record CalendarEngine(
@@ -123,6 +121,7 @@ public sealed record TimeOffDuration(double Ticks)
 
 public sealed record PaidTimeOffAdditionEvent(TimeOffDuration Duration, TimeOffType Type) : ITimeOffAdditionEvent
 {
+    // TBD: period start|end 
     public static ITimeOffAdditionEvent Create(TimeOffDuration duration)
     {
         return new PaidTimeOffAdditionEvent(duration, TimeOffType.Paid);

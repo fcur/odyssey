@@ -1,62 +1,35 @@
 namespace Calendar;
 
-public sealed class Actor
+public sealed class Actor(User user, StartDate startDate, TimeOffSettings timeOffSettings)
 {
-    public User User { get; init; }
-    public StartDate StartDate { get; init; }
-    public TimeOffSettings TimeOffSettings { get; init; }
-
+    public User User { get; init; } = user ?? throw new ArgumentNullException(nameof(user));
+    public StartDate StartDate { get; init; } = startDate ?? throw new ArgumentNullException(nameof(startDate));
+    public TimeOffSettings TimeOffSettings { get; init; } =
+        timeOffSettings ?? throw new ArgumentNullException(nameof(timeOffSettings));
 
     public static Actor Crete(User user, StartDate startDate, TimeOffSettings timeOffSettings)
     {
-        return new Actor
-        {
-            User = user,
-            StartDate = startDate,
-            TimeOffSettings = timeOffSettings
-        };
+        return new Actor(user, startDate, timeOffSettings);
     }
 
     public IReadOnlyCollection<ITimeOffAdditionEvent> GetTimeOffAdditionEvents(DateTimeOffset atTime)
     {
-        var nextMonth = StartDate.Date.AddMonths(1);
-        var time = new DateTimeOffset(nextMonth.Year, nextMonth.Month, 1, 0, 0, 0, StartDate.Date.Offset);
+        var paidTimeOffAdditionEvents = PreparePaidTimeOffAdditionEvents(atTime);
 
-        if (time > atTime)
-        {
-            time = atTime;
-        }
+        var unpaidTimeOffAdditionEvents = Array.Empty<ITimeOffAdditionEvent>();
+        var familyTimeOffAdditionEvents = Array.Empty<ITimeOffAdditionEvent>();
 
-        var checkpoints = new List<DateTimeOffset> { StartDate.Date };
+        return paidTimeOffAdditionEvents;
+    }
 
-        while (time < atTime)
-        {
-            checkpoints.Add(time);
-            time = time.AddMonths(1);
-        }
+    private IReadOnlyCollection<ITimeOffAdditionEvent> PreparePaidTimeOffAdditionEvents(DateTimeOffset atTime)
+    {
+        var checkpoints = CalendarTools.BuildMonthlyCheckpoints(StartDate.Date, atTime);
+        var timeAccruals = CalendarTools.PrepareMonthlyTimeAccruals(checkpoints, TimeOffSettings.PaidTimeOffDuration.Duration)
+            .ToArray();
 
-        checkpoints.Add(atTime);
-
-        var timeOffAdditionEvents = new List<ITimeOffAdditionEvent>(checkpoints.Count - 1);
-
-        for (int i = 0, j = 1; j < checkpoints.Count; i++, j++)
-        {
-            var periodStart = checkpoints[i];
-            var periodEnd = checkpoints[j];
-
-            var duration = periodEnd - periodStart;
-            double ticksInYear = DateTime.IsLeapYear(periodStart.Year)
-                ? PredefinedPeriods.LeapYear.Ticks
-                : PredefinedPeriods.RegularYear.Ticks;
-
-            var timeOffTicks = duration.Ticks / ticksInYear *
-                               TimeOffSettings.PaidTimeOffDuration.Duration.Ticks;
-
-            var timeOffDuration = new TimeOffDuration(timeOffTicks);
-            timeOffAdditionEvents.Add(PaidTimeOffAdditionEvent.Create(timeOffDuration));
-        }
-
-        return timeOffAdditionEvents.ToArray();
+        return timeAccruals.Select(timeOffTicks => PaidTimeOffAdditionEvent.Create(new TimeOffDuration(timeOffTicks)))
+            .ToArray();
     }
 }
 
