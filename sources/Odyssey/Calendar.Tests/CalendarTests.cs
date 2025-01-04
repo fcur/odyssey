@@ -92,7 +92,7 @@ public sealed class CalendarTests
 
         using var scope = new AssertionScope();
         timeOff.PaidTimeOff.Duration.Days.Should().BeGreaterThan(0);
-        timeOff.UnPaidTimeOff.Duration.Days.Should().Be(0);
+        timeOff.UnpaidTimeOff.Duration.Days.Should().Be(0);
         timeOff.FamilyTimeOff.Duration.Days.Should().Be(0);
     }
 }

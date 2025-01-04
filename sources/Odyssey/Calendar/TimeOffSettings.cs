@@ -1,15 +1,15 @@
 namespace Calendar;
 
 public sealed record TimeOffSettings(
-    PaidTimeOffDuration PaidTimeOffDuration,
-    UnPaidTimeOffDuration UnPaidTimeOffDuration,
-    FamilyTimeOffDuration FamilyTimeOffDuration,
-    TimeOffRounding TimeOffRounding)
+    PaidTimeOffDuration Paid,
+    UnpaidTimeOffDuration Unpaid,
+    FamilyTimeOffDuration Family,
+    TimeOffRounding Rounding)
 {
     public static TimeOffSettings CreateDefault()
     {
         var paidTimeOffDuration = new PaidTimeOffDuration(TimeSpan.FromDays(20));
-        var unPaidTimeOffDuration = new UnPaidTimeOffDuration(TimeSpan.Zero);
+        var unPaidTimeOffDuration = new UnpaidTimeOffDuration(TimeSpan.Zero);
         var familyTimeOffDuration = new FamilyTimeOffDuration(TimeSpan.Zero);
         var timeOffRounding = new TimeOffRounding(TimeSpan.FromSeconds(1));
 
@@ -18,11 +18,11 @@ public sealed record TimeOffSettings(
 
     public static TimeOffSettings Create(
         PaidTimeOffDuration paidTimeOffDuration,
-        UnPaidTimeOffDuration unPaidTimeOffDuration,
+        UnpaidTimeOffDuration unpaidTimeOffDuration,
         FamilyTimeOffDuration familyTimeOffDuration,
         TimeOffRounding timeOffRounding)
     {
-        return new TimeOffSettings(paidTimeOffDuration, unPaidTimeOffDuration, familyTimeOffDuration, timeOffRounding);
+        return new TimeOffSettings(paidTimeOffDuration, unpaidTimeOffDuration, familyTimeOffDuration, timeOffRounding);
     }
 
     public static TimeOffSettings Create(
@@ -31,7 +31,7 @@ public sealed record TimeOffSettings(
     {
         return Create(
             new PaidTimeOffDuration(paidTimeOffDuration),
-            new UnPaidTimeOffDuration(TimeSpan.Zero),
+            new UnpaidTimeOffDuration(TimeSpan.Zero),
             new FamilyTimeOffDuration(TimeSpan.Zero),
             new TimeOffRounding(timeOffRounding));
     }
@@ -39,7 +39,7 @@ public sealed record TimeOffSettings(
 
 public sealed record PaidTimeOffDuration(TimeSpan Duration);
 
-public sealed record UnPaidTimeOffDuration(TimeSpan Duration);
+public sealed record UnpaidTimeOffDuration(TimeSpan Duration);
 
 public sealed record FamilyTimeOffDuration(TimeSpan Duration);
 

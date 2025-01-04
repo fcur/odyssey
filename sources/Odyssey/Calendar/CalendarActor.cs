@@ -27,11 +27,17 @@ public sealed class CalendarActor(User user, StartDate startDate, TimeOffSetting
     {
         var monthlyCheckpoints = CalendarTools.BuildMonthlyCheckpoints(StartDate.Date, atTime);
         var timeAccruals = CalendarTools
-            .PrepareMonthlyTimeAccruals(monthlyCheckpoints, TimeOffSettings.PaidTimeOffDuration.Duration)
+            .PrepareMonthlyTimeAccruals(monthlyCheckpoints, TimeOffSettings.Paid.Duration)
             .ToArray();
 
         return timeAccruals.Select(PaidTimeOffAdditionEvent.Create).ToArray();
     }
 }
 
-public sealed record StartDate(DateTimeOffset Date);
+public sealed record StartDate(DateTimeOffset Date)
+{
+    public override string ToString()
+    {
+        return Date.ToString(); 
+    }
+}

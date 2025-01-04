@@ -36,10 +36,10 @@ public sealed record CalendarEngine(
         var availablePaidTimeOffDuration = paidTimeOffDuration.Subtract(requestedPaidTimeOffDuration);
 
         var paidTimeOff = new PaidTimeOffDuration(availablePaidTimeOffDuration);
-        var unPaidTimeOff = new UnPaidTimeOffDuration(TimeSpan.Zero);
+        var unPaidTimeOff = new UnpaidTimeOffDuration(TimeSpan.Zero);
         var familyTimeOff = new FamilyTimeOffDuration(TimeSpan.Zero);
         return new TimeOffResult(paidTimeOff, unPaidTimeOff, familyTimeOff);
     }
 }
 
-public record struct TimeOffResult(PaidTimeOffDuration PaidTimeOff, UnPaidTimeOffDuration UnPaidTimeOff, FamilyTimeOffDuration FamilyTimeOff);
+public record struct TimeOffResult(PaidTimeOffDuration PaidTimeOff, UnpaidTimeOffDuration UnpaidTimeOff, FamilyTimeOffDuration FamilyTimeOff);

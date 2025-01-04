@@ -15,7 +15,7 @@ public class CalendarBenchmark
     {
         var startDate = DateTimeOffset.Parse("2000-01-01");
         var atTime = startDate.AddYears(1000);
-        PerYearDuration = TimeOffSettings.CreateDefault().PaidTimeOffDuration.Duration;
+        PerYearDuration = TimeOffSettings.CreateDefault().Paid.Duration;
         
         Checkpoints = CalendarTools.BuildMonthlyCheckpoints(startDate, atTime);
     }
