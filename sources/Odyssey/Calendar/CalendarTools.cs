@@ -2,6 +2,9 @@ namespace Calendar;
 
 public static class CalendarTools
 {
+    public static readonly double LeapYearTicks = TimeSpan.FromDays(366).Ticks;
+    public static readonly double RegularYearTicks = TimeSpan.FromDays(365).Ticks;
+    
     public static DateTimeOffset[] BuildMonthlyCheckpoints(DateTimeOffset startDate, DateTimeOffset atTime)
     {
         var nextMonth = startDate.AddMonths(1);
@@ -25,7 +28,7 @@ public static class CalendarTools
         return checkpoints.ToArray();
     }
 
-    public static IEnumerable<double> PrepareMonthlyTimeAccruals(DateTimeOffset[] checkpoints, TimeSpan perYearDuration)
+    public static IEnumerable<TimeAccrual> PrepareMonthlyTimeAccruals(DateTimeOffset[] checkpoints, TimeSpan perYearDuration)
     {
         for (int i = 0, j = 1; j < checkpoints.Length; i++, j++)
         {
@@ -34,12 +37,14 @@ public static class CalendarTools
 
             var duration = periodEnd - periodStart;
             var ticksInYear = DateTime.IsLeapYear(periodStart.Year)
-                ? PredefinedPeriods.LeapYearTicks
-                : PredefinedPeriods.RegularYearTicks;
+                ? LeapYearTicks
+                : RegularYearTicks;
 
             var timeOffTicks = duration.Ticks / ticksInYear * perYearDuration.Ticks;
 
-            yield return timeOffTicks;
+            yield return new TimeAccrual(timeOffTicks, periodStart, periodEnd);
         }
     }
 }
+
+public sealed record TimeAccrual(double Ticks, DateTimeOffset PeriodStart, DateTimeOffset PeriodEnd);

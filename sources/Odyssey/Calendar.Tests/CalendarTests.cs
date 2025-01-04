@@ -31,7 +31,7 @@ public sealed class CalendarTests
         var paidTimeOffDuration = TimeSpan.Parse("20.00:00:00");
         var timeOffSettings = TimeOffSettings.Create(paidTimeOffDuration, TimeSpan.FromSeconds(1));
         var startDate = new StartDate(DateTimeOffset.Parse(dateFromData));
-        var actor = Actor.Crete(user, startDate, timeOffSettings);
+        var actor = CalendarActor.Crete(user, startDate, timeOffSettings);
         var atTime = startDate.Date.AddYears(1);
 
         var timeOffAdditionEvents = actor.GetTimeOffAdditionEvents(atTime);
@@ -71,7 +71,7 @@ public sealed class CalendarTests
         var timeOffSettings = TimeOffSettings.CreateDefault();
         var startDate = new StartDate(DateTimeOffset.Parse("2023-02-13"));
 
-        var actor = Actor.Crete(user, startDate, timeOffSettings);
+        var actor = CalendarActor.Crete(user, startDate, timeOffSettings);
 
         var startTime1 = DateTimeOffset.Parse("2023-08-01");
         var startTime2 = DateTimeOffset.Parse("2023-10-01");
@@ -87,10 +87,7 @@ public sealed class CalendarTests
         };
 
         var atTime = DateTimeOffset.Parse("2024-12-05");
-        var timeOffAdditionEvents = actor.GetTimeOffAdditionEvents(atTime);
-
-        var engine = CalendarEngine.Create(actor, timeOffAdditionEvents, timeOffRequests);
-
+        var engine = CalendarEngine.Create(actor, timeOffRequests);
         var timeOff = engine.CalculateTimeOff(atTime);
 
         using var scope = new AssertionScope();
