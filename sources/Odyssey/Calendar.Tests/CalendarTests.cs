@@ -12,7 +12,7 @@ public sealed class CalendarTests
     public void UserAutoDataTest(User user)
     {
         using var scope = new AssertionScope();
-        user.UserName.Name.Should().NotBeEmpty();
+        user.Name.Name.Should().NotBeEmpty();
         user.Email.Value.Should().NotBeNullOrEmpty();
     }
 
@@ -38,7 +38,7 @@ public sealed class CalendarTests
         var paidTimeOffDurationResult = CalendarEngine.CalculateTimeOffDuration(timeOffAdditionEvents);
         
         using var scope = new AssertionScope();
-        user.UserName.Name.Should().NotBeEmpty();
+        user.Name.Name.Should().NotBeEmpty();
         user.Email.Value.Should().NotBeNullOrEmpty();
         paidTimeOffDurationResult.Days.Should().Be(paidTimeOffDuration.Days);
         paidTimeOffDurationResult.Hours.Should().Be(0);
@@ -50,7 +50,7 @@ public sealed class CalendarTests
     public void LeapYearPaidTimeOffTest(User user)
     {
         using var scope = new AssertionScope();
-        user.UserName.Name.Should().NotBeEmpty();
+        user.Name.Name.Should().NotBeEmpty();
         user.Email.Value.Should().NotBeNullOrEmpty();
     }
 
@@ -58,7 +58,7 @@ public sealed class CalendarTests
     public void RegularYearPaidTimeOffTest(User user)
     {
         using var scope = new AssertionScope();
-        user.UserName.Name.Should().NotBeEmpty();
+        user.Name.Name.Should().NotBeEmpty();
         user.Email.Value.Should().NotBeNullOrEmpty();
     }
 

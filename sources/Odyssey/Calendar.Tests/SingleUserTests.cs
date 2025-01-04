@@ -1,3 +1,4 @@
+using Calendar.Tests.YamlConverter;
 using FluentAssertions;
 using FluentAssertions.Execution;
 using YamlDotNet.Serialization;
@@ -20,7 +21,14 @@ public sealed class SingleUserTests
 
         var serializer = new SerializerBuilder()
             .WithNamingConvention(HyphenatedNamingConvention.Instance)
-            .WithTypeConverter(new DateTimeOffsetYamlConverter())
+            .WithTypeConverter(new StartDateYamlConverter())
+            .WithTypeConverter(new UserNameYamlConverter())
+            .WithTypeConverter(new UserIdYamlConverter())
+            .WithTypeConverter(new EmailYamlConverter())
+            .WithTypeConverter(new PaidTimeOffDurationYamlConverter())
+            .WithTypeConverter(new UnpaidTimeOffDurationYamlConverter())
+            .WithTypeConverter(new FamilyTimeOffDurationYamlConverter())
+            .WithTypeConverter(new TimeOffRoundingYamlConverter())
             .Build();
         var yamlString = serializer.Serialize(actor);
 
