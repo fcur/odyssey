@@ -1,10 +1,12 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Calendar", "Calendar\Calendar.csproj", "{B5855096-F4C5-4BA8-A78C-F1C6293984AA}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Odyssey.Calendar", "Odyssey.Calendar\Odyssey.Calendar.csproj", "{B5855096-F4C5-4BA8-A78C-F1C6293984AA}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Calendar.Tests", "Calendar.Tests\Calendar.Tests.csproj", "{7FB7F612-5E40-4524-8AE7-A434C4380223}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Odyssey.Calendar.Tests", "Odyssey.Calendar.Tests\Odyssey.Calendar.Tests.csproj", "{7FB7F612-5E40-4524-8AE7-A434C4380223}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Calendar.Benchmark.Tests", "Calendar.Benchmark.Tests\Calendar.Benchmark.Tests.csproj", "{6653798B-B733-41E0-AA61-B12B8CA5A3E3}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Odyssey.SingleUserApp", "Odyssey.SingleUserApp\Odyssey.SingleUserApp.csproj", "{39379716-E250-4C49-AB68-4B202795FB56}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Odyssey.Calendar.Benchmark.Tests", "Odyssey.Calendar.Benchmark.Tests\Odyssey.Calendar.Benchmark.Tests.csproj", "{438E93D5-6C43-434E-8C3B-C40413EE7DA7}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -20,9 +22,13 @@ Global
 		{7FB7F612-5E40-4524-8AE7-A434C4380223}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{7FB7F612-5E40-4524-8AE7-A434C4380223}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{7FB7F612-5E40-4524-8AE7-A434C4380223}.Release|Any CPU.Build.0 = Release|Any CPU
-		{6653798B-B733-41E0-AA61-B12B8CA5A3E3}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{6653798B-B733-41E0-AA61-B12B8CA5A3E3}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{6653798B-B733-41E0-AA61-B12B8CA5A3E3}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{6653798B-B733-41E0-AA61-B12B8CA5A3E3}.Release|Any CPU.Build.0 = Release|Any CPU
+		{39379716-E250-4C49-AB68-4B202795FB56}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{39379716-E250-4C49-AB68-4B202795FB56}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{39379716-E250-4C49-AB68-4B202795FB56}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{39379716-E250-4C49-AB68-4B202795FB56}.Release|Any CPU.Build.0 = Release|Any CPU
+		{438E93D5-6C43-434E-8C3B-C40413EE7DA7}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{438E93D5-6C43-434E-8C3B-C40413EE7DA7}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{438E93D5-6C43-434E-8C3B-C40413EE7DA7}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{438E93D5-6C43-434E-8C3B-C40413EE7DA7}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

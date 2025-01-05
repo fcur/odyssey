@@ -1,4 +1,4 @@
-namespace Calendar;
+namespace Odyssey.Calendar;
 
 public sealed record TimeOffSettings(
     PaidTimeOffDuration Paid,
@@ -37,10 +37,35 @@ public sealed record TimeOffSettings(
     }
 }
 
-public sealed record PaidTimeOffDuration(TimeSpan Duration);
+public sealed record PaidTimeOffDuration(TimeSpan Value)
+{
+    public static PaidTimeOffDuration Parse(string duration)
+    {
+        return new PaidTimeOffDuration(TimeSpan.Parse(duration));
+    }
+}
 
-public sealed record UnpaidTimeOffDuration(TimeSpan Duration);
+public sealed record UnpaidTimeOffDuration(TimeSpan Value)
+{
+    public static UnpaidTimeOffDuration Parse(string duration)
+    {
+        return new UnpaidTimeOffDuration(TimeSpan.Parse(duration));
+    }
+}
 
-public sealed record FamilyTimeOffDuration(TimeSpan Duration);
+public sealed record FamilyTimeOffDuration(TimeSpan Value)
+{
+    public static FamilyTimeOffDuration Parse(string duration)
+    {
+        return new FamilyTimeOffDuration(TimeSpan.Parse(duration));
+    }
+}
 
-public sealed record TimeOffRounding(TimeSpan Interval);
+public sealed record TimeOffRounding(TimeSpan Value)
+{
+    public static TimeOffRounding Parse(string duration)
+    {
+        return new TimeOffRounding(TimeSpan.Parse(duration));
+    }
+    
+}

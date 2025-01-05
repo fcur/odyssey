@@ -1,4 +1,4 @@
-namespace Calendar;
+namespace Odyssey.Calendar;
 
 public interface ITimeOffRequest
 {

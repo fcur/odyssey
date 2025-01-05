@@ -1,7 +1,7 @@
 using BenchmarkDotNet.Attributes;
 using Microsoft.VSDiagnostics;
 
-namespace Calendar.Benchmark.Tests;
+namespace Odyssey.Calendar.Benchmark.Tests;
 
 [CPUUsageDiagnoser]
 [RankColumn]
@@ -15,7 +15,7 @@ public class CalendarBenchmark
     {
         var startDate = DateTimeOffset.Parse("2000-01-01");
         var atTime = startDate.AddYears(1000);
-        PerYearDuration = TimeOffSettings.CreateDefault().Paid.Duration;
+        PerYearDuration = TimeOffSettings.CreateDefault().Paid.Value;
         
         Checkpoints = CalendarTools.BuildMonthlyCheckpoints(startDate, atTime);
     }

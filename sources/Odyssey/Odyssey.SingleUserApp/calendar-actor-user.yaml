@@ -1,0 +1,10 @@
+user:
+  name: "John Fitzgerald Kennedy"
+  email: "foo@bar.com"
+  id: "01943690-779a-7a89-8f95-fd624aa78dfc"
+start-date: "2023-02-13 0:00:00 +02:00"
+time-off-settings:
+  paid: "20.00:00:00"
+  unpaid: "00:00:00"
+  family: "00:00:00"
+  rounding: "00:00:01"

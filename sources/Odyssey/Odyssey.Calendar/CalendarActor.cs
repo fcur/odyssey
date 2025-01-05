@@ -1,4 +1,4 @@
-namespace Calendar;
+namespace Odyssey.Calendar;
 
 public sealed class CalendarActor(User user, StartDate startDate, TimeOffSettings timeOffSettings)
 {
@@ -25,19 +25,25 @@ public sealed class CalendarActor(User user, StartDate startDate, TimeOffSetting
 
     private IReadOnlyCollection<ITimeOffAdditionEvent> PreparePaidTimeOffAdditionEvents(DateTimeOffset atTime)
     {
-        var monthlyCheckpoints = CalendarTools.BuildMonthlyCheckpoints(StartDate.Date, atTime);
+        var monthlyCheckpoints = CalendarTools.BuildMonthlyCheckpoints(StartDate.Value, atTime);
         var timeAccruals = CalendarTools
-            .PrepareMonthlyTimeAccruals(monthlyCheckpoints, TimeOffSettings.Paid.Duration)
+            .PrepareMonthlyTimeAccruals(monthlyCheckpoints, TimeOffSettings.Paid.Value)
             .ToArray();
 
         return timeAccruals.Select(PaidTimeOffAdditionEvent.Create).ToArray();
     }
 }
 
-public sealed record StartDate(DateTimeOffset Date)
+public sealed record StartDate(DateTimeOffset Value)
 {
+    public static StartDate Parse(string data)
+    {
+        var dateTime = DateTimeOffset.Parse(data);
+        return new StartDate(dateTime);
+    }
+
     public override string ToString()
     {
-        return Date.ToString(); 
+        return Value.ToString();
     }
 }

@@ -1,9 +1,10 @@
 ﻿using System.Diagnostics.CodeAnalysis;
 using AutoFixture.Xunit2;
+using Odyssey.Calendar;
 using FluentAssertions;
 using FluentAssertions.Execution;
 
-namespace Calendar.Tests;
+namespace Odyssey.Calendar.Tests;
 
 [ExcludeFromCodeCoverage]
 public sealed class CalendarTests
@@ -12,7 +13,7 @@ public sealed class CalendarTests
     public void UserAutoDataTest(User user)
     {
         using var scope = new AssertionScope();
-        user.Name.Name.Should().NotBeEmpty();
+        user.Name.Values.Should().NotBeEmpty();
         user.Email.Value.Should().NotBeNullOrEmpty();
     }
 
@@ -32,13 +33,13 @@ public sealed class CalendarTests
         var timeOffSettings = TimeOffSettings.Create(paidTimeOffDuration, TimeSpan.FromSeconds(1));
         var startDate = new StartDate(DateTimeOffset.Parse(dateFromData));
         var actor = CalendarActor.Crete(user, startDate, timeOffSettings);
-        var atTime = startDate.Date.AddYears(1);
+        var atTime = startDate.Value.AddYears(1);
 
         var timeOffAdditionEvents = actor.GetTimeOffAdditionEvents(atTime);
         var paidTimeOffDurationResult = CalendarEngine.CalculateTimeOffDuration(timeOffAdditionEvents);
         
         using var scope = new AssertionScope();
-        user.Name.Name.Should().NotBeEmpty();
+        user.Name.Values.Should().NotBeEmpty();
         user.Email.Value.Should().NotBeNullOrEmpty();
         paidTimeOffDurationResult.Days.Should().Be(paidTimeOffDuration.Days);
         paidTimeOffDurationResult.Hours.Should().Be(0);
@@ -50,7 +51,7 @@ public sealed class CalendarTests
     public void LeapYearPaidTimeOffTest(User user)
     {
         using var scope = new AssertionScope();
-        user.Name.Name.Should().NotBeEmpty();
+        user.Name.Values.Should().NotBeEmpty();
         user.Email.Value.Should().NotBeNullOrEmpty();
     }
 
@@ -58,7 +59,7 @@ public sealed class CalendarTests
     public void RegularYearPaidTimeOffTest(User user)
     {
         using var scope = new AssertionScope();
-        user.Name.Name.Should().NotBeEmpty();
+        user.Name.Values.Should().NotBeEmpty();
         user.Email.Value.Should().NotBeNullOrEmpty();
     }
 
@@ -91,8 +92,8 @@ public sealed class CalendarTests
         var timeOff = engine.CalculateTimeOff(atTime);
 
         using var scope = new AssertionScope();
-        timeOff.PaidTimeOff.Duration.Days.Should().BeGreaterThan(0);
-        timeOff.UnpaidTimeOff.Duration.Days.Should().Be(0);
-        timeOff.FamilyTimeOff.Duration.Days.Should().Be(0);
+        timeOff.PaidTimeOff.Value.Days.Should().BeGreaterThan(0);
+        timeOff.UnpaidTimeOff.Value.Days.Should().Be(0);
+        timeOff.FamilyTimeOff.Value.Days.Should().Be(0);
     }
 }

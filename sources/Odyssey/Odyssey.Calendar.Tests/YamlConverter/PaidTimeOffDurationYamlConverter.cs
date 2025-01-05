@@ -1,8 +1,9 @@
+using Odyssey.Calendar;
 using YamlDotNet.Core;
 using YamlDotNet.Core.Events;
 using YamlDotNet.Serialization;
 
-namespace Calendar.Tests.YamlConverter;
+namespace Odyssey.Calendar.Tests.YamlConverter;
 
 public sealed class PaidTimeOffDurationYamlConverter: IYamlTypeConverter
 {
@@ -25,7 +26,7 @@ public sealed class PaidTimeOffDurationYamlConverter: IYamlTypeConverter
     public void WriteYaml(IEmitter emitter, object? value, Type type, ObjectSerializer serializer)
     {
         var data = (PaidTimeOffDuration)value!;
-        var formatted = data.Duration.ToString();
+        var formatted = data.Value.ToString();
         var scalar = new Scalar(AnchorName.Empty, TagName.Empty, formatted, ScalarStyle.DoubleQuoted, true, true);
         emitter.Emit(scalar);
     }

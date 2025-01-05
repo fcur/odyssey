@@ -1,32 +1,33 @@
+using Odyssey.Calendar;
 using YamlDotNet.Core;
 using YamlDotNet.Core.Events;
 using YamlDotNet.Serialization;
 
-namespace Calendar.Tests.YamlConverter;
+namespace Odyssey.Calendar.Tests.YamlConverter;
 
-public sealed class TimeOffRoundingYamlConverter: IYamlTypeConverter
+public sealed class UserIdYamlConverter: IYamlTypeConverter
 {
     public bool Accepts(Type type)
     {
-        return type == typeof(TimeOffRounding);
+        return type == typeof(UserId);
     }
 
     public object? ReadYaml(IParser parser, Type type, ObjectDeserializer rootDeserializer)
     {
         var value = parser.Consume<Scalar>().Value;
 
-        if (!string.IsNullOrEmpty(value) && TimeSpan.TryParse(value, out var result))
+        if (Guid.TryParse(value, out var guid))
         {
-            return new TimeOffRounding(result);
+            return new UserId(guid);
         }
 
-        throw new NotSupportedException(nameof(TimeOffRounding));
+        throw new NotSupportedException(nameof(UserId));
     }
 
     public void WriteYaml(IEmitter emitter, object? value, Type type, ObjectSerializer serializer)
     {
-        var data = (TimeOffRounding)value!;
-        var formatted = data.Interval.ToString();
+        var data = (UserId)value!;
+        var formatted = data.Value.ToString("D");
         var scalar = new Scalar(AnchorName.Empty, TagName.Empty, formatted, ScalarStyle.DoubleQuoted, true, true);
         emitter.Emit(scalar);
     }

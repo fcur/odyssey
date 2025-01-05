@@ -1,5 +1,5 @@
 ﻿
 using BenchmarkDotNet.Running;
-using Calendar.Benchmark.Tests;
+using Odyssey.Calendar.Benchmark.Tests;
 
 BenchmarkRunner.Run<CalendarBenchmark>();

@@ -1,32 +1,34 @@
+using Odyssey.Calendar;
 using YamlDotNet.Core;
 using YamlDotNet.Core.Events;
 using YamlDotNet.Serialization;
 
-namespace Calendar.Tests.YamlConverter;
+namespace Odyssey.Calendar.Tests.YamlConverter;
 
-public sealed class UserIdYamlConverter: IYamlTypeConverter
+public sealed class EmailYamlConverter : IYamlTypeConverter
 {
     public bool Accepts(Type type)
     {
-        return type == typeof(UserId);
+        return type == typeof(Email);
     }
 
     public object? ReadYaml(IParser parser, Type type, ObjectDeserializer rootDeserializer)
     {
         var value = parser.Consume<Scalar>().Value;
 
-        if (Guid.TryParse(value, out var guid))
+        if (!string.IsNullOrEmpty(value))
         {
-            return new UserId(guid);
+            return new Email(value);
         }
 
-        throw new NotSupportedException(nameof(UserId));
+        throw new NotSupportedException(nameof(Email));
     }
 
     public void WriteYaml(IEmitter emitter, object? value, Type type, ObjectSerializer serializer)
     {
-        var data = (UserId)value!;
-        var formatted = data.Id.ToString("D");
+        var data = (Email)value!;
+        var formatted = data.Value;
+        
         var scalar = new Scalar(AnchorName.Empty, TagName.Empty, formatted, ScalarStyle.DoubleQuoted, true, true);
         emitter.Emit(scalar);
     }

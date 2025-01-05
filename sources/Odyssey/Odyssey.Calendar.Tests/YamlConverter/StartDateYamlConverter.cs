@@ -1,34 +1,36 @@
+using Odyssey.Calendar;
 using YamlDotNet.Core;
 using YamlDotNet.Core.Events;
 using YamlDotNet.Serialization;
 
-namespace Calendar.Tests.YamlConverter;
+namespace Odyssey.Calendar.Tests;
 
-public sealed class UserNameYamlConverter : IYamlTypeConverter
+public sealed class StartDateYamlConverter : IYamlTypeConverter
 {
     public bool Accepts(Type type)
     {
-        return type == typeof(UserName);
+        return type == typeof(StartDate);
     }
 
     public object? ReadYaml(IParser parser, Type type, ObjectDeserializer rootDeserializer)
     {
         var value = parser.Consume<Scalar>().Value;
 
-        if (!string.IsNullOrEmpty(value))
+        if (!string.IsNullOrEmpty(value) && DateTimeOffset.TryParse(value, out var result))
         {
-            var parts = value.Split(' ');
-            return new UserName(parts);
+            return new StartDate(result);
         }
 
-        throw new NotSupportedException(nameof(UserName));
+        return new StartDate(DateTimeOffset.UtcNow);
     }
 
     public void WriteYaml(IEmitter emitter, object? value, Type type, ObjectSerializer serializer)
     {
-        var data = (UserName)value!;
-        var formatted = string.Join(" ", data.Name);
+        var startDate = (StartDate)value!;
+
+        var formatted = startDate.Value.ToString();
         var scalar = new Scalar(AnchorName.Empty, TagName.Empty, formatted, ScalarStyle.DoubleQuoted, true, true);
+
         emitter.Emit(scalar);
     }
 }
