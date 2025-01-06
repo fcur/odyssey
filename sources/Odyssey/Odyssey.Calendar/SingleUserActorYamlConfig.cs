@@ -1,10 +1,11 @@
 namespace Odyssey.Calendar;
 
-public sealed class SingleUserActorYamlConfig
+public sealed class SingleUserYamlConfig
 {
     public UserYamlConfig User { get; set; }
     public string StartDate { get; set; }
     public TimeOffYamlConfig TimeOffSettings { get; set; }
+    public TimeOffRequestYamlConfig[] TimeOffRequests { get; set; }
 }
 
 public sealed class UserYamlConfig
@@ -22,9 +23,16 @@ public sealed class TimeOffYamlConfig
     public string Rounding { get; set; }
 }
 
+public sealed class TimeOffRequestYamlConfig
+{
+    public string Type { get; set; }
+    public string Start { get; set; }
+    public string End { get; set; }
+}
+
 public static class SingleUserConfigExtensions
 {
-    public static CalendarActor ToCalendarActor(this SingleUserActorYamlConfig config)
+    public static CalendarActor ToCalendarActor(this SingleUserYamlConfig config)
     {
         ArgumentNullException.ThrowIfNull(config);
         ArgumentException.ThrowIfNullOrEmpty(config.StartDate);

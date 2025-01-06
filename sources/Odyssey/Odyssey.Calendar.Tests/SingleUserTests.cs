@@ -26,15 +26,15 @@ public sealed class SingleUserTests
             .WithTypeConverter(new TimeOffRoundingYamlConverter());
 
         var deserializerBuilder = new DeserializerBuilder()
-            .WithNamingConvention(HyphenatedNamingConvention.Instance)
-            .WithTypeConverter(new StartDateYamlConverter())
-            .WithTypeConverter(new UserNameYamlConverter())
-            .WithTypeConverter(new UserIdYamlConverter())
-            .WithTypeConverter(new EmailYamlConverter())
-            .WithTypeConverter(new PaidTimeOffDurationYamlConverter())
-            .WithTypeConverter(new UnpaidTimeOffDurationYamlConverter())
-            .WithTypeConverter(new FamilyTimeOffDurationYamlConverter())
-            .WithTypeConverter(new TimeOffRoundingYamlConverter());
+            .WithNamingConvention(HyphenatedNamingConvention.Instance);
+            // .WithTypeConverter(new StartDateYamlConverter())
+            // .WithTypeConverter(new UserNameYamlConverter())
+            // .WithTypeConverter(new UserIdYamlConverter())
+            // .WithTypeConverter(new EmailYamlConverter())
+            // .WithTypeConverter(new PaidTimeOffDurationYamlConverter())
+            // .WithTypeConverter(new UnpaidTimeOffDurationYamlConverter())
+            // .WithTypeConverter(new FamilyTimeOffDurationYamlConverter())
+            // .WithTypeConverter(new TimeOffRoundingYamlConverter())
 
         YamlSerializer = serializerBuilder.Build();
         YamlDeserializer = deserializerBuilder.Build();
@@ -69,7 +69,7 @@ public sealed class SingleUserTests
         var familyTimeOffDuration = TimeSpan.Zero;
         var timeOffRoundingInterval = TimeSpan.FromSeconds(1);
 
-        var config = YamlDeserializer.Deserialize<SingleUserActorYamlConfig>(yamlString);
+        var config = YamlDeserializer.Deserialize<SingleUserYamlConfig>(yamlString);
         var actor = config.ToCalendarActor();
 
         using var scope = new AssertionScope();

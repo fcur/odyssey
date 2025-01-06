@@ -1,3 +1,4 @@
+---
 user:
   name: "John Fitzgerald Kennedy"
   email: "foo@bar.com"
@@ -8,3 +9,10 @@ time-off-settings:
   unpaid: "00:00:00"
   family: "00:00:00"
   rounding: "00:00:01"
+time-off-requests:
+  - type: "paid"
+    start: "2023-08-01"
+    end: "2023-08-05"
+  - type: "paid"
+    start: "2023-10-01"
+    end: "2023-10-03"
