@@ -1,18 +1,23 @@
----
 user:
-  name: "John Fitzgerald Kennedy"
-  email: "foo@bar.com"
-  id: "01943690-779a-7a89-8f95-fd624aa78dfc"
-start-date: "2023-02-13 0:00:00 +02:00"
+  id: 019452f8-0ebf-7184-acc3-0e024531863c
+  email: foo@bar.com
+  name: John Fitzgerald Kennedy
+start-date: 2023-02-13 0:00:00 +02:00
 time-off-settings:
-  paid: "20.00:00:00"
-  unpaid: "00:00:00"
-  family: "00:00:00"
-  rounding: "00:00:01"
+  paid: 20.00:00:00
+  unpaid: 00:00:00
+  family: 00:00:00
+  rounding: 00:00:01
 time-off-requests:
-  - type: "paid"
-    start: "2023-08-01"
-    end: "2023-08-05"
-  - type: "paid"
-    start: "2023-10-01"
-    end: "2023-10-03"
+  - type: paid
+    start: 2023-08-01
+    finish: 2023-08-05
+  - type: paid
+    start: 2023-10-01
+    finish: 2023-10-03
+  - type: unpaid
+    start: 2023-11-20
+    finish: 2023-11-30
+  - type: family
+    start: 2023-12-20
+    finish: 2023-12-24

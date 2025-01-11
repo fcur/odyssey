@@ -1,11 +1,22 @@
+using CSharpFunctionalExtensions;
+
 namespace Odyssey.Calendar;
 
-public sealed record CalendarEngine(
-    CalendarActor Actor,
-    IReadOnlyCollection<ITimeOffRequest> TimeOffRequests)
+public sealed class CalendarEngine
 {
-    public static CalendarEngine Create(CalendarActor calendarActor,
-        IReadOnlyCollection<ITimeOffRequest> timeOffRequests)
+    public CalendarActor Actor { get; }
+    public IReadOnlyCollection<TimeOffRequest> TimeOffRequests { get; }
+
+    public CalendarEngine(CalendarActor actor, IReadOnlyCollection<TimeOffRequest> timeOffRequests)
+    {
+        ArgumentNullException.ThrowIfNull(actor);
+        ArgumentNullException.ThrowIfNull(timeOffRequests);
+
+        Actor = actor;
+        TimeOffRequests = timeOffRequests;
+    }
+
+    public static Result<CalendarEngine> Create(CalendarActor calendarActor, IReadOnlyCollection<TimeOffRequest> timeOffRequests)
     {
         return new CalendarEngine(calendarActor, timeOffRequests);
     }
@@ -18,15 +29,22 @@ public sealed record CalendarEngine(
         return TimeSpan.FromTicks((long)roundedTicks);
     }
 
-    public static TimeSpan CalculatePaidTimeOffDuration(IReadOnlyCollection<ITimeOffRequest> timeOffRequests)
+    public static TimeSpan CalculatePaidTimeOffDuration(IReadOnlyCollection<TimeOffRequest> timeOffRequests)
     {
         return timeOffRequests.Aggregate(TimeSpan.Zero,
             (current, timeOffRequest) => current.Add(timeOffRequest.TimeOffSettings.Duration));
     }
 
-    public TimeOffResult CalculateTimeOff(DateTimeOffset atTime)
+    public Result<TimeOffResult, Error> CalculateTimeOff(DateTimeOffset atTime)
     {
-        var timeOffAdditionEvents = Actor.GetTimeOffAdditionEvents(atTime);
+        var timeOffAdditionEventsResult = Actor.GetTimeOffAdditionEvents(atTime);
+
+        if (timeOffAdditionEventsResult.IsFailure)
+        {
+            return timeOffAdditionEventsResult.Error;
+        }
+        
+        var timeOffAdditionEvents = timeOffAdditionEventsResult.Value;
         
         var paidTimeOffDuration =
             CalculateTimeOffDuration(timeOffAdditionEvents.Where(v => v.Type == TimeOffType.Paid).ToArray());
@@ -38,8 +56,12 @@ public sealed record CalendarEngine(
         var paidTimeOff = new PaidTimeOffDuration(availablePaidTimeOffDuration);
         var unPaidTimeOff = new UnpaidTimeOffDuration(TimeSpan.Zero);
         var familyTimeOff = new FamilyTimeOffDuration(TimeSpan.Zero);
+        
         return new TimeOffResult(paidTimeOff, unPaidTimeOff, familyTimeOff);
     }
 }
 
-public record struct TimeOffResult(PaidTimeOffDuration PaidTimeOff, UnpaidTimeOffDuration UnpaidTimeOff, FamilyTimeOffDuration FamilyTimeOff);
+public record struct TimeOffResult(
+    PaidTimeOffDuration PaidTimeOff,
+    UnpaidTimeOffDuration UnpaidTimeOff,
+    FamilyTimeOffDuration FamilyTimeOff);

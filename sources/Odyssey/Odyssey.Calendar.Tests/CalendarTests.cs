@@ -1,6 +1,5 @@
 ﻿using System.Diagnostics.CodeAnalysis;
 using AutoFixture.Xunit2;
-using Odyssey.Calendar;
 using FluentAssertions;
 using FluentAssertions.Execution;
 
@@ -35,8 +34,8 @@ public sealed class CalendarTests
         var actor = CalendarActor.Crete(user, startDate, timeOffSettings);
         var atTime = startDate.Value.AddYears(1);
 
-        var timeOffAdditionEvents = actor.GetTimeOffAdditionEvents(atTime);
-        var paidTimeOffDurationResult = CalendarEngine.CalculateTimeOffDuration(timeOffAdditionEvents);
+        var timeOffAdditionEvents = actor.Value.GetTimeOffAdditionEvents(atTime);
+        var paidTimeOffDurationResult = CalendarEngine.CalculateTimeOffDuration(timeOffAdditionEvents.Value);
         
         using var scope = new AssertionScope();
         user.Name.Values.Should().NotBeEmpty();
@@ -81,19 +80,20 @@ public sealed class CalendarTests
 
         var timeOffRequests = new[]
         {
-            PaidTimeOffRequest.Create(new TimeOffRequestSettings(startTime1, TimeSpan.FromDays(5))),
-            PaidTimeOffRequest.Create(new TimeOffRequestSettings(startTime2, TimeSpan.FromDays(3))),
-            PaidTimeOffRequest.Create(new TimeOffRequestSettings(startTime3, TimeSpan.FromDays(1))),
-            PaidTimeOffRequest.Create(new TimeOffRequestSettings(startTime4, TimeSpan.FromDays(1)))
+            TimeOffRequest.CreatePaidRequest(new TimeOffRequestSettings(startTime1, TimeSpan.FromDays(5))),
+            TimeOffRequest.CreatePaidRequest(new TimeOffRequestSettings(startTime2, TimeSpan.FromDays(3))),
+            TimeOffRequest.CreatePaidRequest(new TimeOffRequestSettings(startTime3, TimeSpan.FromDays(1))),
+            TimeOffRequest.CreatePaidRequest(new TimeOffRequestSettings(startTime4, TimeSpan.FromDays(1)))
         };
 
         var atTime = DateTimeOffset.Parse("2024-12-05");
-        var engine = CalendarEngine.Create(actor, timeOffRequests);
-        var timeOff = engine.CalculateTimeOff(atTime);
+        var engine = CalendarEngine.Create(actor.Value, timeOffRequests);
+        var timeOffResult = engine.Value.CalculateTimeOff(atTime);
 
         using var scope = new AssertionScope();
-        timeOff.PaidTimeOff.Value.Days.Should().BeGreaterThan(0);
-        timeOff.UnpaidTimeOff.Value.Days.Should().Be(0);
-        timeOff.FamilyTimeOff.Value.Days.Should().Be(0);
+        timeOffResult.IsSuccess.Should().BeTrue();
+        timeOffResult.Value.PaidTimeOff.Value.Days.Should().BeGreaterThan(0);
+        timeOffResult.Value.UnpaidTimeOff.Value.Days.Should().Be(0);
+        timeOffResult.Value.FamilyTimeOff.Value.Days.Should().Be(0);
     }
 }

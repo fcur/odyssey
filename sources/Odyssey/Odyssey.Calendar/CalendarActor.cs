@@ -1,19 +1,38 @@
+using CSharpFunctionalExtensions;
+
 namespace Odyssey.Calendar;
 
-public sealed class CalendarActor(User user, StartDate startDate, TimeOffSettings timeOffSettings)
+public sealed class CalendarActor
 {
-    public User User { get; init; } = user ?? throw new ArgumentNullException(nameof(user));
-    public StartDate StartDate { get; init; } = startDate ?? throw new ArgumentNullException(nameof(startDate));
+    public User User { get; }
+    public StartDate StartDate { get; }
+    public TimeOffSettings TimeOffSettings { get; }
 
-    public TimeOffSettings TimeOffSettings { get; init; } =
-        timeOffSettings ?? throw new ArgumentNullException(nameof(timeOffSettings));
-
-    public static CalendarActor Crete(User user, StartDate startDate, TimeOffSettings timeOffSettings)
+    public CalendarActor(User user, StartDate startDate, TimeOffSettings timeOffSettings)
     {
+        ArgumentNullException.ThrowIfNull(user);
+        ArgumentNullException.ThrowIfNull(startDate);
+        ArgumentNullException.ThrowIfNull(timeOffSettings);
+        
+        User = user;
+        StartDate = startDate;
+        TimeOffSettings = timeOffSettings;
+    }
+
+    public static Result<CalendarActor> Crete(User user, StartDate startDate, TimeOffSettings timeOffSettings)
+    {
+        var validationResult = Validate(user, startDate, timeOffSettings);
+
+        if (validationResult.IsFailure)
+        {
+            return Result.Failure<CalendarActor>(
+                $"Failed to create {nameof(CalendarActor)} instance due to error: '{validationResult.Error}'.");
+        }
+
         return new CalendarActor(user, startDate, timeOffSettings);
     }
 
-    public IReadOnlyCollection<ITimeOffAdditionEvent> GetTimeOffAdditionEvents(DateTimeOffset atTime)
+    public Result<IReadOnlyCollection<ITimeOffAdditionEvent>, Error> GetTimeOffAdditionEvents(DateTimeOffset atTime)
     {
         var paidTimeOffAdditionEvents = PreparePaidTimeOffAdditionEvents(atTime);
 
@@ -23,7 +42,7 @@ public sealed class CalendarActor(User user, StartDate startDate, TimeOffSetting
         return paidTimeOffAdditionEvents;
     }
 
-    private IReadOnlyCollection<ITimeOffAdditionEvent> PreparePaidTimeOffAdditionEvents(DateTimeOffset atTime)
+    private Result<IReadOnlyCollection<ITimeOffAdditionEvent>, Error> PreparePaidTimeOffAdditionEvents(DateTimeOffset atTime)
     {
         var monthlyCheckpoints = CalendarTools.BuildMonthlyCheckpoints(StartDate.Value, atTime);
         var timeAccruals = CalendarTools
@@ -31,6 +50,26 @@ public sealed class CalendarActor(User user, StartDate startDate, TimeOffSetting
             .ToArray();
 
         return timeAccruals.Select(PaidTimeOffAdditionEvent.Create).ToArray();
+    }
+
+    private static Result Validate(User? user, StartDate? startDate, TimeOffSettings? timeOffSettings)
+    {
+        if (user is null)
+        {
+            return Result.Failure<CalendarActor>($"{nameof(User)} cannot be undefined.");
+        }
+
+        if (startDate is null)
+        {
+            return Result.Failure<CalendarActor>($"{nameof(StartDate)} cannot be undefined.");
+        }
+
+        if (timeOffSettings is null)
+        {
+            return Result.Failure<CalendarActor>($"{nameof(TimeOffSettings)} cannot be undefined.");
+        }
+
+        return Result.Success();
     }
 }
 

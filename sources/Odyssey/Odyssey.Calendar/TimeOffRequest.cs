@@ -1,49 +1,56 @@
+using CSharpFunctionalExtensions;
+
 namespace Odyssey.Calendar;
 
-public interface ITimeOffRequest
+public record TimeOffRequest(TimeOffRequestSettings TimeOffSettings, DateTimeOffset CreatedAt, TimeOffType Type)
 {
-    TimeOffRequestSettings TimeOffSettings { get; }
-    DateTimeOffset CreatedAt { get; }
-    TimeOffType Type { get; }
-}
-
-public sealed record PaidTimeOffRequest(
-    TimeOffRequestSettings TimeOffSettings,
-    DateTimeOffset CreatedAt,
-    TimeOffType Type) : ITimeOffRequest
-{
-    public static ITimeOffRequest Create(TimeOffRequestSettings timeOffSettings, DateTimeOffset createdAt)
+    public DateTimeOffset StartAt => TimeOffSettings.StartAt;
+    public DateTimeOffset FinishAt => TimeOffSettings.FinishAt;
+    
+    public static TimeOffRequest CreatePaidRequest(TimeOffRequestSettings timeOffSettings,
+        DateTimeOffset? createdAt = null)
     {
-        return new PaidTimeOffRequest(timeOffSettings, createdAt, TimeOffType.Paid);
+        return Create(timeOffSettings, TimeOffType.Paid, createdAt);
     }
 
-    public static ITimeOffRequest Create(TimeOffRequestSettings timeOffSettings)
+    public static TimeOffRequest CreateUnpaidRequest(TimeOffRequestSettings timeOffSettings,
+        DateTimeOffset? createdAt = null)
     {
-        var createdAt = timeOffSettings.StartAt.AddDays(-1);
-        return Create(timeOffSettings, createdAt);
+        return Create(timeOffSettings, TimeOffType.Unpaid, createdAt);
     }
-}
 
-public sealed record UnPaidTimeOffRequest(
-    TimeOffRequestSettings TimeOffSettings,
-    DateTimeOffset CreatedAt,
-    TimeOffType Type) : ITimeOffRequest
-{
-    public static ITimeOffRequest Create(TimeOffRequestSettings timeOffSettings, DateTimeOffset createdAt)
+    public static TimeOffRequest CreateFamilyRequest(TimeOffRequestSettings timeOffSettings,
+        DateTimeOffset? createdAt = null)
     {
-        return new UnPaidTimeOffRequest(timeOffSettings, createdAt, TimeOffType.UnPaid);
+        return Create(timeOffSettings, TimeOffType.Family, createdAt);
+    }
+
+    private static TimeOffRequest Create(TimeOffRequestSettings timeOffSettings,
+        TimeOffType type,
+        DateTimeOffset? createdAt = null)
+    {
+        return new TimeOffRequest(timeOffSettings, createdAt ?? timeOffSettings.StartAt.AddDays(-1), type);
     }
 }
 
-public sealed record FamilyTimeOffRequest(
-    TimeOffRequestSettings TimeOffSettings,
-    DateTimeOffset CreatedAt,
-    TimeOffType Type) : ITimeOffRequest
+public record struct TimeOffRequestSettings(DateTimeOffset StartAt, TimeSpan Duration)
 {
-    public static ITimeOffRequest Create(TimeOffRequestSettings timeOffSettings, DateTimeOffset createdAt)
+    public DateTimeOffset FinishAt => StartAt + Duration;
+    
+    public static Result<TimeOffRequestSettings> Create(DateTimeOffset startAt, TimeSpan duration)
     {
-        return new FamilyTimeOffRequest(timeOffSettings, createdAt, TimeOffType.Family);
+        return new TimeOffRequestSettings(startAt, duration);
+    }
+
+    public static Result<TimeOffRequestSettings> Create(DateTimeOffset startAt, DateTimeOffset finishAt)
+    {
+        if (finishAt < startAt)
+        {
+            return Result.Failure<TimeOffRequestSettings>(
+                "Can't create time-off settings with for specified start and finish date.");
+        }
+
+        var duration = finishAt - startAt;
+        return new TimeOffRequestSettings(startAt, duration);
     }
 }
-
-public record struct TimeOffRequestSettings(DateTimeOffset StartAt, TimeSpan Duration);
