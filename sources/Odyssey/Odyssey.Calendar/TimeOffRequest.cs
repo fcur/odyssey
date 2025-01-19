@@ -7,27 +7,17 @@ public record TimeOffRequest(TimeOffRequestSettings TimeOffSettings, DateTimeOff
     public DateTimeOffset StartAt => TimeOffSettings.StartAt;
     public DateTimeOffset FinishAt => TimeOffSettings.FinishAt;
     
-    public static TimeOffRequest CreatePaidRequest(TimeOffRequestSettings timeOffSettings,
-        DateTimeOffset? createdAt = null)
+    public static TimeOffRequest CreatePaidTimeOffRequest(TimeOffRequestSettings timeOffSettings, DateTimeOffset? createdAt = null)
     {
         return Create(timeOffSettings, TimeOffType.Paid, createdAt);
     }
 
-    public static TimeOffRequest CreateUnpaidRequest(TimeOffRequestSettings timeOffSettings,
-        DateTimeOffset? createdAt = null)
+    public static TimeOffRequest CreateUnpaidTimeOffRequest(TimeOffRequestSettings timeOffSettings, DateTimeOffset? createdAt = null)
     {
         return Create(timeOffSettings, TimeOffType.Unpaid, createdAt);
     }
 
-    public static TimeOffRequest CreateFamilyRequest(TimeOffRequestSettings timeOffSettings,
-        DateTimeOffset? createdAt = null)
-    {
-        return Create(timeOffSettings, TimeOffType.Family, createdAt);
-    }
-
-    private static TimeOffRequest Create(TimeOffRequestSettings timeOffSettings,
-        TimeOffType type,
-        DateTimeOffset? createdAt = null)
+    private static TimeOffRequest Create(TimeOffRequestSettings timeOffSettings, TimeOffType type, DateTimeOffset? createdAt = null)
     {
         return new TimeOffRequest(timeOffSettings, createdAt ?? timeOffSettings.StartAt.AddDays(-1), type);
     }

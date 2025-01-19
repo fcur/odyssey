@@ -18,6 +18,3 @@ time-off-requests:
   - type: unpaid
     start: 2023-11-20
     finish: 2023-11-30
-  - type: family
-    start: 2023-12-20
-    finish: 2023-12-24

@@ -14,6 +14,7 @@ public sealed class SingleUserTests
     static SingleUserTests()
     {
         var serializerBuilder = new SerializerBuilder()
+            .ConfigureDefaultValuesHandling(DefaultValuesHandling.OmitNull)
             .WithNamingConvention(HyphenatedNamingConvention.Instance);
         // .WithTypeConverter(new StartDateYamlConverter())
         // .WithTypeConverter(new UserNameYamlConverter())
@@ -40,16 +41,15 @@ public sealed class SingleUserTests
         var timeOffSettings = TimeOffSettings.CreateDefault();
         var startDate = new StartDate(DateTimeOffset.Parse("2023-02-13"));
         var actor = CalendarActor.Crete(user, startDate, timeOffSettings);
-        var dates = new[] { "2023-08-01", "2023-08-05", "2023-10-01", "2023-10-03", "2023-11-20", "2023-11-30", "2023-12-20", "2023-12-24" }
+        var dates = new[] { "2023-08-01", "2023-08-05", "2023-10-01", "2023-10-03", "2023-11-20", "2023-11-30"}
             .Select(DateTimeOffset.Parse).ToArray();
         var index = 0;
         
         var timeOffRequests = new[]
         {
-            TimeOffRequest.CreatePaidRequest(TimeOffRequestSettings.Create(dates[index++], dates[index++]).Value),
-            TimeOffRequest.CreatePaidRequest(TimeOffRequestSettings.Create(dates[index++], dates[index++]).Value),
-            TimeOffRequest.CreateUnpaidRequest(TimeOffRequestSettings.Create(dates[index++], dates[index++]).Value),
-            TimeOffRequest.CreateFamilyRequest(TimeOffRequestSettings.Create(dates[index++], dates[index]).Value)
+            TimeOffRequest.CreatePaidTimeOffRequest(TimeOffRequestSettings.Create(dates[index++], dates[index++]).Value),
+            TimeOffRequest.CreatePaidTimeOffRequest(TimeOffRequestSettings.Create(dates[index++], dates[index++]).Value),
+            TimeOffRequest.CreateUnpaidTimeOffRequest(TimeOffRequestSettings.Create(dates[index++], dates[index++]).Value)
         };
 
         var yamlConfig = (actor.Value, timeOffRequests).ToConfig();
@@ -82,7 +82,7 @@ public sealed class SingleUserTests
 
         actor.TimeOffSettings.Should().NotBeNull();
         actor.User.Id.Should().NotBeNull();
-        actor.User.Id.Value.Should().Be(Guid.Parse("01943690-779a-7a89-8f95-fd624aa78dfc"));
+        actor.User.Id.Value.Should().NotBeEmpty();
 
         actor.User.Email.Should().NotBeNull();
         actor.User.Email.Value.Should().Be("foo@bar.com");
@@ -105,7 +105,7 @@ public sealed class SingleUserTests
         actor.TimeOffSettings.Rounding.Value.Should().Be(TimeSpan.FromSeconds(1));
 
         timeOffRequests.Should().NotBeEmpty();
-        timeOffRequests.Length.Should().Be(4);
+        timeOffRequests.Length.Should().Be(3);
 
         index.Should().Be(0);
         timeOffRequests[index].Type.Should().Be(TimeOffType.Paid);
@@ -123,11 +123,14 @@ public sealed class SingleUserTests
         timeOffRequests[index].Type.Should().Be(TimeOffType.Unpaid);
         timeOffRequests[index].StartAt.Should().Be(DateTimeOffset.Parse("2023-11-20"));
         timeOffRequests[index].FinishAt.Should().Be(DateTimeOffset.Parse("2023-11-30"));
+    }
 
-        index++;
-        index.Should().Be(3);
-        timeOffRequests[index].Type.Should().Be(TimeOffType.Family);
-        timeOffRequests[index].StartAt.Should().Be(DateTimeOffset.Parse("2023-12-20"));
-        timeOffRequests[index].FinishAt.Should().Be(DateTimeOffset.Parse("2023-12-24"));
+    [Fact]
+    public void LeaveSettingsSerializationTest()
+    {
+        var leaveSettings = LeaveSettings.CreateDefault();
+        var yamlConfig =  leaveSettings.Select(v=>v.ToConfig()).ToArray();
+        var yamlConfigString = YamlSerializer.Serialize(yamlConfig);
+
     }
 }

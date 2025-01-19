@@ -80,10 +80,10 @@ public sealed class CalendarTests
 
         var timeOffRequests = new[]
         {
-            TimeOffRequest.CreatePaidRequest(new TimeOffRequestSettings(startTime1, TimeSpan.FromDays(5))),
-            TimeOffRequest.CreatePaidRequest(new TimeOffRequestSettings(startTime2, TimeSpan.FromDays(3))),
-            TimeOffRequest.CreatePaidRequest(new TimeOffRequestSettings(startTime3, TimeSpan.FromDays(1))),
-            TimeOffRequest.CreatePaidRequest(new TimeOffRequestSettings(startTime4, TimeSpan.FromDays(1)))
+            TimeOffRequest.CreatePaidTimeOffRequest(new TimeOffRequestSettings(startTime1, TimeSpan.FromDays(5))),
+            TimeOffRequest.CreatePaidTimeOffRequest(new TimeOffRequestSettings(startTime2, TimeSpan.FromDays(3))),
+            TimeOffRequest.CreatePaidTimeOffRequest(new TimeOffRequestSettings(startTime3, TimeSpan.FromDays(1))),
+            TimeOffRequest.CreatePaidTimeOffRequest(new TimeOffRequestSettings(startTime4, TimeSpan.FromDays(1)))
         };
 
         var atTime = DateTimeOffset.Parse("2024-12-05");

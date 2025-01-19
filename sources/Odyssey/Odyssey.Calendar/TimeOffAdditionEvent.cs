@@ -23,14 +23,6 @@ public sealed record UnPaidTimeOffAdditionEvent(TimeOffDuration Duration, TimeOf
     }
 }
 
-public sealed record FamilyTimeOffAdditionEvent(TimeOffDuration Duration, TimeOffType Type) : ITimeOffAdditionEvent
-{
-    public static ITimeOffAdditionEvent Create(TimeOffDuration duration)
-    {
-        return new FamilyTimeOffAdditionEvent(duration, TimeOffType.Family);
-    }
-}
-
 public sealed record TimeOffDuration(double Ticks)
 {
     private TimeSpan Duration => TimeSpan.FromTicks((long)Ticks);

@@ -10,22 +10,43 @@ public sealed class SingleUserYamlConfig
 
 public sealed class UserYamlConfig
 {
-    public string Id { get; set; }
-    public string Email { get; set; }
-    public string Name { get; set; }
+    public string Id { get; set; } = null!;
+    public string Email { get; set; } = null!;
+    public string Name { get; set; } = null!;
 }
 
 public sealed class TimeOffYamlConfig
 {
-    public string Paid { get; set; }
-    public string Unpaid { get; set; }
-    public string Family { get; set; }
-    public string Rounding { get; set; }
+    public string Paid { get; set; } = null!;
+    public string Unpaid { get; set; } = null!;
+    public string Family { get; set; } = null!;
+    public string Rounding { get; set; } = null!;
 }
 
 public sealed class TimeOffRequestYamlConfig
 {
-    public string Type { get; set; }
-    public string Start { get; set; }
-    public string Finish { get; set; }
+    public string Type { get; set; } = null!;
+    public string Start { get; set; } = null!;
+    public string Finish { get; set; } = null!;
+}
+
+public sealed class LeaveSettingsYamlConfig
+{
+    public string Type { get; set; } = null!;
+    public ILeaveSettingDetailsYamlConfig? Details { get; set; }
+}
+
+public interface ILeaveSettingDetailsYamlConfig
+{
+}
+
+public sealed class RecurringTimeOffSettingsYamlConfig : ILeaveSettingDetailsYamlConfig
+{
+    public string Duration { get; set; } = null!;
+    public string Policy { get; set; } = null!;
+}
+
+public sealed class BankHolidaySettingsYamlConfig : ILeaveSettingDetailsYamlConfig
+{
+    public string[] Days { get; set; } = null!;
 }

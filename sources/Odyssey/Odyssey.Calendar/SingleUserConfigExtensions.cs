@@ -41,11 +41,11 @@ public static class SingleUserConfigExtensions
         return (calendarActor.Value, timeOffRequests);
     }
 
-    public static SingleUserYamlConfig ToConfig(this(CalendarActor Actor, TimeOffRequest[] timeOffRequests) domain)
+    public static SingleUserYamlConfig ToConfig(this (CalendarActor Actor, TimeOffRequest[] timeOffRequests) domain)
     {
         var actor = domain.Actor;
         var timeOffRequests = domain.timeOffRequests;
-        
+
         return new SingleUserYamlConfig
         {
             User = new UserYamlConfig
@@ -66,6 +66,24 @@ public static class SingleUserConfigExtensions
         };
     }
     
+    public static LeaveSettingsYamlConfig ToConfig(this LeaveSettings domain)
+    {
+        var details = domain.Type.Code switch
+        {
+            LeaveType.PaidTimeOffCode or LeaveType.UnpaidTimeOffCode when domain.Details is RecurringTimeOffSettings rts => rts.ToConfig(),
+            LeaveType.BankHolidayCode when domain.Details is BankHolidaySettings bhs => bhs.ToConfig(),
+            _ => null
+        };
+        
+        var result = new LeaveSettingsYamlConfig
+        {
+            Type = domain.Type.Code,
+            Details = details
+        };
+
+        return result;
+    }
+
     private static TimeOffRequest ToTimeOffRequestDomain(TimeOffRequestYamlConfig config)
     {
         ArgumentException.ThrowIfNullOrEmpty(config.Start);
@@ -92,5 +110,26 @@ public static class SingleUserConfigExtensions
             Start = domain.StartAt.ToString(),
             Finish = domain.FinishAt.ToString()
         };
+    }
+
+    private static ILeaveSettingDetailsYamlConfig ToConfig(this RecurringTimeOffSettings domain)
+    {
+        var result = new RecurringTimeOffSettingsYamlConfig
+        {
+            Duration = domain.Accrual.Value.ToString(),
+            Policy = domain.Accrual.Policy.PolicyName
+        };
+        
+        return result;
+    }
+    
+    private static ILeaveSettingDetailsYamlConfig ToConfig(this BankHolidaySettings domain)
+    {
+        var result = new BankHolidaySettingsYamlConfig
+        {
+            Days = domain.Days.Select(v=>v.ToString("yyyy-MM-dd")).ToArray(),
+        };
+        
+        return result;
     }
 }
