@@ -1,5 +1,5 @@
 using CSharpFunctionalExtensions;
-using Odyssey.Calendar;
+using Odyssey.Domain;
 
 namespace Odyssey.SingleUserApp.Services;
 
