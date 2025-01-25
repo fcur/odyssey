@@ -1,6 +1,6 @@
 namespace Odyssey.Domain.EmployeeEntity;
 
-public sealed record LeaveType(string Name, string Code, string? Description)
+public sealed record LeaveType(string Code, string Name, string? Description)
 {
     public const string PaidTimeOffCode = "PAID-TIME-OFF";
     public const string UnpaidTimeOffCode = "UNPAID-TIME-OFF";
@@ -11,14 +11,14 @@ public sealed record LeaveType(string Name, string Code, string? Description)
     public const string ParentalLeaveCode = "PARENTAL-LEAVE";
     public const string BankHolidayCode = "BANK-HOLIDAY";
 
-    public static readonly LeaveType PaidTimeOff = new LeaveType("Paid time off", PaidTimeOffCode, null);
-    public static readonly LeaveType UnpaidTimeOff = new LeaveType("Unpaid time off", UnpaidTimeOffCode, null);
-    public static readonly LeaveType FamilyLeave = new LeaveType("Family leave", FamilyLeaveCode, null);
-    public static readonly LeaveType MilitaryLeave = new LeaveType("Military leave", MilitaryLeaveCode, null);
-    public static readonly LeaveType SickLeave = new LeaveType("Sick leave", SickLeaveCode, null);
-    public static readonly LeaveType MarriageLeave = new LeaveType("Marriage leave", MarriageLeaveCode, null);
-    public static readonly LeaveType ParentalLeave = new LeaveType("Parental leave", ParentalLeaveCode, null);
-    public static readonly LeaveType BankHoliday = new LeaveType("Bank holiday", BankHolidayCode, null);
+    public static readonly LeaveType PaidTimeOff = new LeaveType(PaidTimeOffCode, "Paid time off", null);
+    public static readonly LeaveType UnpaidTimeOff = new LeaveType(UnpaidTimeOffCode, "Unpaid time off", null);
+    public static readonly LeaveType FamilyLeave = new LeaveType(FamilyLeaveCode, "Family leave", null);
+    public static readonly LeaveType MilitaryLeave = new LeaveType(MilitaryLeaveCode, "Military leave", null);
+    public static readonly LeaveType SickLeave = new LeaveType(SickLeaveCode, "Sick leave", null);
+    public static readonly LeaveType MarriageLeave = new LeaveType(MarriageLeaveCode, "Marriage leave", null);
+    public static readonly LeaveType ParentalLeave = new LeaveType(ParentalLeaveCode, "Parental leave", null);
+    public static readonly LeaveType BankHoliday = new LeaveType(BankHolidayCode, "Bank holiday", null);
     public static readonly LeaveType Unknown = new LeaveType(string.Empty, string.Empty, null);
 
     public static LeaveType Parse(string value)
@@ -40,7 +40,7 @@ public sealed record LeaveType(string Name, string Code, string? Description)
 
         return result;
     }
-    
+
     public override int GetHashCode()
     {
         return Code.GetHashCode();

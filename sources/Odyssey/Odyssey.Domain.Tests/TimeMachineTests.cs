@@ -24,8 +24,8 @@ public sealed class TimeMachineTests
     public void YearlyPaidTimeOffTest(string dateFromData, User user)
     {
         var paidTimeOffDuration = TimeSpan.Parse("20.00:00:00");
-        var paidTimeOffAccrual = new TimeOffAccrual(paidTimeOffDuration, TimeOffAccrualPolicy.Yearly);
-        var paidTimeOffSettings = LeaveSettings.CreatePaidTimeOff(paidTimeOffAccrual, null);
+        var paidTimeOffAccrual = new LeaveAccrual(paidTimeOffDuration, AccrualPeriod.Yearly, AccrualInterval.Monthly);
+        var paidTimeOffSettings = LeaveSettings.CreatePaidTimeOff(paidTimeOffAccrual, LeaveLimits.None);
 
         var leaveSettings = new[] { paidTimeOffSettings };
         var startDate = new StartDate(DateTimeOffset.Parse(dateFromData));
@@ -91,5 +91,56 @@ public sealed class TimeMachineTests
         state[LeaveType.UnpaidTimeOff].Accrued.Days.Should().BeGreaterThan(0);
         state[LeaveType.UnpaidTimeOff].Used.Days.Should().Be(0);
         state[LeaveType.UnpaidTimeOff].Delta.Days.Should().BeGreaterThan(0);
+    }
+    
+    [Fact]
+    public void PaidTimeOff_20DaysForYear_AccruedEachMonth_WithoutLimits()
+    {
+        var startDate = DateTimeOffset.Parse("2025-01-25");
+        var atTime = startDate.AddYears(1);
+        var leaveAccrual = Accruing20DaysForYear() with { Interval = AccrualInterval.Monthly };
+        var paidTimeOffDetails = new RecurringLeaveAccrualDetails(leaveAccrual, LeaveLimits.None);
+        var leaveSettings = new LeaveSettings(LeaveType.PaidTimeOff, paidTimeOffDetails);
+
+        var accrualItems = TimeMachine.BuildRecurringTimeOffAccruals(paidTimeOffDetails, startDate, atTime);
+        var accrualResult = TimeMachine.BuildTimeAccruals(leaveSettings, startDate, atTime);
+
+        using var scope = new AssertionScope();
+        
+        accrualItems.Should().NotBeNull();
+        accrualItems.Length.Should().Be(13);
+        
+        accrualResult.Should().NotBeNull();
+        accrualResult!.Duration.Should().Be(TimeSpan.FromDays(20));
+    }
+
+    [Fact]
+    public void UnpaidTimeOff_20DaysForYear_AccruedYearly_WithoutLimits()
+    {
+        var startDate = DateTimeOffset.Parse("2025-01-25");
+        var atTime = startDate.AddYears(1);
+        var leaveAccrual = Accruing20DaysForYear() with { Interval = AccrualInterval.Yearly };
+        var paidTimeOffDetails = new RecurringLeaveAccrualDetails(leaveAccrual, LeaveLimits.None);
+        var leaveSettings = new LeaveSettings(LeaveType.UnpaidTimeOff, paidTimeOffDetails);
+        
+        var accrualItems = TimeMachine.BuildRecurringTimeOffAccruals(paidTimeOffDetails, startDate, atTime);
+        var accrualResult = TimeMachine.BuildTimeAccruals(leaveSettings, startDate, atTime);
+
+        using var scope = new AssertionScope();
+        
+        accrualItems.Should().NotBeNull();
+        accrualItems.Length.Should().Be(2);
+        
+        accrualResult.Should().NotBeNull();
+        accrualResult!.Duration.Should().Be(TimeSpan.FromDays(40));
+    }
+
+    private static LeaveAccrual Accruing20DaysForYear()
+    {
+        var duration = TimeSpan.FromDays(20);
+        var period = AccrualPeriod.Yearly;
+        var interval = AccrualInterval.Unknown;
+
+        return new LeaveAccrual(duration, period, interval);
     }
 }

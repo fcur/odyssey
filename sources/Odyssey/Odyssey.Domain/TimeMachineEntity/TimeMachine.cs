@@ -33,8 +33,9 @@ public sealed class TimeMachine
     public Result<TimeMachineState, Error> GoTo(DateTimeOffset atTime)
     {
         var leaveSettings = _actor.LeaveSettings;
+        var startDate = _actor.StartDate.Value;
 
-        var timeAccruals = leaveSettings.Select(v => BuildTimeAccruals(v, atTime))
+        var timeAccruals = leaveSettings.Select(v => BuildTimeAccruals(v, startDate, atTime))
             .ExceptNull()
             .ToDictionary(v => v!.Type, v => v!.Duration);
 
@@ -54,19 +55,30 @@ public sealed class TimeMachine
         return new TimeMachineState(atTime, results);
     }
 
-    private TimeAccrual[] BuildRecurringTimeOffAccruals(RecurringTimeOffSettings rts, DateTimeOffset atTime)
+    public static TimeAccrual[] BuildRecurringTimeOffAccruals(
+        RecurringLeaveAccrualDetails rts,
+        DateTimeOffset startDate,
+        DateTimeOffset atTime)
     {
-        var (value, policy) = rts.Accrual;
+        var (value, period, interval) = rts.Accrual;
 
-        if (policy != TimeOffAccrualPolicy.Yearly)
+        if (period != AccrualPeriod.Yearly)
         {
-            throw new NotImplementedException($"Not implemented for '{policy.Name}'");
+            throw new NotImplementedException($"Not implemented for period: '{period.Value}'");
         }
 
-        var startDate = _actor.StartDate.Value;
+        var timeAccruals = interval.Value switch
+        {
+            AccrualInterval.YearlyTypeName => HandleYearlyAccruals(value, startDate, atTime),
+            AccrualInterval.MonthlyTypeName => HandleMonthlyAccruals(value, startDate, atTime),
+            _ => throw new NotImplementedException($"Not implemented for interval: '{interval.Value}'")
+        };
 
-        // yearly recurring time off accruals
+        return timeAccruals;
+    }
 
+    private static TimeAccrual[] HandleMonthlyAccruals(TimeSpan value, DateTimeOffset startDate, DateTimeOffset atTime)
+    {
         var monthlyCheckpoints = CalendarTools.BuildMonthlyCheckpoints(startDate, atTime);
         var timeAccruals = CalendarTools
             .PrepareMonthlyTimeAccruals(monthlyCheckpoints, value)
@@ -75,17 +87,32 @@ public sealed class TimeMachine
         return timeAccruals;
     }
 
-    private TimeOffAccrualResult? BuildTimeAccruals(LeaveSettings settings, DateTimeOffset atTime)
+    private static TimeAccrual[] HandleYearlyAccruals(TimeSpan value, DateTimeOffset startDate, DateTimeOffset atTime)
+    {
+        var yearlyCheckpoints = CalendarTools.BuildYearlyCheckpoints(startDate, atTime);
+        var timeAccruals = CalendarTools
+            .PrepareYearlyTimeAccruals(yearlyCheckpoints, value)
+            .ToArray();
+
+        return timeAccruals;
+    }
+
+    public static TimeOffAccrualResult? BuildTimeAccruals(LeaveSettings settings, DateTimeOffset startDate, DateTimeOffset atTime)
     {
         var timeOffAccrual = settings.Type.Code switch
         {
-            LeaveType.PaidTimeOffCode or LeaveType.UnpaidTimeOffCode when
-                settings.Details is RecurringTimeOffSettings rts =>
-                new TimeOffAccrualResult(settings.Type, Aggregate(BuildRecurringTimeOffAccruals(rts, atTime))),
+            LeaveType.PaidTimeOffCode or LeaveType.UnpaidTimeOffCode when settings.Details is RecurringLeaveAccrualDetails rts =>
+                new TimeOffAccrualResult(settings.Type, AggregateRecurringTimeOffAccruals(rts, startDate, atTime)),
             _ => null
         };
 
         return timeOffAccrual;
+    }
+    
+    private static TimeSpan AggregateRecurringTimeOffAccruals(RecurringLeaveAccrualDetails rts, DateTimeOffset startDate, DateTimeOffset atTime)
+    {
+        var accruals = BuildRecurringTimeOffAccruals(rts, startDate, atTime);
+        return Aggregate(accruals);
     }
 
     private static TimeSpan Aggregate(IReadOnlyCollection<TimeAccrual> timeAccruals)

@@ -21,7 +21,7 @@ public static class SingleUserConfigExtensions
         var userName = UserName.Parse(config.User.Name);
         var user = new User(UserId.Empty, userName, email);
         var startDate = StartDate.Parse(config.StartDate);
-        var leaveSettings = config.LeaveSettings.Select(ToDomain).Where(v=>v.Type!= LeaveType.Unknown).ToArray();
+        var leaveSettings = config.LeaveSettings.Select(ToDomain).Where(v => v.Type != LeaveType.Unknown).ToArray();
 
         var employee = Employee.Create(EmployeeId.Empty, user, startDate, leaveSettings).GetValueOrDefault();
         var timeOffRequests = config.TimeOffRequests.Select(ToTimeOffRequestDomain).ToArray();
@@ -51,7 +51,8 @@ public static class SingleUserConfigExtensions
     {
         var details = domain.Type.Code switch
         {
-            LeaveType.PaidTimeOffCode or LeaveType.UnpaidTimeOffCode when domain.Details is RecurringTimeOffSettings rts
+            LeaveType.PaidTimeOffCode or LeaveType.UnpaidTimeOffCode when
+                domain.Details is RecurringLeaveAccrualDetails rts
                 => rts.ToConfig(),
             LeaveType.BankHolidayCode when domain.Details is BankHolidaySettings bhs => bhs.ToConfig(),
             _ => null
@@ -95,12 +96,13 @@ public static class SingleUserConfigExtensions
         };
     }
 
-    private static LeaveSettingDetailsPlainYamlConfig ToConfig(this RecurringTimeOffSettings domain)
+    private static LeaveSettingDetailsPlainYamlConfig ToConfig(this RecurringLeaveAccrualDetails domain)
     {
         var result = new RecurringTimeOffSettingsPlainYamlConfig
         {
             Duration = domain.Accrual.Value.ToString(),
-            Policy = domain.Accrual.Policy.Name.ToLowerInvariant()
+            Period = domain.Accrual.Period.Value.ToLowerInvariant(),
+            Interval = domain.Accrual.Interval.Value.ToLowerInvariant(),
         };
 
         return result;
@@ -116,29 +118,29 @@ public static class SingleUserConfigExtensions
         return result;
     }
 
-    private static ILeaveDetails ToRecurringTimeOffSettings(this LeaveSettingDetailsPlainYamlConfig config)
+    private static LeaveDetails ToRecurringTimeOffSettings(this LeaveSettingDetailsPlainYamlConfig config)
     {
-        var accrual =  TimeOffAccrual.Parse(config.Duration!, config.Policy!);
-        var result = new RecurringTimeOffSettings(accrual, TimeOffLimits.None);
+        _ = LeaveAccrual.TryParse(config.Duration!, config.Period!, config.Interval!, out var accrual);
+        var result = new RecurringLeaveAccrualDetails(accrual, LeaveLimits.None);
 
         return result;
     }
-    
-    private static ILeaveDetails ToBankHolidaySettings(this LeaveSettingDetailsPlainYamlConfig config)
+
+    private static LeaveDetails ToBankHolidaySettings(this LeaveSettingDetailsPlainYamlConfig config)
     {
         var days = config.Days!.Select(DateTimeOffset.Parse).ToArray();
         var result = new BankHolidaySettings(days);
-        
+
         return result;
     }
-    
+
     private static LeaveSettings ToDomain(this LeaveSettingsYamlConfig config)
     {
         var leaveType = LeaveType.Parse(config.Type);
-        
+
         var details = leaveType.Code switch
         {
-            LeaveType.PaidTimeOffCode or LeaveType.UnpaidTimeOffCode  => config.Details!.ToRecurringTimeOffSettings(),
+            LeaveType.PaidTimeOffCode or LeaveType.UnpaidTimeOffCode => config.Details!.ToRecurringTimeOffSettings(),
             LeaveType.BankHolidayCode => config.Details!.ToBankHolidaySettings(),
             _ => null
         };

@@ -79,12 +79,12 @@ public sealed class SingleUserTests
         var config = YamlDeserializer.Deserialize<SingleUserYamlConfig>(yamlString);
         var (actor, timeOffRequests) = config.ToDomain();
         var index = 0;
-        Func<ILeaveDetails?, bool> checkRecurringSettings = (details) =>
+        Func<LeaveDetails?, bool> checkRecurringSettings = (details) =>
         {
-            var settings = details as RecurringTimeOffSettings;
-            return settings is { Accrual: { Policy.Name: TimeOffAccrualPolicy.YearlyTypeName, Value.Days: 20 } };
+            var settings = details as RecurringLeaveAccrualDetails;
+            return settings is { Accrual: { Period.Value: AccrualPeriod.YearlyTypeName, Value.Days: 20 } };
         };
-        Func<ILeaveDetails?, bool> checkBankHolidaySettings = (details) =>
+        Func<LeaveDetails?, bool> checkBankHolidaySettings = (details) =>
         {
             var settings = details as BankHolidaySettings;
             return settings is { Days.Length: 1 };
@@ -106,7 +106,7 @@ public sealed class SingleUserTests
         actor.User.Name.Values.Should().ContainInOrder("John", "Fitzgerald", "Kennedy");
 
         actor.LeaveSettings.Count.Should().Be(4);
-        actor.LeaveSettings.Should().ContainSingle(v => v.Type == LeaveType.PaidTimeOff && v.Details is RecurringTimeOffSettings && checkRecurringSettings(v.Details));
+        actor.LeaveSettings.Should().ContainSingle(v => v.Type == LeaveType.PaidTimeOff && v.Details is RecurringLeaveAccrualDetails && checkRecurringSettings(v.Details));
         actor.LeaveSettings.Should().ContainSingle(v => v.Type == LeaveType.UnpaidTimeOff && checkRecurringSettings(v.Details));
         actor.LeaveSettings.Should().ContainSingle(v => v.Type == LeaveType.SickLeave && v.Details == null);
         actor.LeaveSettings.Should().ContainSingle(v => v.Type == LeaveType.BankHoliday && checkBankHolidaySettings(v.Details));
