@@ -3,17 +3,22 @@ using Odyssey.Domain.UserEntity;
 
 namespace Odyssey.Domain.EmployeeEntity;
 
-public sealed class Employee
+public sealed record Employee
 {
     public EmployeeId Id { get; }
     public User User { get; }
-
     public StartDate StartDate { get; }
+
+    public EmployeeExternalId? ExternalId { get; }
 
     // TBD: initial leave counters
     public IReadOnlyCollection<LeaveSettings> LeaveSettings { get; }
 
-    public Employee(EmployeeId id, User user, StartDate startDate, IReadOnlyCollection<LeaveSettings> leaveSettings)
+    public Employee(EmployeeId id,
+        User user,
+        StartDate startDate,
+        IReadOnlyCollection<LeaveSettings> leaveSettings,
+        EmployeeExternalId? externalId = null)
     {
         ArgumentNullException.ThrowIfNull(user);
         ArgumentNullException.ThrowIfNull(startDate);
@@ -23,9 +28,11 @@ public sealed class Employee
         User = user;
         StartDate = startDate;
         LeaveSettings = leaveSettings;
+        ExternalId = externalId;
     }
 
-    public static Result<Employee> Create(EmployeeId id,
+    public static Result<Employee> Create(
+        EmployeeId id,
         User user,
         StartDate startDate,
         IReadOnlyCollection<LeaveSettings> leaveSettings)

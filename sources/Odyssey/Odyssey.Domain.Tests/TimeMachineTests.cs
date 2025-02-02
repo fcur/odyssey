@@ -5,6 +5,7 @@ using FluentAssertions.Execution;
 using Odyssey.Domain.EmployeeEntity;
 using Odyssey.Domain.TimeMachineEntity;
 using Odyssey.Domain.UserEntity;
+// ReSharper disable NullableWarningSuppressionIsUsed
 
 namespace Odyssey.Domain.Tests;
 
