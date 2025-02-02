@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using FluentAssertions;
+using FluentAssertions.Execution;
 
 namespace Odyssey.Domain.Tests;
 
@@ -27,23 +28,67 @@ public sealed class CalcPrototypeTests
     [InlineData("2024-11-01", 8.26)]
     [InlineData("2024-12-01", 9.92)]
     [InlineData("2025-01-01", 11.58)]
-    public void Test1(string checkpoint, decimal expected)
+    [InlineData("2025-02-01", 12.24)]
+    [InlineData("2025-03-01", 8.9)]
+    public void Test_Until_PreviousPeriod_Reset(string checkpoint, decimal expected)
     {
         var withdrawal1 = BalanceRecord.Withdrawal(DateOnly.Parse("2024-05-13"), 5M);
         var withdrawal2 = BalanceRecord.Withdrawal(DateOnly.Parse("2024-08-25"), 5M);
+        var withdrawal3 = BalanceRecord.Withdrawal(DateOnly.Parse("2025-01-02"), 1M);
+        var withdrawal4 = BalanceRecord.Withdrawal(DateOnly.Parse("2025-02-10"), 5M);
 
         var checkpointDate = DateOnly.Parse(checkpoint);
-        var balanceRecords = MergeBalanceRecords(checkpointDate, withdrawal1, withdrawal2);
+        var balanceRecords = MergeBalanceRecords(checkpointDate,
+            withdrawal1,
+            withdrawal2,
+            withdrawal3,
+            withdrawal4);
 
         var balance = BalanceHandler.Handle(balanceRecords);
 
         balance.Should().Be(expected);
     }
 
+    [Theory]
+    // [InlineData("2024-12-01", 9.92, 0, 9.92)]
+    // [InlineData("2025-01-01", 11.58, 11.58, 0)]
+    // [InlineData("2025-02-01", 12.24, 10.58, 1.66)]
+    // [InlineData("2025-03-01", 8.9, 5.58, 3.32)]
+    [InlineData("2025-04-01", 4.98, 0, 4.98)]
+    // [InlineData("2025-05-01", 6.64, 0, 6.64)]
+    // [InlineData("2025-06-01", 8.3, 0, 8.3)]
+    // [InlineData("2025-07-01", 9.96, 0, 9.96)]
+    // [InlineData("2025-08-01", 11.62, 0, 11.62)]
+    // [InlineData("2025-09-01", 13.28, 0, 13.28)]
+    // [InlineData("2025-10-01", 14.94, 0, 14.94)]
+    // [InlineData("2025-11-01", 16.6, 0, 16.6)]
+    // [InlineData("2025-12-01", 18.26, 0, 18.26)]
+    public void Test_Including_PreviousPeriod_Reset(string checkpoint,
+        decimal expected,
+        decimal previous,
+        decimal current)
+    {
+        var withdrawal1 = BalanceRecord.Withdrawal(DateOnly.Parse("2024-08-25"), 10M);
+        var withdrawal2 = BalanceRecord.Withdrawal(DateOnly.Parse("2025-01-02"), 1M);
+        var withdrawal3 = BalanceRecord.Withdrawal(DateOnly.Parse("2025-02-10"), 5M);
+        var checkpointDate = DateOnly.Parse(checkpoint);
+        var resetDate = DateOnly.Parse("2025-03-31");
+
+        var balanceRecords = MergeBalanceRecords(checkpointDate, withdrawal1, withdrawal2, withdrawal3);
+
+        var balance = BalanceHandler.Handle(balanceRecords, resetDate);
+        
+
+        using var scope = new AssertionScope();
+        balance.Should().Be(expected);
+        previous.Should().BeGreaterOrEqualTo(0M);
+        current.Should().BeGreaterOrEqualTo(0M);
+    }
+
     private IReadOnlyCollection<BalanceRecord> PrepareDepositRecords()
     {
         var initialDate = DateOnly.Parse("2023-12-01");
-        var monthlyAmount = 1.66M;
+        const decimal monthlyAmount = 1.66M;
 
         return Enumerable.Range(1, 17)
             .Select(v => BalanceRecord.Deposit(initialDate.AddMonths(v), monthlyAmount)).ToArray();
@@ -75,15 +120,26 @@ public sealed record BalanceRecord(DateOnly Date, decimal Amount, BalanceRecordT
 
 public record struct BalanceRecordType(string Name, sbyte Code)
 {
-    public static BalanceRecordType Deposit = new BalanceRecordType("Deposit", 1);
-    public static BalanceRecordType Withdrawal = new BalanceRecordType("Withdrawal", -1);
+    public static readonly BalanceRecordType Deposit = new BalanceRecordType("Deposit", 1);
+    public static readonly BalanceRecordType Withdrawal = new BalanceRecordType("Withdrawal", -1);
 }
 
 public static class BalanceHandler
 {
-    public static decimal Handle(IReadOnlyCollection<BalanceRecord> balanceRecords)
+    public static decimal Handle(IReadOnlyCollection<BalanceRecord> balanceRecords, DateOnly? resetDate = null)
     {
         var result = 0M;
+
+        _ = TryGetPreviousPeriodEnd(resetDate, out var previousPeriodEnd);
+
+        if (resetDate.HasValue && previousPeriodEnd.HasValue)
+        {
+            var prevPeriodDepositRecords = balanceRecords
+                .Where(v => v.Type == BalanceRecordType.Deposit && v.Date <= previousPeriodEnd).ToArray();
+            var currentPeriodDepositRecords = balanceRecords
+                .Where(v => v.Type == BalanceRecordType.Deposit && v.Date > previousPeriodEnd).ToArray();
+        }
+
 
         foreach (var record in balanceRecords)
         {
@@ -97,7 +153,19 @@ public static class BalanceHandler
             }
         }
 
-
         return result;
+    }
+
+    private static bool TryGetPreviousPeriodEnd(this DateOnly? resetDate, out DateOnly? result)
+    {
+        result = null;
+
+        if (!resetDate.HasValue)
+        {
+            return false;
+        }
+
+        result = new DateOnly(resetDate.Value.Year, 01, 01);
+        return true;
     }
 }
