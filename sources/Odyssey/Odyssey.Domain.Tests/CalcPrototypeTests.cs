@@ -1,5 +1,4 @@
 using System.Diagnostics.CodeAnalysis;
-using System.Runtime.InteropServices.JavaScript;
 using FluentAssertions;
 using FluentAssertions.Execution;
 
@@ -8,12 +7,7 @@ namespace Odyssey.Domain.Tests;
 [ExcludeFromCodeCoverage]
 public sealed class CalcPrototypeTests
 {
-    private readonly IReadOnlyCollection<BalanceRecord> _depositRecords;
-
-    public CalcPrototypeTests()
-    {
-        _depositRecords = PrepareDepositRecords();
-    }
+    private readonly IReadOnlyCollection<BalanceRecord> _depositRecords = PrepareDepositRecords();
 
     [Theory]
     [InlineData("2024-01-01", 1.66)]
@@ -31,7 +25,7 @@ public sealed class CalcPrototypeTests
     [InlineData("2025-01-01", 11.58)]
     [InlineData("2025-02-01", 12.24)]
     [InlineData("2025-03-01", 8.9)]
-    public void Test_Until_PreviousPeriod_Reset(string checkpoint, decimal expected)
+    public void Test_Without_PreviousPeriod_Reset(string checkpoint, decimal expected)
     {
         var withdrawal1 = BalanceRecord.Withdrawal(DateOnly.Parse("2024-05-13"), 5M);
         var withdrawal2 = BalanceRecord.Withdrawal(DateOnly.Parse("2024-08-25"), 5M);
@@ -39,11 +33,7 @@ public sealed class CalcPrototypeTests
         var withdrawal4 = BalanceRecord.Withdrawal(DateOnly.Parse("2025-02-10"), 5M);
 
         var checkpointDate = DateOnly.Parse(checkpoint);
-        var balanceRecords = MergeBalanceRecords(checkpointDate,
-            withdrawal1,
-            withdrawal2,
-            withdrawal3,
-            withdrawal4);
+        var balanceRecords = MergeBalanceRecords(checkpointDate, withdrawal1, withdrawal2, withdrawal3, withdrawal4);
 
         var (_, _, balance) = BalanceHandler.Handle(balanceRecords);
 
@@ -51,30 +41,20 @@ public sealed class CalcPrototypeTests
     }
 
     [Theory]
-    // [InlineData("2024-12-01", 9.92, 0, 9.92)]
-    // [InlineData("2025-01-01", 11.58, 11.58, 0)]
-    // [InlineData("2025-02-01", 12.24, 10.58, 1.66)]
-    // [InlineData("2025-03-01", 8.9, 5.58, 3.32)]
-    // [InlineData("2025-04-01", 4.98, 0, 4.98)] // ok
-    [InlineData("2025-05-01", 6.64, 0, 6.64)] // ok
-    // [InlineData("2025-06-01", 8.3, 0, 8.3)]
-    // [InlineData("2025-07-01", 9.96, 0, 9.96)]
-    // [InlineData("2025-08-01", 11.62, 0, 11.62)]
-    // [InlineData("2025-09-01", 13.28, 0, 13.28)]
-    // [InlineData("2025-10-01", 14.94, 0, 14.94)]
-    // [InlineData("2025-11-01", 16.6, 0, 16.6)]
-    // [InlineData("2025-12-01", 18.26, 0, 18.26)]
-    public void Test_Including_PreviousPeriod_Reset(string checkpoint, decimal expected, decimal previous, decimal current)
+    [InlineData("2024-12-01", 8.26, 0, 8.26)]
+    [InlineData("2025-01-01", 9.92, 0, 9.92)]
+    public void Test_Including_PreviousPeriod_Reset2024(string checkpoint,
+        decimal expected,
+        decimal previous,
+        decimal current)
     {
         var withdrawal1 = BalanceRecord.Withdrawal(DateOnly.Parse("2024-08-25"), 10M);
         var withdrawal2 = BalanceRecord.Withdrawal(DateOnly.Parse("2025-01-02"), 1M);
         var withdrawal3 = BalanceRecord.Withdrawal(DateOnly.Parse("2025-02-10"), 5M);
-        var checkpointDate = DateOnly.Parse(checkpoint);
-        var resetDate = DateOnly.Parse("2025-03-31");
 
-        var balanceRecords = MergeBalanceRecords(checkpointDate, withdrawal1, withdrawal2, withdrawal3);
+        var balanceRecords = MergeBalanceRecords(DateOnly.Parse(checkpoint), withdrawal1, withdrawal2, withdrawal3);
 
-        var (prev, cur, balance) = BalanceHandler.Handle(balanceRecords, resetDate);
+        var (prev, cur, balance) = BalanceHandler.Handle(balanceRecords, DateOnly.Parse("2024-03-31"));
 
         using var scope = new AssertionScope();
         balance.Should().Be(expected);
@@ -82,13 +62,45 @@ public sealed class CalcPrototypeTests
         current.Should().Be(cur);
     }
 
-    private IReadOnlyCollection<BalanceRecord> PrepareDepositRecords()
+    [Theory]
+    [InlineData("2025-02-01", 10.58, 8.92, 1.66)]
+    [InlineData("2025-03-01", 7.24, 3.92, 3.32)]
+    [InlineData("2025-04-01", 4.98, 0, 4.98)]
+    [InlineData("2025-05-01", 6.64, 0, 6.64)]
+    [InlineData("2025-06-01", 8.3, 0, 8.3)]
+    [InlineData("2025-07-01", 9.96, 0, 9.96)]
+    [InlineData("2025-08-01", 11.62, 0, 11.62)]
+    [InlineData("2025-09-01", 8.28, 0, 8.28)]
+    [InlineData("2025-10-01", 9.94, 0, 9.94)]
+    [InlineData("2025-11-01", 11.6, 0, 11.6)]
+    [InlineData("2025-12-01", 13.26, 0, 13.26)]
+    public void Test_Including_PreviousPeriod_Reset2025(string checkpoint, decimal expected, decimal previous, decimal current)
+    {
+        // reset 1.66 from period_2023/2024-01-01
+        var reset2024 = BalanceRecord.Reset(DateOnly.Parse("2024-03-31"), 1.66M); 
+        var withdrawal1 = BalanceRecord.Withdrawal(DateOnly.Parse("2024-08-25"), 10M);
+        var withdrawal2 = BalanceRecord.Withdrawal(DateOnly.Parse("2025-01-02"), 1M);
+        var withdrawal3 = BalanceRecord.Withdrawal(DateOnly.Parse("2025-02-10"), 5M);
+        var withdrawal4 = BalanceRecord.Withdrawal(DateOnly.Parse("2025-09-01"), 5M);
+
+        var balanceRecords = MergeBalanceRecords(
+            DateOnly.Parse(checkpoint), reset2024, 
+            withdrawal1, withdrawal2, withdrawal3, withdrawal4);
+
+        var (prev, cur, balance) = BalanceHandler.Handle(balanceRecords, DateOnly.Parse("2025-03-31"));
+
+        using var scope = new AssertionScope();
+        balance.Should().Be(expected);
+        previous.Should().Be(prev);
+        current.Should().Be(cur);
+    }
+
+    private static IReadOnlyCollection<BalanceRecord> PrepareDepositRecords()
     {
         var initialDate = DateOnly.Parse("2023-12-01");
         const decimal monthlyAmount = 1.66M;
 
-        return Enumerable.Range(1, 100)
-            .Select(v => BalanceRecord.Deposit(initialDate.AddMonths(v), monthlyAmount)).ToArray();
+        return Enumerable.Range(1, 100).Select(v => BalanceRecord.Deposit(initialDate.AddMonths(v), monthlyAmount)).ToArray();
     }
 
     private IReadOnlyCollection<BalanceRecord> MergeBalanceRecords(DateOnly maxDate, params BalanceRecord[] records)
@@ -113,7 +125,7 @@ public sealed record BalanceRecord(DateOnly Date, decimal Amount, BalanceRecordT
     {
         return new BalanceRecord(date, amount, BalanceRecordType.Withdrawal);
     }
-    
+
     public static BalanceRecord Reset(DateOnly date, decimal amount)
     {
         return new BalanceRecord(date, amount, BalanceRecordType.Reset);
@@ -139,33 +151,30 @@ public sealed record BalanceSplitResult(
     public decimal WithdrawalUntilResetAmount => WithdrawalUntilReset.Aggregate(0M, (current, withdrawal) => current + withdrawal.Amount);
     public decimal WithdrawalAfterResetAmount => WithdrawalAfterReset.Aggregate(0M, (current, withdrawal) => current + withdrawal.Amount);
 
-    public static BalanceSplitResult Empty => new BalanceSplitResult(Array.Empty<BalanceRecord>(),
+    public static BalanceSplitResult Empty => new BalanceSplitResult(
+        Array.Empty<BalanceRecord>(),
         Array.Empty<BalanceRecord>(),
         Array.Empty<BalanceRecord>(),
         Array.Empty<BalanceRecord>());
 
-
-    public static BalanceSplitResult Create(IReadOnlyCollection<BalanceRecord> records,
-        DateOnly resetDate,
-        DateOnly previousPeriodEnd)
+    public static BalanceSplitResult Create(IReadOnlyCollection<BalanceRecord> records, DateOnly resetDate, DateOnly previousPeriodEnd)
     {
         var prevDepositRecords = records
-            .Where(v =>  v.Date <= previousPeriodEnd && (v.Type == BalanceRecordType.Deposit /*|| v.Type == BalanceRecordType.Bonus*/)).ToArray();
+            .Where(v => v.Date <= previousPeriodEnd && IsDeposit(v)).ToArray();
 
         var currentDepositRecords = records
-            .Where(v => v.Date > previousPeriodEnd && (v.Type == BalanceRecordType.Deposit /*|| v.Type == BalanceRecordType.Bonus*/)).ToArray();
+            .Where(v => v.Date > previousPeriodEnd && IsDeposit(v)).ToArray();
 
         var withdrawalUntilReset = records
-            .Where(v => v.Date <= resetDate && (v.Type == BalanceRecordType.Withdrawal /*|| v.Type == BalanceRecordType.Reset*/)).ToArray();
+            .Where(v => v.Date <= resetDate && IsWithdrawal(v)).ToArray();
 
         var withdrawalAfterReset = records
-            .Where(v => v.Date > resetDate && (v.Type == BalanceRecordType.Withdrawal /*|| v.Type == BalanceRecordType.Reset*/)).ToArray();
+            .Where(v => v.Date > resetDate && IsWithdrawal(v)).ToArray();
 
-        return new BalanceSplitResult(
-            prevDepositRecords,
-            currentDepositRecords,
-            withdrawalUntilReset,
-            withdrawalAfterReset);
+        return new BalanceSplitResult(prevDepositRecords, currentDepositRecords, withdrawalUntilReset, withdrawalAfterReset);
+
+        bool IsDeposit(BalanceRecord v) => v.Type == BalanceRecordType.Deposit;
+        bool IsWithdrawal(BalanceRecord v) => v.Type == BalanceRecordType.Withdrawal;
     }
 }
 
@@ -192,9 +201,10 @@ public static class BalanceHandler
                 result -= record.Amount;
             }
         }
-
+        
         var splitResult = SplitBalanceRecords(balanceRecords, resetDate, previousPeriodEnd);
-        var resetAmount = balanceRecords.Where(v=>v.Type == BalanceRecordType.Reset).Aggregate(0M, (current, reset) => current + reset.Amount);
+        var resetAmount = balanceRecords.Where(v => v.Type == BalanceRecordType.Reset)
+            .Aggregate(0M, (current, reset) => current + reset.Amount);
         var prevResult = splitResult.PrevDepositAmount - splitResult.WithdrawalUntilResetAmount - resetAmount;
         var curResult = splitResult.CurrentDepositAmount - splitResult.WithdrawalAfterResetAmount;
 
@@ -214,10 +224,23 @@ public static class BalanceHandler
     }
 
     private static IReadOnlyCollection<BalanceRecord> ConsiderBalanceReset(
-        IReadOnlyCollection<BalanceRecord> balanceRecords, DateOnly resetDate, DateOnly previousPeriodEnd)
+        IReadOnlyCollection<BalanceRecord> balanceRecords,
+        DateOnly resetDate,
+        DateOnly previousPeriodEnd)
     {
-        var splitResult =  BalanceSplitResult.Create(balanceRecords, resetDate, previousPeriodEnd);
-        var resetAmount = splitResult.PrevDepositAmount - splitResult.WithdrawalUntilResetAmount;
+        // ReSharper disable once NullableWarningSuppressionIsUsed
+        var maxDepositDate = balanceRecords.Where(v => v.Type == BalanceRecordType.Deposit)!.Last().Date;
+
+        if (maxDepositDate < resetDate)
+        {
+            return balanceRecords;
+        }
+        
+        var splitResult = BalanceSplitResult.Create(balanceRecords, resetDate, previousPeriodEnd);
+        var prevResetAmount = balanceRecords.Where(v => v.Type == BalanceRecordType.Reset)
+            .Aggregate(0M, (current, reset) => current + reset.Amount);
+        
+        var resetAmount = splitResult.PrevDepositAmount - splitResult.WithdrawalUntilResetAmount - prevResetAmount;
 
         if (resetAmount <= 0)
         {
@@ -230,13 +253,14 @@ public static class BalanceHandler
         return newBalanceRecords.OrderBy(v => v.Date).ToArray();
     }
 
-
-    private static BalanceSplitResult SplitBalanceRecords(IReadOnlyCollection<BalanceRecord> balanceRecords, DateOnly? resetDate, DateOnly? previousPeriodEnd)
+    private static BalanceSplitResult SplitBalanceRecords(IReadOnlyCollection<BalanceRecord> balanceRecords,
+        DateOnly? resetDate,
+        DateOnly? previousPeriodEnd)
     {
         var resetDateOrMin = resetDate ?? DateOnly.MinValue;
         var previousPeriodEndOrMin = previousPeriodEnd ?? DateOnly.MinValue;
 
-        var splitResult =  BalanceSplitResult.Create(balanceRecords, resetDateOrMin, previousPeriodEndOrMin);
+        var splitResult = BalanceSplitResult.Create(balanceRecords, resetDateOrMin, previousPeriodEndOrMin);
 
         return splitResult;
     }
