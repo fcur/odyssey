@@ -1,6 +1,7 @@
 using CSharpFunctionalExtensions;
 using Odyssey.HRMS.Domain.Base;
 using Odyssey.HRMS.Domain.JourneyEntity.Activity;
+using Odyssey.HRMS.Domain.JourneyEntity.ActivityTemplate;
 
 namespace Odyssey.HRMS.Domain.JourneyEntity;
 
@@ -10,6 +11,7 @@ public sealed record Journey(
     IReadOnlyCollection<JourneyActivity> Activities,
     JourneyStatus Status,
     JourneyStartup? Startup,
+    JourneyInitializationData? InitializationData,
     DateTimeOffset ChangedAt,
     DomainVersion Version,
     ulong RowVersion)
@@ -18,8 +20,18 @@ public sealed record Journey(
     public static Result<Journey, JourneyValidationError> Create(
         JourneyName name,
         IReadOnlyCollection<JourneyActivity> activities,
-        JourneyStartup? startup)
+        JourneyStartup? startup = null,
+        JourneyInitializationData? initializationData = null)
     {
+
+        var sourceActivityEvents = activities.SelectMany(v => v.Events)
+            .Where(v => v.EventType == JourneyActivityEventType.Source).ToArray();
+
+        if (sourceActivityEvents.Length == 0)
+        {
+            return JourneyValidationError.MissingSourceActivity;
+        }
+        
         var id = JourneyId.New();
         var status = JourneyStatus.Draft;
         var changedAt = DateTimeOffset.UtcNow;
@@ -30,7 +42,7 @@ public sealed record Journey(
         // > check it on journey status update
         
         var @event = new JourneyChangedEvent(id, changedAt, version);
-        var journey = new Journey(id, name, activities, status, startup, changedAt, version, rowVersion);
+        var journey = new Journey(id, name, activities, status, startup, initializationData, changedAt, version, rowVersion);
         journey.EnqueueEvent(@event);
 
         return journey;
