@@ -19,7 +19,7 @@ public static class SingleUserConfigExtensions
 
         var email = new Email(config.User.Email);
         var userName = UserName.Parse(config.User.Name);
-        var user = new User(UserId.Empty, userName, email);
+        var user = User.Create(UserId.Empty, userName, email);
         var startDate = StartDate.Parse(config.StartDate);
         var leaveSettings = config.LeaveSettings.Select(ToDomain).Where(v => v.Type != LeaveType.Unknown).ToArray();
 

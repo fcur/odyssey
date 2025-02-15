@@ -1,6 +1,6 @@
 using Odyssey.HRMS.Domain.Base;
 
-namespace Odyssey.HRMS.Domain.TimeMachineEntity;
+namespace Odyssey.HRMS.Domain.TimeMachine;
 
 public sealed record TimeMachineDomainError(string Type, string Message) : DomainError(Type, Message)
 {

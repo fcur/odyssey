@@ -3,7 +3,6 @@ using AutoFixture.Xunit2;
 using FluentAssertions;
 using FluentAssertions.Execution;
 using Odyssey.HRMS.Domain.EmployeeEntity;
-using Odyssey.HRMS.Domain.TimeMachineEntity;
 using Odyssey.HRMS.Domain.UserEntity;
 // ReSharper disable NullableWarningSuppressionIsUsed
 
@@ -34,7 +33,7 @@ public sealed class TimeMachineTests
             .GetValueOrDefault();
         var atTime = startDate.Value.AddYears(1);
 
-        var timeMachine = TimeMachine.Create(employee, Array.Empty<TimeOffRequest>()).GetValueOrDefault();
+        var timeMachine = TimeMachine.TimeMachine.Create(employee, Array.Empty<TimeOffRequest>()).GetValueOrDefault();
         var state = timeMachine.GoTo(atTime).GetValueOrDefault();
 
         using var scope = new AssertionScope();
@@ -76,7 +75,7 @@ public sealed class TimeMachineTests
         };
 
         var atTime = DateTimeOffset.Parse("2024-12-05");
-        var timeMachine = TimeMachine.Create(actor, timeOffRequests).GetValueOrDefault();
+        var timeMachine = TimeMachine.TimeMachine.Create(actor, timeOffRequests).GetValueOrDefault();
         var state = timeMachine.GoTo(atTime).GetValueOrDefault();
 
         using var scope = new AssertionScope();
@@ -103,8 +102,8 @@ public sealed class TimeMachineTests
         var paidTimeOffDetails = new RecurringLeaveAccrualDetails(leaveAccrual, LeaveLimits.None);
         var leaveSettings = new LeaveSettings(LeaveType.PaidTimeOff, paidTimeOffDetails);
 
-        var accrualItems = TimeMachine.BuildRecurringTimeOffAccruals(paidTimeOffDetails, startDate, atTime);
-        var accrualResult = TimeMachine.BuildTimeAccruals(leaveSettings, startDate, atTime);
+        var accrualItems = TimeMachine.TimeMachine.BuildRecurringTimeOffAccruals(paidTimeOffDetails, startDate, atTime);
+        var accrualResult = TimeMachine.TimeMachine.BuildTimeAccruals(leaveSettings, startDate, atTime);
 
         using var scope = new AssertionScope();
         
@@ -124,8 +123,8 @@ public sealed class TimeMachineTests
         var paidTimeOffDetails = new RecurringLeaveAccrualDetails(leaveAccrual, LeaveLimits.None);
         var leaveSettings = new LeaveSettings(LeaveType.UnpaidTimeOff, paidTimeOffDetails);
         
-        var accrualItems = TimeMachine.BuildRecurringTimeOffAccruals(paidTimeOffDetails, startDate, atTime);
-        var accrualResult = TimeMachine.BuildTimeAccruals(leaveSettings, startDate, atTime);
+        var accrualItems = TimeMachine.TimeMachine.BuildRecurringTimeOffAccruals(paidTimeOffDetails, startDate, atTime);
+        var accrualResult = TimeMachine.TimeMachine.BuildTimeAccruals(leaveSettings, startDate, atTime);
 
         using var scope = new AssertionScope();
         

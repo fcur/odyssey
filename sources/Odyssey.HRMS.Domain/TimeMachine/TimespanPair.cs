@@ -1,4 +1,4 @@
-namespace Odyssey.HRMS.Domain.TimeMachineEntity;
+namespace Odyssey.HRMS.Domain.TimeMachine;
 
 public sealed record TimespanPair(TimeSpan Accrued, TimeSpan Used)
 {

@@ -2,7 +2,7 @@ using CSharpFunctionalExtensions;
 using Odyssey.HRMS.Domain.Base;
 using Odyssey.HRMS.Domain.EmployeeEntity;
 
-namespace Odyssey.HRMS.Domain.TimeMachineEntity;
+namespace Odyssey.HRMS.Domain.TimeMachine;
 
 public sealed class TimeMachine
 {
