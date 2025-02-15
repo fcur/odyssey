@@ -1,3 +1,5 @@
+using Odyssey.Domain.Base;
+
 namespace Odyssey.Domain.TimeMachineEntity;
 
 public sealed record TimeMachineError(string Type, string Message) : Error(Type, Message)

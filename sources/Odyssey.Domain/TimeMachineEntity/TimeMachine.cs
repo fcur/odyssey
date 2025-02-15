@@ -1,4 +1,5 @@
 using CSharpFunctionalExtensions;
+using Odyssey.Domain.Base;
 using Odyssey.Domain.EmployeeEntity;
 
 namespace Odyssey.Domain.TimeMachineEntity;
