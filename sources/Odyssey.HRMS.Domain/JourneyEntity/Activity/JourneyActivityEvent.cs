@@ -3,6 +3,6 @@ using Odyssey.HRMS.Domain.JourneyEntity.ActivityTemplate;
 namespace Odyssey.HRMS.Domain.JourneyEntity.Activity;
 
 public sealed record JourneyActivityEvent(
-    JourneyActivityEventName EventName,
-    JourneyActivityEventType EventType,
+    JourneyActivityEventName Name,
+    JourneyActivityEventType Type,
     JourneyActivityId? NextActivityId);
