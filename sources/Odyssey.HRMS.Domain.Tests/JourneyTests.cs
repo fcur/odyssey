@@ -92,6 +92,7 @@ public sealed class JourneyTests
         var paidHolidayAccrualId = JourneyActivityId.New();
         var notifyEmployeeId = JourneyActivityId.New();
         var endOfJourneyId = JourneyActivityId.New();
+        _ = JourneyActivityId.New();
         var teamId = Guid.NewGuid();
         var initializationData = JourneyInitializationData.Create("TeamId", JsonSerializer.SerializeToElement(teamId));
 
