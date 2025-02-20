@@ -11,13 +11,12 @@ public abstract class AggregateRoot<TId, TState> where TState : AggregateRootSta
     protected AggregateRoot(TId id, TState state, IReadOnlyCollection<DomainEvent> domainEvents)
     {
         Id = id;
+        
         foreach (var @event in domainEvents)
         {
-            state.Apply(@event);
+            State = (TState)state.Apply(@event);
         }
-        State = state;
     }
-
 }
 
 public abstract class AggregateRootState
@@ -25,6 +24,5 @@ public abstract class AggregateRootState
     private readonly Dictionary<JourneyActivityTemplateDependency, JsonElement> _data =
         new Dictionary<JourneyActivityTemplateDependency, JsonElement>();
 
-    protected internal abstract void Apply(DomainEvent domainEvent);
+    protected internal abstract AggregateRootState Apply(DomainEvent domainEvent);
 }
-

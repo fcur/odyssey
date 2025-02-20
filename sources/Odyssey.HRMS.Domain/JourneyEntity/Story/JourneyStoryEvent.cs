@@ -1,0 +1,49 @@
+using System.Text.Json;
+using Odyssey.HRMS.Domain.Base;
+using Odyssey.HRMS.Domain.EmployeeEntity;
+using Odyssey.HRMS.Domain.JourneyEntity.Activity;
+using Odyssey.HRMS.Domain.JourneyEntity.ActivityTemplate;
+
+namespace Odyssey.HRMS.Domain.JourneyEntity.Story;
+
+public abstract record JourneyStoryEvent(
+    JourneyStoryId StoryId,
+    JourneyActivityId ActivityId,
+    DateTimeOffset CreatedAt,
+    DomainVersion Version)
+    : DomainEvent(CreatedAt, Version);
+
+// ReSharper disable once ClassNeverInstantiated.Global
+public sealed record JourneyActivityStartedEvent(
+    JourneyStoryId StoryId,
+    JourneyActivityId ActivityId,
+    JourneyActivityEventName Name,
+    JourneyActivityEventType Type,
+    EventBody? Body,
+    EmployeeId EmployeeId,
+    DateTimeOffset CreatedAt,
+    DomainVersion Version)
+    : JourneyStoryEvent(StoryId, ActivityId, CreatedAt, Version);
+
+// ReSharper disable once ClassNeverInstantiated.Global
+public sealed record JourneyActivityCompletedEvent(
+    JourneyStoryId StoryId,
+    JourneyActivityId ActivityId,
+    JourneyActivityEventName Name,
+    JourneyActivityEventType Type,
+    EventBody? Body,
+    EmployeeId EmployeeId,
+    DateTimeOffset CreatedAt,
+    DomainVersion Version)
+    : JourneyStoryEvent(StoryId, ActivityId, CreatedAt, Version);
+
+public sealed record EventBody(IReadOnlyDictionary<string, JsonElement> Data)
+{
+    public static readonly EventBody? Unset = null;
+
+    public static EventBody Create(string key, JsonElement rawData)
+    {
+        var data = new Dictionary<string, JsonElement>() { { key, rawData } };
+        return new EventBody(data);
+    }
+}
