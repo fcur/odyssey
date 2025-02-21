@@ -3,22 +3,22 @@ using Odyssey.HRMS.Domain.JourneyEntity.Story;
 
 namespace Odyssey.HRMS.Domain.EmployeeEntity;
 
-public sealed class PaidHoliday : AggregateRoot<EmployeeId, PaidHolidayState>
+public sealed class EmployeeTimeOff : AggregateRoot<EmployeeId, EmployeeTimeOffState>
 {
-    private PaidHoliday(EmployeeId id, PaidHolidayState state, IReadOnlyCollection<DomainEvent> domainEvents)
+    private EmployeeTimeOff(EmployeeId id, EmployeeTimeOffState state, IReadOnlyCollection<DomainEvent> domainEvents)
         : base(id, state, domainEvents) { }
     
-    public static PaidHoliday Create(EmployeeId id, IReadOnlyCollection<DomainEvent> domainEvents)
+    public static EmployeeTimeOff Create(EmployeeId id, IReadOnlyCollection<DomainEvent> domainEvents)
     {
-        var state = PaidHolidayState.Create();
+        var state = EmployeeTimeOffState.Create();
         
-        return new PaidHoliday(id, state, domainEvents);
+        return new EmployeeTimeOff(id, state, domainEvents);
     }
 }
 
-public sealed class PaidHolidayState : AggregateRootState
+public sealed class EmployeeTimeOffState : AggregateRootState
 {
-    public static PaidHolidayState Create() => new PaidHolidayState();
+    public static EmployeeTimeOffState Create() => new EmployeeTimeOffState();
     protected internal override AggregateRootState Apply(DomainEvent domainEvent)
     {
         return domainEvent switch
@@ -40,13 +40,13 @@ public sealed class PaidHolidayState : AggregateRootState
     }
 }
 
-public abstract record PaidHolidayEvent(EmployeeId EmployeeId, decimal Amount, EventBody? Body, DateTimeOffset CreatedAt, DomainVersion Version)
+public abstract record HolidayEvent(EmployeeId EmployeeId, decimal Amount, EventBody? Body, DateTimeOffset CreatedAt, DomainVersion Version)
     : DomainEvent(CreatedAt, Version);
 
 // ReSharper disable once ClassNeverInstantiated.Global
 public sealed record PaidHolidayAccruedEvent(EmployeeId EmployeeId, decimal Amount, EventBody? Body, DateTimeOffset CreatedAt, DomainVersion Version)
-    : PaidHolidayEvent(EmployeeId,  Amount, Body, CreatedAt, Version);
+    : HolidayEvent(EmployeeId,  Amount, Body, CreatedAt, Version);
     
 // ReSharper disable once ClassNeverInstantiated.Global
 public sealed record PaidHolidayUsedEvent(EmployeeId EmployeeId, decimal Amount, EventBody? Body, DateTimeOffset CreatedAt, DomainVersion Version)
-    : PaidHolidayEvent(EmployeeId,  Amount, Body, CreatedAt, Version);
+    : HolidayEvent(EmployeeId,  Amount, Body, CreatedAt, Version);
