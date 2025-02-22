@@ -5,7 +5,7 @@ namespace Odyssey.HRMS.Domain.Base;
 public abstract record DomainEntity<TId>()
 {
     private readonly Queue<DomainEvent> _domainEvents;
-    protected TId Id { get; init; }
+    public TId Id { get; init; }
     protected DateTimeOffset ChangedAt { get; set; }
     protected DomainVersion Version { get; set; }
 

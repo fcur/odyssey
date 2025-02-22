@@ -6,7 +6,7 @@ using Odyssey.HRMS.Domain.JourneyEntity.ActivityTemplate;
 
 namespace Odyssey.HRMS.Domain.JourneyEntity.Story;
 
-public abstract record JourneyStoryEvent(
+public abstract record JourneyStoryChangedEvent(
     JourneyStoryId StoryId,
     JourneyActivityId ActivityId,
     DateTimeOffset CreatedAt,
@@ -20,10 +20,9 @@ public sealed record JourneyActivityStartedEvent(
     JourneyActivityEventName Name,
     JourneyActivityEventType Type,
     EventBody? Body,
-    EmployeeId EmployeeId,
     DateTimeOffset CreatedAt,
     DomainVersion Version)
-    : JourneyStoryEvent(StoryId, ActivityId, CreatedAt, Version);
+    : JourneyStoryChangedEvent(StoryId, ActivityId, CreatedAt, Version);
 
 // ReSharper disable once ClassNeverInstantiated.Global
 public sealed record JourneyActivityCompletedEvent(
@@ -32,10 +31,9 @@ public sealed record JourneyActivityCompletedEvent(
     JourneyActivityEventName Name,
     JourneyActivityEventType Type,
     EventBody? Body,
-    EmployeeId EmployeeId,
     DateTimeOffset CreatedAt,
     DomainVersion Version)
-    : JourneyStoryEvent(StoryId, ActivityId, CreatedAt, Version);
+    : JourneyStoryChangedEvent(StoryId, ActivityId, CreatedAt, Version);
 
 public sealed record EventBody(IReadOnlyDictionary<string, JsonElement> Data)
 {
@@ -45,5 +43,18 @@ public sealed record EventBody(IReadOnlyDictionary<string, JsonElement> Data)
     {
         var data = new Dictionary<string, JsonElement>() { { key, rawData } };
         return new EventBody(data);
+    }
+
+    public static EventBody Create()
+    {
+        var data = new Dictionary<string, JsonElement> { };
+        return new EventBody(data);
+    }
+
+    public EventBody With<TValue>(string key, TValue value)
+    {
+        var newData = Data.ToDictionary();
+        newData[key] = JsonSerializer.SerializeToElement(value);
+        return new EventBody(newData);
     }
 }

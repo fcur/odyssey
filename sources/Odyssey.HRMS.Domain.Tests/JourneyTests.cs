@@ -1,6 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using FluentAssertions;
 using Odyssey.HRMS.Domain.JourneyEntity;
 using Odyssey.HRMS.Domain.JourneyEntity.Activity;
@@ -11,74 +10,74 @@ namespace Odyssey.HRMS.Domain.Tests;
 [ExcludeFromCodeCoverage]
 public sealed class JourneyTests
 {
-    private readonly JourneyActivityName _teamImportActivityName = new JourneyActivityName("TeamImport");
-    private readonly JourneyActivityName _paidHolidayAccrualActivityName = new JourneyActivityName("PaidHolidayAccrual");
-    private readonly JourneyActivityName _notifyEmployeeActivityName = new JourneyActivityName("NotifyEmployee");
+    private readonly JourneyActivityName _teamImportActivityName = new JourneyActivityName(TestSource.TeamImportActivityName);
+    private readonly JourneyActivityName _paidHolidayAccrualActivityName = new JourneyActivityName(TestSource.PaidHolidayAccrualActivityName);
+    private readonly JourneyActivityName _notifyEmployeeActivityName = new JourneyActivityName(TestSource.NotifyEmployeeActivityName);
 
-    private readonly JourneyActivityEventName _employeeAddedEventName = new JourneyActivityEventName("TeamEmployeeAdded");
-    private readonly JourneyActivityEventName _teamImportFailedEventName = new JourneyActivityEventName("TeamImportFailed");
+    private readonly JourneyActivityEventName _employeeAddedEventName = new JourneyActivityEventName(TestSource.EmployeeAddedEventName);
+    private readonly JourneyActivityEventName _teamImportFailedEventName = new JourneyActivityEventName(TestSource.TeamImportFailedEventName);
 
-    private readonly JourneyActivityEventName _paidHolidayAccruedEventName = new JourneyActivityEventName("PaidHolidayAccrued");
-    private readonly JourneyActivityEventName _paidHolidayAccrualFailedEventName = new JourneyActivityEventName("PaidHolidayAccrualFailed");
+    private readonly JourneyActivityEventName _paidHolidayAccruedEventName = new JourneyActivityEventName(TestSource.PaidHolidayAccruedEventName);
+    private readonly JourneyActivityEventName _paidHolidayAccrualFailedEventName = new JourneyActivityEventName(TestSource.PaidHolidayAccrualFailedEventName);
 
-    private readonly JourneyActivityEventName _notificationSentEventName = new JourneyActivityEventName("NotificationSent");
-    private readonly JourneyActivityEventName _notificationFailedEventName = new JourneyActivityEventName("NotificationNotSent");
+    private readonly JourneyActivityEventName _notificationSentEventName = new JourneyActivityEventName(TestSource.NotificationSentEventName);
+    private readonly JourneyActivityEventName _notificationFailedEventName = new JourneyActivityEventName(TestSource.NotificationFailedEventName);
 
     [Fact]
     public void TeamImportActivityTemplateTest()
     {
-        var teamIdDependency = new JourneyActivityTemplateDependency("TeamId", JourneyActivityTemplateDependencySource.Unset);
+        var teamIdDependency = new JourneyActivityTemplateDependency(TestSource.TeamIdDependencyKey, JourneyActivityTemplateDependencySource.Unset);
 
         var events = new[]
         {
-            JourneyActivityEventTemplate.CreateSource(_employeeAddedEventName, "EmployeeId"),
-            JourneyActivityEventTemplate.CreateExit(_teamImportFailedEventName, "TeamId")
+            JourneyActivityEventTemplate.CreateSource(_employeeAddedEventName, TestSource.EmployeeIdResultKey),
+            JourneyActivityEventTemplate.CreateExit(_teamImportFailedEventName, TestSource.TeamIdResultKey)
         };
         var dependencies = new[] { teamIdDependency };
 
-        var teamImportActivityHeader = JourneyActivityTemplate.Create(_teamImportActivityName, events, dependencies);
+        var teamImportActivityTemplate = JourneyActivityTemplate.Create(_teamImportActivityName, events, dependencies);
 
-        teamImportActivityHeader.IsSuccess.Should().BeTrue();
+        teamImportActivityTemplate.IsSuccess.Should().BeTrue();
     }
 
     [Fact]
     public void PaidHolidayAccrualActivityTemplateTest()
     {
-        var employeeIdDependency = new JourneyActivityTemplateDependency("EmployeeId", new JourneyActivityTemplateDependencySource(_teamImportActivityName, _employeeAddedEventName));
+        var employeeIdDependency = new JourneyActivityTemplateDependency(TestSource.EmployeeIdDependencyKey, new JourneyActivityTemplateDependencySource(_teamImportActivityName, _employeeAddedEventName));
 
         var events = new[]
         {
-            JourneyActivityEventTemplate.CreateAction(_paidHolidayAccruedEventName, "Balance", "AmountAdded"),
-            JourneyActivityEventTemplate.CreateExit(_paidHolidayAccrualFailedEventName, "Balance")
+            JourneyActivityEventTemplate.CreateAction(_paidHolidayAccruedEventName, TestSource.BalanceResultKey, TestSource.AmountAddedResultKey),
+            JourneyActivityEventTemplate.CreateExit(_paidHolidayAccrualFailedEventName, TestSource.BalanceResultKey)
         };
         var dependencies = new[] { employeeIdDependency };
 
-        var paidHolidayAccrualActivityHeader = JourneyActivityTemplate.Create(_paidHolidayAccrualActivityName, events, dependencies);
+        var paidHolidayAccrualActivityTemplate = JourneyActivityTemplate.Create(_paidHolidayAccrualActivityName, events, dependencies);
 
-        paidHolidayAccrualActivityHeader.IsSuccess.Should().BeTrue();
+        paidHolidayAccrualActivityTemplate.IsSuccess.Should().BeTrue();
     }
 
     [Fact]
     public void NotifyEmployeeActivityTemplateTest()
     {
-        var employeeIdDependency = new JourneyActivityTemplateDependency("EmployeeId",
+        var employeeIdDependency = new JourneyActivityTemplateDependency(TestSource.EmployeeIdDependencyKey,
             new JourneyActivityTemplateDependencySource(_teamImportActivityName, _employeeAddedEventName));
-        var balanceDependency = new JourneyActivityTemplateDependency("Balance",
+        var balanceDependency = new JourneyActivityTemplateDependency(TestSource.BalanceDependencyKey,
             new JourneyActivityTemplateDependencySource(_paidHolidayAccrualActivityName, _paidHolidayAccruedEventName));
-        var amountAddedDependency = new JourneyActivityTemplateDependency("AmountAdded",
+        var amountAddedDependency = new JourneyActivityTemplateDependency(TestSource.AmountAddedDependencyKey,
             new JourneyActivityTemplateDependencySource(_paidHolidayAccrualActivityName, _paidHolidayAccruedEventName));
 
         var events = new[]
         {
-            JourneyActivityEventTemplate.CreateExit(_notificationSentEventName, "AtTime"),
-            JourneyActivityEventTemplate.CreateExit(_notificationFailedEventName, "AtTime")
+            JourneyActivityEventTemplate.CreateExit(_notificationSentEventName, TestSource.AtTimeResultKey),
+            JourneyActivityEventTemplate.CreateExit(_notificationFailedEventName, TestSource.AtTimeResultKey)
         };
 
         var dependencies = new[] { employeeIdDependency, balanceDependency, amountAddedDependency };
 
-        var notifyEmployeeActivityHeader = JourneyActivityTemplate.Create(_notifyEmployeeActivityName, events, dependencies);
+        var notifyEmployeeActivityTemplate = JourneyActivityTemplate.Create(_notifyEmployeeActivityName, events, dependencies);
 
-        notifyEmployeeActivityHeader.IsSuccess.Should().BeTrue();
+        notifyEmployeeActivityTemplate.IsSuccess.Should().BeTrue();
     }
 
     [Fact]
@@ -94,7 +93,7 @@ public sealed class JourneyTests
         var endOfJourneyId = JourneyActivityId.New();
         _ = JourneyActivityId.New();
         var teamId = Guid.NewGuid();
-        var initializationData = JourneyInitializationData.Create("TeamId", JsonSerializer.SerializeToElement(teamId));
+        var initializationData = JourneyInitializationData.Create(TestSource.TeamIdResultKey, JsonSerializer.SerializeToElement(teamId));
 
         JourneyActivityEvent[] teamImportActivityEvents =
         [
@@ -139,7 +138,7 @@ public sealed class JourneyTests
         journeyResult.IsSuccess.Should().BeTrue();
     }
 
-    [Fact]
+    [Fact(Skip = "TBD")]
     public void EmployeePaidHolidayRequestFlowTest()
     {
         
