@@ -88,8 +88,8 @@ public sealed class JourneyStoryTests
         var journeyStoryId = JourneyStoryId.New();
         var employeeAddedEventBody = EventBody.Create().With(TestSource.TeamIdResultKey, _teamId)
             .With(TestSource.EmployeeIdResultKey, _employeeId.Value);
-        var employeeAddedEvent = new JourneyActivityCompletedEvent(journeyStoryId, _teamImportActivityId, _employeeAddedEventName, 
-            JourneyActivityEventType.Source, employeeAddedEventBody, atTime, DomainVersion.New);
+        var employeeAddedEvent = new JourneyActivityCompletedEvent(journeyStoryId, _teamImportActivityId, _teamImportActivityName, 
+            _employeeAddedEventName, JourneyActivityEventType.Source, employeeAddedEventBody, atTime, DomainVersion.New);
     }
 
     private JourneyStoryEventContext BuildEventContext(JourneyStoryEvent storyEvent)

@@ -17,8 +17,9 @@ public abstract record JourneyStoryChangedEvent(
 public sealed record JourneyActivityStartedEvent(
     JourneyStoryId StoryId,
     JourneyActivityId ActivityId,
-    JourneyActivityEventName Name,
-    JourneyActivityEventType Type,
+    JourneyActivityName ActivityName,
+    JourneyActivityEventName EventName,
+    JourneyActivityEventType EventType,
     EventBody? Body,
     DateTimeOffset CreatedAt,
     DomainVersion Version)
@@ -28,8 +29,9 @@ public sealed record JourneyActivityStartedEvent(
 public sealed record JourneyActivityCompletedEvent(
     JourneyStoryId StoryId,
     JourneyActivityId ActivityId,
-    JourneyActivityEventName Name,
-    JourneyActivityEventType Type,
+    JourneyActivityName ActivityName,
+    JourneyActivityEventName EventName,
+    JourneyActivityEventType EventType,
     EventBody? Body,
     DateTimeOffset CreatedAt,
     DomainVersion Version)

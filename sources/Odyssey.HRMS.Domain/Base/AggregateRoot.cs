@@ -7,15 +7,31 @@ public abstract class AggregateRoot<TId, TState> where TState : AggregateRootSta
 {
     protected TId Id { get; init; }
     protected TState State { get; init; }
+    protected DomainVersion Version { get; private set; }
+    protected List<DomainEvent> Events { get; } = new();
     
     protected AggregateRoot(TId id, TState state, IReadOnlyCollection<DomainEvent> domainEvents)
     {
         Id = id;
+        Version = DomainVersion.New;
         
         foreach (var @event in domainEvents)
         {
-            State = (TState)state.Apply(@event);
+            state = (TState)state.Apply(@event);
+            Version++;
         }
+
+        State = state;
+    }
+
+    protected DomainVersion IncrementVersion()
+    {
+        return Version++;
+    }
+
+    protected void AddEvent(DomainEvent @event)
+    {
+        Events.Add(@event);
     }
 }
 
