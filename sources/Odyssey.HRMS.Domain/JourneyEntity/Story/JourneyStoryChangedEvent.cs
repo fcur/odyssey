@@ -14,7 +14,7 @@ public abstract record JourneyStoryChangedEvent(
     : DomainEvent(CreatedAt, Version);
 
 // ReSharper disable once ClassNeverInstantiated.Global
-public sealed record JourneyActivityStartedEvent(
+public sealed record JourneyStoryStartedEvent(
     JourneyStoryId StoryId,
     JourneyActivityId ActivityId,
     JourneyActivityName ActivityName,
@@ -26,7 +26,7 @@ public sealed record JourneyActivityStartedEvent(
     : JourneyStoryChangedEvent(StoryId, ActivityId, CreatedAt, Version);
 
 // ReSharper disable once ClassNeverInstantiated.Global
-public sealed record JourneyActivityCompletedEvent(
+public sealed record JourneyStoryCompletedEvent(
     JourneyStoryId StoryId,
     JourneyActivityId ActivityId,
     JourneyActivityName ActivityName,

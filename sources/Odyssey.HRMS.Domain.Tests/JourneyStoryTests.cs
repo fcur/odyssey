@@ -77,7 +77,6 @@ public sealed class JourneyStoryTests
         var storyEvent = new JourneyStoryEvent(_teamImportActivityId, _employeeAddedEventName, employeeAddedEventBody);
         var storyEventContext = BuildEventContext(storyEvent);
         var maybeError = journeyStory.Handle(storyEvent, storyEventContext, atTime);
-
         maybeError.HasNoValue.Should().BeTrue();
     }
 
@@ -88,7 +87,7 @@ public sealed class JourneyStoryTests
         var journeyStoryId = JourneyStoryId.New();
         var employeeAddedEventBody = EventBody.Create().With(TestSource.TeamIdResultKey, _teamId)
             .With(TestSource.EmployeeIdResultKey, _employeeId.Value);
-        var employeeAddedEvent = new JourneyActivityCompletedEvent(journeyStoryId, _teamImportActivityId, _teamImportActivityName, 
+        var employeeAddedEvent = new JourneyStoryCompletedEvent(journeyStoryId, _teamImportActivityId, _teamImportActivityName, 
             _employeeAddedEventName, JourneyActivityEventType.Source, employeeAddedEventBody, atTime, DomainVersion.New);
     }
 
@@ -98,10 +97,10 @@ public sealed class JourneyStoryTests
         _  = _activitiesMap.TryGetValue(activityId, out var journeyId);
         _ = _journeys.TryGetValue(journeyId, out var journey);
         var activity = journey!.Activities.Single(v=>v.Id == activityId);
-        var @event = activity.Events.Single(v => v.Name == storyEvent.Name); 
+        var activityEvent = activity.Events.Single(v => v.Name == storyEvent.Name); 
         var activityName = activity.Name;
-        var eventType = @event.Type;
-        var nextActivityId = @event.NextActivityId;
+        var eventType = activityEvent.Type;
+        var nextActivityId = activityEvent.NextActivityId;
         var nextActivity = journey!.Activities.SingleOrDefault(v=>v.Id == nextActivityId);
         _ = _activityTemplatesMap.TryGetValue(nextActivity?.Name, out var nextActivityTemplate);
         var nextActivityDependencies = nextActivityTemplate?.Dependencies;
