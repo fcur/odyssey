@@ -1,4 +1,5 @@
 using FluentAssertions;
+using FluentAssertions.Execution;
 using Odyssey.HRMS.Domain.Base;
 using System.Diagnostics.CodeAnalysis;
 using Odyssey.HRMS.Domain.EmployeeEntity;
@@ -71,13 +72,20 @@ public sealed class JourneyStoryTests
         var journeyStoryId = JourneyStoryId.New();
         var atTime = DateTimeOffset.UtcNow;
         var journeyStory = JourneyStory.Create(journeyStoryId);
-        var employeeAddedEventBody = EventBody.Create().With(TestSource.TeamIdResultKey, _teamId)
+        var employeeAddedEventBody = EventBody.Create()
+            .With(TestSource.TeamIdResultKey, _teamId)
             .With(TestSource.EmployeeIdResultKey, _employeeId.Value);
 
         var storyEvent = new JourneyStoryEvent(_teamImportActivityId, _employeeAddedEventName, employeeAddedEventBody);
         var storyEventContext = BuildEventContext(storyEvent);
         var maybeError = journeyStory.Handle(storyEvent, storyEventContext, atTime);
+        var state = journeyStory.GetState();
+
+        using var scope = new AssertionScope();
         maybeError.HasNoValue.Should().BeTrue();
+        state.Should().NotBeNull();
+        state.GetEmployeeId().Should().Be(_employeeId);
+        state.GetTeamId().Should().Be(_teamId);
     }
 
     [Fact]
@@ -126,7 +134,7 @@ public sealed class JourneyStoryTests
     private JourneyActivity BuildNotifyEmployeeActivity()
     {
         var notifyEmployeeActivityEvents = BuildNotifyEmployeeActivityEvents();
-        var result = JourneyActivity.Create(_notifyEmployeeActivityId, _notifyEmployeeActivityName, JourneyActivityStatus.Draft,notifyEmployeeActivityEvents);
+        var result = JourneyActivity.Create(_notifyEmployeeActivityId, _notifyEmployeeActivityName, JourneyActivityStatus.Draft, notifyEmployeeActivityEvents);
         return result.GetValueOrDefault();
     }
     
@@ -180,20 +188,22 @@ public sealed class JourneyStoryTests
         var result = JourneyActivityTemplate.Create(_notifyEmployeeActivityName, events, dependencies);
         return result.GetValueOrDefault();
     }
-
-
+    
     private JourneyActivityEvent[] BuildTeamImportActivityEvents() =>  [
+        JourneyActivityEvent.ActivityStarted,
         new JourneyActivityEvent(_employeeAddedEventName, JourneyActivityEventType.Source, _paidHolidayAccrualActivityId),
-        new JourneyActivityEvent(_teamImportFailedEventName, JourneyActivityEventType.Exit, _endOfJourneyActivityId)
+        new JourneyActivityEvent(_teamImportFailedEventName, JourneyActivityEventType.Completion, _endOfJourneyActivityId)
     ];
     
     private JourneyActivityEvent[] BuildPaidHolidayAccrualActivityEvents() =>  [
+        JourneyActivityEvent.ActivityStarted,
         new JourneyActivityEvent(_paidHolidayAccruedEventName, JourneyActivityEventType.Action, _notifyEmployeeActivityId),
-        new JourneyActivityEvent(_paidHolidayAccrualFailedEventName, JourneyActivityEventType.Exit, _endOfJourneyActivityId)
+        new JourneyActivityEvent(_paidHolidayAccrualFailedEventName, JourneyActivityEventType.Completion, _endOfJourneyActivityId)
     ];
     
     private JourneyActivityEvent[] BuildNotifyEmployeeActivityEvents() =>  [
-        new JourneyActivityEvent(_notificationSentEventName, JourneyActivityEventType.Exit, _endOfJourneyActivityId),
-        new JourneyActivityEvent(_notificationFailedEventName, JourneyActivityEventType.Exit, _endOfJourneyActivityId)
+        JourneyActivityEvent.ActivityStarted,
+        new JourneyActivityEvent(_notificationSentEventName, JourneyActivityEventType.Completion, _endOfJourneyActivityId),
+        new JourneyActivityEvent(_notificationFailedEventName, JourneyActivityEventType.Completion, _endOfJourneyActivityId)
     ];
 }

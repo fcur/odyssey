@@ -17,6 +17,6 @@ public sealed record JourneyActivityEventTemplate(
     
     public static JourneyActivityEventTemplate CreateExit(JourneyActivityEventName eventName, params string[] resultKeys)
     {
-        return new JourneyActivityEventTemplate(eventName, JourneyActivityEventType.Exit, resultKeys);
+        return new JourneyActivityEventTemplate(eventName, JourneyActivityEventType.Completion, resultKeys);
     }
 }

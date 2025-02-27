@@ -98,19 +98,19 @@ public sealed class JourneyTests
         JourneyActivityEvent[] teamImportActivityEvents =
         [
             new JourneyActivityEvent(_employeeAddedEventName, JourneyActivityEventType.Source, paidHolidayAccrualId),
-            new JourneyActivityEvent(_teamImportFailedEventName, JourneyActivityEventType.Exit, endOfJourneyId)
+            new JourneyActivityEvent(_teamImportFailedEventName, JourneyActivityEventType.Completion, endOfJourneyId)
         ];
 
         JourneyActivityEvent[] paidHolidayAccrualActivityEvents =
         [
             new JourneyActivityEvent(_paidHolidayAccruedEventName, JourneyActivityEventType.Action, notifyEmployeeId),
-            new JourneyActivityEvent(_paidHolidayAccrualFailedEventName, JourneyActivityEventType.Exit, endOfJourneyId)
+            new JourneyActivityEvent(_paidHolidayAccrualFailedEventName, JourneyActivityEventType.Completion, endOfJourneyId)
         ];
         
         JourneyActivityEvent[] notifyEmployeeActivityEvents =
         [
-            new JourneyActivityEvent(_notificationSentEventName, JourneyActivityEventType.Exit, endOfJourneyId),
-            new JourneyActivityEvent(_notificationFailedEventName, JourneyActivityEventType.Exit, endOfJourneyId)
+            new JourneyActivityEvent(_notificationSentEventName, JourneyActivityEventType.Completion, endOfJourneyId),
+            new JourneyActivityEvent(_notificationFailedEventName, JourneyActivityEventType.Completion, endOfJourneyId)
         ];
 
         JourneyActivity[] activities =

@@ -37,6 +37,17 @@ public sealed record JourneyStoryCompletedEvent(
     DomainVersion Version)
     : JourneyStoryChangedEvent(StoryId, ActivityId, CreatedAt, Version);
 
+public sealed record JourneyStoryStartingEvent(
+    JourneyStoryId StoryId,
+    JourneyActivityId ActivityId,
+    JourneyActivityName ActivityName,
+    JourneyActivityEventName EventName,
+    JourneyActivityEventType EventType,
+    EventBody? Body,
+    DateTimeOffset CreatedAt,
+    DomainVersion Version)
+    : JourneyStoryChangedEvent(StoryId, ActivityId, CreatedAt, Version);
+
 public sealed record EventBody(IReadOnlyDictionary<string, JsonElement> Data)
 {
     public static readonly EventBody? Unset = null;
