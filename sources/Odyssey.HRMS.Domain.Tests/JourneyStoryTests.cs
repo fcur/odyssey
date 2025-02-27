@@ -84,8 +84,8 @@ public sealed class JourneyStoryTests
         using var scope = new AssertionScope();
         maybeError.HasNoValue.Should().BeTrue();
         state.Should().NotBeNull();
-        state.GetEmployeeId().Should().Be(_employeeId);
-        state.GetTeamId().Should().Be(_teamId);
+        state.EmployeeId.Should().Be(_employeeId);
+        state.GetData<Guid>(TestSource.TeamIdResultKey).Should().Be(_teamId);
     }
 
     [Fact]
@@ -104,6 +104,7 @@ public sealed class JourneyStoryTests
         var activityId = storyEvent.Id;
         _  = _activitiesMap.TryGetValue(activityId, out var journeyId);
         _ = _journeys.TryGetValue(journeyId, out var journey);
+        var initializationData = journey!.InitializationData;
         var activity = journey!.Activities.Single(v=>v.Id == activityId);
         var activityEvent = activity.Events.Single(v => v.Name == storyEvent.Name); 
         var activityName = activity.Name;
@@ -113,7 +114,7 @@ public sealed class JourneyStoryTests
         _ = _activityTemplatesMap.TryGetValue(nextActivity?.Name, out var nextActivityTemplate);
         var nextActivityDependencies = nextActivityTemplate?.Dependencies;
         
-        var storyEventContext = new JourneyStoryEventContext(activityName, eventType, nextActivityId, nextActivityDependencies);
+        var storyEventContext = new JourneyStoryEventContext(activityName, eventType, initializationData, nextActivityId, nextActivityDependencies);
         return storyEventContext;
     }
     
@@ -190,19 +191,18 @@ public sealed class JourneyStoryTests
     }
     
     private JourneyActivityEvent[] BuildTeamImportActivityEvents() =>  [
-        JourneyActivityEvent.ActivityStarted,
         new JourneyActivityEvent(_employeeAddedEventName, JourneyActivityEventType.Source, _paidHolidayAccrualActivityId),
         new JourneyActivityEvent(_teamImportFailedEventName, JourneyActivityEventType.Completion, _endOfJourneyActivityId)
     ];
     
     private JourneyActivityEvent[] BuildPaidHolidayAccrualActivityEvents() =>  [
-        JourneyActivityEvent.ActivityStarted,
+        // JourneyActivityEvent.ActivityStarted,
         new JourneyActivityEvent(_paidHolidayAccruedEventName, JourneyActivityEventType.Action, _notifyEmployeeActivityId),
         new JourneyActivityEvent(_paidHolidayAccrualFailedEventName, JourneyActivityEventType.Completion, _endOfJourneyActivityId)
     ];
     
     private JourneyActivityEvent[] BuildNotifyEmployeeActivityEvents() =>  [
-        JourneyActivityEvent.ActivityStarted,
+        // JourneyActivityEvent.ActivityStarted,
         new JourneyActivityEvent(_notificationSentEventName, JourneyActivityEventType.Completion, _endOfJourneyActivityId),
         new JourneyActivityEvent(_notificationFailedEventName, JourneyActivityEventType.Completion, _endOfJourneyActivityId)
     ];

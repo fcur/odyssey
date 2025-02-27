@@ -13,6 +13,17 @@ public abstract record JourneyStoryChangedEvent(
     DomainVersion Version)
     : DomainEvent(CreatedAt, Version);
 
+public sealed record JourneyStoryStartingEvent(
+    JourneyStoryId StoryId,
+    JourneyActivityId ActivityId,
+    JourneyActivityName ActivityName,
+    JourneyActivityEventName EventName,
+    JourneyActivityEventType EventType,
+    EventBody? Body,
+    DateTimeOffset CreatedAt,
+    DomainVersion Version)
+    : JourneyStoryChangedEvent(StoryId, ActivityId, CreatedAt, Version);
+
 // ReSharper disable once ClassNeverInstantiated.Global
 public sealed record JourneyStoryStartedEvent(
     JourneyStoryId StoryId,
@@ -27,17 +38,6 @@ public sealed record JourneyStoryStartedEvent(
 
 // ReSharper disable once ClassNeverInstantiated.Global
 public sealed record JourneyStoryCompletedEvent(
-    JourneyStoryId StoryId,
-    JourneyActivityId ActivityId,
-    JourneyActivityName ActivityName,
-    JourneyActivityEventName EventName,
-    JourneyActivityEventType EventType,
-    EventBody? Body,
-    DateTimeOffset CreatedAt,
-    DomainVersion Version)
-    : JourneyStoryChangedEvent(StoryId, ActivityId, CreatedAt, Version);
-
-public sealed record JourneyStoryStartingEvent(
     JourneyStoryId StoryId,
     JourneyActivityId ActivityId,
     JourneyActivityName ActivityName,
