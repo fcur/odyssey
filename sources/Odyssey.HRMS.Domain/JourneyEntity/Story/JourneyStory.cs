@@ -15,16 +15,14 @@ public sealed class JourneyStory : AggregateRoot<JourneyStoryId, JourneyStorySta
     {
     }
 
-    public static JourneyStory Create(JourneyStoryId id, IReadOnlyCollection<JourneyStoryChangedEvent> domainEvents)
+    public static JourneyStory Create(JourneyStoryId id, JourneyStoryState state, IReadOnlyCollection<JourneyStoryChangedEvent> domainEvents)
     {
-        var state = JourneyStoryState.Create();
-
         return new JourneyStory(id, state, domainEvents);
     }
 
-    public static JourneyStory Create(JourneyStoryId id)
+    public static JourneyStory Create(JourneyStoryId id, JourneyStoryState state)
     {
-        return Create(id, Array.Empty<JourneyStoryChangedEvent>());
+        return Create(id, state, Array.Empty<JourneyStoryChangedEvent>());
     }
 
     public Maybe<JourneyStoryError> Handle(JourneyStoryEvent storyEvent, JourneyStoryEventContext context, DateTimeOffset atTime)
@@ -48,11 +46,11 @@ public sealed class JourneyStory : AggregateRoot<JourneyStoryId, JourneyStorySta
     {
         var storyId = Id;
         var activityId = storyEvent.Id;
+        var activityName = context.Name;
         var eventName = storyEvent.Name;
         var eventType = context.Type;
         var eventBody = storyEvent.Body;
         var version = IncrementVersion();
-        var activityName = context.Name;
         
         var completedEvent = new JourneyStoryStartedEvent(storyId, activityId, activityName, eventName, eventType, eventBody, atTime, version);
 
@@ -66,11 +64,11 @@ public sealed class JourneyStory : AggregateRoot<JourneyStoryId, JourneyStorySta
     {
         var storyId = Id;
         var activityId = storyEvent.Id;
+        var activityName = context.Name;
         var eventName = storyEvent.Name;
         var eventType = context.Type;
         var eventBody = storyEvent.Body;
         var version = IncrementVersion();
-        var activityName = context.Name;
         
         var completedEvent = new JourneyStoryCompletedEvent(storyId, activityId, activityName, eventName, eventType, eventBody, atTime, version);
 
@@ -82,48 +80,38 @@ public sealed class JourneyStory : AggregateRoot<JourneyStoryId, JourneyStorySta
     
     private Maybe<JourneyStoryError> HandleSourceActivityAndStartStory(JourneyStoryEvent storyEvent, JourneyStoryEventContext context, DateTimeOffset atTime)
     {
-        // TODO: add shared data as story event
-        
         var storyId = Id;
         var activityId = storyEvent.Id;
-        var version = IncrementVersion();
-
-        // var storyStartingEventBody = context.InitializationData != null ? new EventBody(context.InitializationData.Data) : EventBody.Unset;
-        // var startingEvent = new JourneyStoryStartingEvent(storyId, activityId, JourneyActivityName.Unset, JourneyActivityEventName.Unset, JourneyActivityEventType.Flow, storyStartingEventBody, atTime, version);
-        //
-        // State.Apply(startingEvent);
-        // AddEvent(startingEvent);
-        
-        var eventName = storyEvent.Name;
-        var eventBody = storyEvent.Body;
-        var eventType = context.Type;
         var activityName = context.Name;
-        // version = IncrementVersion();
+        var eventName = storyEvent.Name;
+        var eventType = context.Type;
+        var eventBody = storyEvent.Body;
+        var version = IncrementVersion();
         
         var completedEvent = new JourneyStoryStartedEvent(storyId, activityId, activityName, eventName, eventType, eventBody, atTime, version);
 
         State.Apply(completedEvent);
         AddEvent(completedEvent);
         
-        return Maybe<JourneyStoryError>.None;
+        return StartNextActivity(storyEvent, context, atTime);
     }
     
     private Maybe<JourneyStoryError> HandleCompletionActivityAndStopStory(JourneyStoryEvent storyEvent, JourneyStoryEventContext context, DateTimeOffset atTime)
     {
         var storyId = Id;
         var activityId = storyEvent.Id;
+        var activityName = context.Name;
         var eventName = storyEvent.Name;
         var eventType = context.Type;
         var eventBody = storyEvent.Body;
         var version = IncrementVersion();
-        var activityName = context.Name;
         
         var completedEvent = new JourneyStoryCompletedEvent(storyId, activityId, activityName, eventName, eventType, eventBody, atTime, version);
 
         State.Apply(completedEvent);
         AddEvent(completedEvent);
 
-        return StartNextActivity(storyEvent, context, atTime);
+        return Maybe<JourneyStoryError>.None;
     }
 
     private Maybe<JourneyStoryError> StartNextActivity(JourneyStoryEvent storyEvent, JourneyStoryEventContext context, DateTimeOffset atTime)
@@ -142,6 +130,10 @@ public sealed class JourneyStory : AggregateRoot<JourneyStoryId, JourneyStorySta
         
         var eventBody = EventBody.Create();
 
+        // TODO: refactor
+        // var storyData = new JourneyStoryData(_data);
+        // storyData.GetEventBody(context.NextActivityDependencies);
+        
         if (context.NextActivityDependencies != null)
         {
             foreach (var dependency in context.NextActivityDependencies)
@@ -169,27 +161,65 @@ public sealed class JourneyStory : AggregateRoot<JourneyStoryId, JourneyStorySta
     
 }
 
-public readonly record struct ActivityDataKey(string Key, JourneyActivityName ActivityName, JourneyActivityEventName EventName)
+public readonly record struct StoryDataKey(string Key, JourneyActivityName? ActivityName, JourneyActivityEventName? EventName)
 {
-    public override string ToString() => $"{ActivityName}:{EventName}:{Key}";
+    public static StoryDataKey Create(string key) => new StoryDataKey(key, null, null);
+    public static StoryDataKey Create(string key, JourneyActivityName activityName, JourneyActivityEventName eventName) => new StoryDataKey(key, activityName, eventName);
+
+    public override string ToString()
+    {
+        if (ActivityName != null && EventName != null)
+        {
+            return $"{ActivityName}:{EventName}:{Key}";
+        }
+        
+        return Key;
+    }
 
     public override int GetHashCode()
     {
-        return base.GetHashCode() + EqualityComparer<string>.Default.GetHashCode(Key) 
-                                  + EqualityComparer<string>.Default.GetHashCode(EventName.Value)
-                                  + EqualityComparer<string>.Default.GetHashCode(ActivityName.Value);
+        var baseHashCode = base.GetHashCode();
+        if (ActivityName != null && EventName != null)
+        {
+            return  baseHashCode + EqualityComparer<string>.Default.GetHashCode(Key) 
+                                + EqualityComparer<string>.Default.GetHashCode(EventName.Value)
+                                + EqualityComparer<string>.Default.GetHashCode(ActivityName.Value);
+        }
+
+        return baseHashCode + EqualityComparer<string>.Default.GetHashCode(Key);
     }
 }
 
 
+
+public sealed record JourneyStoryData(Dictionary<StoryDataKey, JsonElement> Data)
+{
+    public EventBody GetEventBody(IReadOnlyCollection<JourneyActivityTemplateDependency>? activityDependencies)
+    {
+        return EventBody.Create();
+    }
+}
+
 public sealed class JourneyStoryState : AggregateRootState
 {
-    private readonly Dictionary<ActivityDataKey, JsonElement> _data = new Dictionary<ActivityDataKey, JsonElement>();
-    private readonly Dictionary<JourneyActivityId, JourneyStoryActivity> _activities = new Dictionary<JourneyActivityId, JourneyStoryActivity>();
+    private readonly Dictionary<StoryDataKey, JsonElement> _data;
+    private readonly Dictionary<JourneyActivityId, JourneyStoryActivity> _activities;
     
     public EmployeeId EmployeeId { get; private set; }
+    public JourneyId JourneyId { get; init; }
     
-    public static JourneyStoryState Create() => new JourneyStoryState();
+    private JourneyStoryState(JourneyId journeyId, Dictionary<JourneyActivityId, JourneyStoryActivity> activities, Dictionary<StoryDataKey, JsonElement> data)
+    {
+        _activities = activities;
+        _data = data;
+        JourneyId = journeyId;
+    }
+
+    public static JourneyStoryState Create(JourneyId journeyId, Dictionary<JourneyActivityId, JourneyStoryActivity> activities) 
+        => Create(journeyId, activities, new Dictionary<StoryDataKey, JsonElement>());
+    
+    public static JourneyStoryState Create(JourneyId journeyId, Dictionary<JourneyActivityId, JourneyStoryActivity> activities, Dictionary<StoryDataKey, JsonElement> data) 
+        => new JourneyStoryState(journeyId, activities, data);
         
     protected internal override AggregateRootState Apply(DomainEvent domainEvent)
     {
@@ -216,9 +246,12 @@ public sealed class JourneyStoryState : AggregateRootState
 
         EnrichContext(startedEvent.ActivityName, startedEvent.EventName, startedEvent.Body);
 
-        var employeeIdDataKey = new ActivityDataKey("EmployeeId", startedEvent.ActivityName, startedEvent.EventName);
-        var employeeIdData = GetData<Guid>(employeeIdDataKey);
-        EmployeeId = new EmployeeId(employeeIdData);
+        var employeeIdDataKey = new StoryDataKey("EmployeeId", startedEvent.ActivityName, startedEvent.EventName);
+
+        if (GetData<Guid>(employeeIdDataKey).TryGetValue(out var employeeIdResult))
+        {
+            EmployeeId = new EmployeeId(employeeIdResult);
+        }
         
         return this;
     }
@@ -256,28 +289,32 @@ public sealed class JourneyStoryState : AggregateRootState
         
         foreach (var key in eventBody.Data.Keys)
         {
-            var dataKey = new ActivityDataKey(key, activityName, eventName);
+            var dataKey = new StoryDataKey(key, activityName, eventName);
             _data[dataKey] = eventBody.Data[key];
         }
     }
     
-    public T? GetData<T>(ActivityDataKey activityDataKey)
+    public Result<T> GetData<T>(StoryDataKey key)
     {
-        return _data[activityDataKey].Deserialize<T>();
-    }
-    
-    public T? GetData<T>(string key)
-    {
-        var dataKey = _data.Keys.FirstOrDefault(v => v.Key == key);
-    
-        if (dataKey == null)
+        try
         {
-            return default;
+            if (!_data.TryGetValue(key, out var data))
+            {
+                return Result.Failure<T>($"Data is missing for the requested key: '{key}'");
+            }
+            
+            return data.Deserialize<T>() ?? throw new InvalidOperationException();
         }
-        
-        return _data[dataKey].Deserialize<T>();
+        catch (JsonException je)
+        {
+            return Result.Failure<T>(je.Message);   
+        }
+        catch (NotSupportedException nse)
+        {
+            return Result.Failure<T>(nse.Message);
+        }
     }
-
+    
     public bool TryGetRawData(string key, out JsonElement result)
     {
         var dataKey = _data.Keys.FirstOrDefault(v => v.Key == key);
@@ -293,7 +330,7 @@ public sealed class JourneyStoryState : AggregateRootState
     
     public bool TryGetRawData(string key, JourneyActivityName activityName, JourneyActivityEventName eventName, [MaybeNullWhen(false)] out JsonElement result)
     {
-        var dataKey = new ActivityDataKey(key, activityName, eventName);
+        var dataKey = new StoryDataKey(key, activityName, eventName);
         return _data.TryGetValue(dataKey, out result);
     }
     

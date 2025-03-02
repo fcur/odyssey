@@ -69,14 +69,16 @@ public sealed class JourneyStoryTests
     [Fact]
     public void Test1()
     {
+        var journeyActivityId = _teamImportActivityId;
         var journeyStoryId = JourneyStoryId.New();
         var atTime = DateTimeOffset.UtcNow;
-        var journeyStory = JourneyStory.Create(journeyStoryId);
+        var storyState = BuildState(journeyActivityId);
+        var journeyStory = JourneyStory.Create(journeyStoryId, storyState);
         var employeeAddedEventBody = EventBody.Create()
             .With(TestSource.TeamIdResultKey, _teamId)
             .With(TestSource.EmployeeIdResultKey, _employeeId.Value);
 
-        var storyEvent = new JourneyStoryEvent(_teamImportActivityId, _employeeAddedEventName, employeeAddedEventBody);
+        var storyEvent = new JourneyStoryEvent(journeyActivityId, _employeeAddedEventName, employeeAddedEventBody);
         var storyEventContext = BuildEventContext(storyEvent);
         var maybeError = journeyStory.Handle(storyEvent, storyEventContext, atTime);
         var state = journeyStory.GetState();
@@ -85,7 +87,10 @@ public sealed class JourneyStoryTests
         maybeError.HasNoValue.Should().BeTrue();
         state.Should().NotBeNull();
         state.EmployeeId.Should().Be(_employeeId);
-        state.GetData<Guid>(TestSource.TeamIdResultKey).Should().Be(_teamId);
+        state.JourneyId.Should().Be(_journeys.Keys.First());
+        state.GetData<Guid>(StoryDataKey.Create(TestSource.TeamIdResultKey)).GetValueOrDefault().Should().Be(_teamId);
+        state.GetData<Guid>(StoryDataKey.Create(TestSource.TeamIdResultKey, _teamImportActivityName, _employeeAddedEventName)).GetValueOrDefault().Should().Be(_teamId);
+        state.GetData<Guid>(StoryDataKey.Create(TestSource.EmployeeIdResultKey, _teamImportActivityName, _employeeAddedEventName)).GetValueOrDefault().Should().Be(_employeeId.Value);
     }
 
     [Fact]
@@ -116,6 +121,21 @@ public sealed class JourneyStoryTests
         
         var storyEventContext = new JourneyStoryEventContext(activityName, eventType, initializationData, nextActivityId, nextActivityDependencies);
         return storyEventContext;
+    }
+
+    private JourneyStoryState BuildState(JourneyActivityId activityId)
+    {
+        _  = _activitiesMap.TryGetValue(activityId, out var journeyId);
+        _ = _journeys.TryGetValue(journeyId, out var journey);
+
+        var activities = journey!.Activities.Select(v => new JourneyStoryActivity(v.Id, v.Name, JourneyActivityStatus.Ready))
+            .ToDictionary(v=>v.Id, v=>v);
+
+        var data = journey.InitializationData!=null
+            ? journey.InitializationData!.Data.ToDictionary(v => StoryDataKey.Create(v.Key), v => v.Value)
+            : new Dictionary<StoryDataKey, JsonElement>();
+        
+        return JourneyStoryState.Create(journeyId, activities!, data);
     }
     
     private JourneyActivity BuildTeamImportActivity()
