@@ -131,7 +131,7 @@ public sealed class JourneyStoryTests
         var activities = journey!.Activities.Select(v => new JourneyStoryActivity(v.Id, v.Name, JourneyActivityStatus.Ready))
             .ToDictionary(v=>v.Id, v=>v);
 
-        var data = journey.InitializationData!=null
+        var data = journey.InitializationData != null
             ? journey.InitializationData!.Data.ToDictionary(v => StoryDataKey.Create(v.Key), v => v.Value)
             : new Dictionary<StoryDataKey, JsonElement>();
         

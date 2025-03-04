@@ -13,7 +13,29 @@ public abstract record JourneyStoryChangedEvent(
     DomainVersion Version)
     : DomainEvent(CreatedAt, Version);
 
-public sealed record JourneyStoryStartingEvent(
+public sealed record JourneyStoryActivityStartingEvent(
+    JourneyStoryId StoryId,
+    JourneyActivityId ActivityId,
+    JourneyActivityName ActivityName,
+    JourneyActivityEventName EventName,
+    JourneyActivityEventType EventType,
+    EventBody? Body,
+    DateTimeOffset CreatedAt,
+    DomainVersion Version)
+    : JourneyStoryChangedEvent(StoryId, ActivityId, CreatedAt, Version);
+
+public sealed record JourneyStoryActivityStartedEvent(
+    JourneyStoryId StoryId,
+    JourneyActivityId ActivityId,
+    JourneyActivityName ActivityName,
+    JourneyActivityEventName EventName,
+    JourneyActivityEventType EventType,
+    EventBody? Body,
+    DateTimeOffset CreatedAt,
+    DomainVersion Version)
+    : JourneyStoryChangedEvent(StoryId, ActivityId, CreatedAt, Version);
+
+public sealed record JourneyStoryActivityCompletedEvent(
     JourneyStoryId StoryId,
     JourneyActivityId ActivityId,
     JourneyActivityName ActivityName,
