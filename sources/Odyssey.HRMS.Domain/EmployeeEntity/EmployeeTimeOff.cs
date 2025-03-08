@@ -19,9 +19,9 @@ public sealed class EmployeeTimeOff : AggregateRoot<EmployeeId, EmployeeTimeOffS
 public sealed class EmployeeTimeOffState : AggregateRootState
 {
     public static EmployeeTimeOffState Create() => new EmployeeTimeOffState();
-    protected internal override AggregateRootState Apply(DomainEvent domainEvent)
+    protected internal override void Apply(DomainEvent domainEvent)
     {
-        return domainEvent switch
+        _ =  domainEvent switch
         {
             PaidHolidayAccruedEvent accruedEvent => Apply(accruedEvent),
             PaidHolidayUsedEvent usedEvent => Apply(usedEvent),
@@ -40,13 +40,13 @@ public sealed class EmployeeTimeOffState : AggregateRootState
     }
 }
 
-public abstract record HolidayEvent(EmployeeId EmployeeId, decimal Amount, EventBody? Body, DateTimeOffset CreatedAt, DomainVersion Version)
+public abstract record HolidayEvent(EmployeeId EmployeeId, decimal Amount, StoryEventBody? Body, DateTimeOffset CreatedAt, DomainVersion Version)
     : DomainEvent(CreatedAt, Version);
 
 // ReSharper disable once ClassNeverInstantiated.Global
-public sealed record PaidHolidayAccruedEvent(EmployeeId EmployeeId, decimal Amount, EventBody? Body, DateTimeOffset CreatedAt, DomainVersion Version)
+public sealed record PaidHolidayAccruedEvent(EmployeeId EmployeeId, decimal Amount, StoryEventBody? Body, DateTimeOffset CreatedAt, DomainVersion Version)
     : HolidayEvent(EmployeeId,  Amount, Body, CreatedAt, Version);
     
 // ReSharper disable once ClassNeverInstantiated.Global
-public sealed record PaidHolidayUsedEvent(EmployeeId EmployeeId, decimal Amount, EventBody? Body, DateTimeOffset CreatedAt, DomainVersion Version)
+public sealed record PaidHolidayUsedEvent(EmployeeId EmployeeId, decimal Amount, StoryEventBody? Body, DateTimeOffset CreatedAt, DomainVersion Version)
     : HolidayEvent(EmployeeId,  Amount, Body, CreatedAt, Version);

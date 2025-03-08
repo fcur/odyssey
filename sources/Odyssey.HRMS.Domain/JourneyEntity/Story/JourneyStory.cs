@@ -1,9 +1,7 @@
 using CSharpFunctionalExtensions;
 using Odyssey.HRMS.Domain.Base;
-using Odyssey.HRMS.Domain.EmployeeEntity;
 using Odyssey.HRMS.Domain.JourneyEntity.Activity;
 using Odyssey.HRMS.Domain.JourneyEntity.ActivityTemplate;
-using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 
 namespace Odyssey.HRMS.Domain.JourneyEntity.Story;
@@ -27,6 +25,8 @@ public sealed class JourneyStory : AggregateRoot<JourneyStoryId, JourneyStorySta
 
     public Maybe<JourneyStoryError> Handle(JourneyStoryEvent storyEvent, JourneyStoryEventContext context, DateTimeOffset atTime)
     {
+        // add generic code 
+        
         var maybeError = context.Type.Name switch
         {
             // TBD: to const
@@ -40,8 +40,6 @@ public sealed class JourneyStory : AggregateRoot<JourneyStoryId, JourneyStorySta
         return maybeError;
     }
 
-    public JourneyStoryState GetState() => State;
-    
     private Maybe<JourneyStoryError> StartActivity(JourneyStoryEvent storyEvent, JourneyStoryEventContext context, DateTimeOffset atTime)
     {
         var storyId = Id;
@@ -54,7 +52,7 @@ public sealed class JourneyStory : AggregateRoot<JourneyStoryId, JourneyStorySta
         
         var completedEvent = new JourneyStoryStartedEvent(storyId, activityId, activityName, eventName, eventType, eventBody, atTime, version);
 
-        State.Apply(completedEvent);
+        ApplyState(completedEvent);
         AddEvent(completedEvent);
         
         return Maybe<JourneyStoryError>.None;
@@ -72,7 +70,7 @@ public sealed class JourneyStory : AggregateRoot<JourneyStoryId, JourneyStorySta
         
         var completedEvent = new JourneyStoryCompletedEvent(storyId, activityId, activityName, eventName, eventType, eventBody, atTime, version);
 
-        State.Apply(completedEvent);
+        ApplyState(completedEvent);
         AddEvent(completedEvent);
         
         return Maybe<JourneyStoryError>.None;
@@ -90,10 +88,10 @@ public sealed class JourneyStory : AggregateRoot<JourneyStoryId, JourneyStorySta
         
         var storyStartedEvent = new JourneyStoryStartedEvent(storyId, activityId, activityName, eventName, eventType, eventBody, atTime, version);
 
-        State.Apply(storyStartedEvent);
+        ApplyState(storyStartedEvent);
         AddEvent(storyStartedEvent);
         
-        return StartNextActivity(storyEvent, context, atTime);
+        return StartNextActivity(context, atTime);
     }
     
     private Maybe<JourneyStoryError> HandleCompletionActivityAndStopStory(JourneyStoryEvent storyEvent, JourneyStoryEventContext context, DateTimeOffset atTime)
@@ -108,13 +106,13 @@ public sealed class JourneyStory : AggregateRoot<JourneyStoryId, JourneyStorySta
         
         var completedEvent = new JourneyStoryCompletedEvent(storyId, activityId, activityName, eventName, eventType, eventBody, atTime, version);
 
-        State.Apply(completedEvent);
+        ApplyState(completedEvent);
         AddEvent(completedEvent);
 
         return Maybe<JourneyStoryError>.None;
     }
 
-    private Maybe<JourneyStoryError> StartNextActivity(JourneyStoryEvent storyEvent, JourneyStoryEventContext context, DateTimeOffset atTime)
+    private Maybe<JourneyStoryError> StartNextActivity(JourneyStoryEventContext context, DateTimeOffset atTime)
     {
         var nextActivityId = context.NextActivityId;
         if (nextActivityId == null)
@@ -124,21 +122,20 @@ public sealed class JourneyStory : AggregateRoot<JourneyStoryId, JourneyStorySta
         
         var storyId = Id;
         var activityId = nextActivityId;
-        var activityName = JourneyActivityName.Unset;
-        var eventName = JourneyActivityEventName.Unset;
-        var eventType = JourneyActivityEventType.Flow;
+        var activityName = context.NextActivityName;
 
         var eventDataResult = State.GetEventBody(context.NextActivityDependencies);
-
         if (eventDataResult.IsFailure)
         {
             return eventDataResult.Error;
         }
 
-        var eventBody = new EventBody(eventDataResult.Value);
+        var activityData = new StoryActivityData(eventDataResult.Value);
         var version = IncrementVersion();
         
-        var activityStartingEvent = new JourneyStoryActivityStartingEvent(storyId, activityId, activityName, eventName, eventType, eventBody, atTime, version);
+        var activityStartingEvent = new JourneyStoryActivityStartingEvent(storyId, activityId, activityName!, activityData, atTime, version);
+        
+        ApplyState(activityStartingEvent);
         AddEvent(activityStartingEvent);
         
         return Maybe<JourneyStoryError>.None;
@@ -204,7 +201,7 @@ public sealed record JourneyStoryData(Dictionary<StoryDataKey, JsonElement> Data
 
     public bool TryGetValue(StoryDataKey key, out JsonElement data) => Data.TryGetValue(key, out data);
     
-    public void EnrihWithEventResponse(JourneyActivityName activityName, JourneyActivityEventName eventName, EventBody? eventBody)
+    public void EnrichWithEventResponse(JourneyActivityName activityName, JourneyActivityEventName eventName, StoryEventBody? eventBody)
     {
         if (eventBody == null)
         {
@@ -219,131 +216,36 @@ public sealed record JourneyStoryData(Dictionary<StoryDataKey, JsonElement> Data
     }
 }
 
-public sealed class JourneyStoryState : AggregateRootState
+public sealed record JourneyStoryEvent(JourneyActivityId Id, JourneyActivityEventName Name, StoryEventBody? Body);
+
+public sealed record JourneyStoryEventContext(JourneyActivityName Name, JourneyActivityEventType Type, JourneyInitializationData? InitializationData, JourneyActivityId? NextActivityId, JourneyActivityName? NextActivityName,  IReadOnlyCollection<JourneyActivityTemplateDependency>? NextActivityDependencies);
+
+public enum JourneyStoryActivityStatus: byte
 {
-    private readonly JourneyStoryData _data;
-    private readonly Dictionary<JourneyActivityId, JourneyStoryActivity> _activities;
-    
-    public EmployeeId EmployeeId { get; private set; }
-    public JourneyId JourneyId { get; init; }
-    
-    private JourneyStoryState(JourneyId journeyId, Dictionary<JourneyActivityId, JourneyStoryActivity> activities, Dictionary<StoryDataKey, JsonElement> data)
-    {
-        _activities = activities;
-        _data = new JourneyStoryData(data);
-        JourneyId = journeyId;
-    }
-
-    public static JourneyStoryState Create(JourneyId journeyId, Dictionary<JourneyActivityId, JourneyStoryActivity> activities) 
-        => Create(journeyId, activities, new Dictionary<StoryDataKey, JsonElement>());
-    
-    public static JourneyStoryState Create(JourneyId journeyId, Dictionary<JourneyActivityId, JourneyStoryActivity> activities, Dictionary<StoryDataKey, JsonElement> data) 
-        => new JourneyStoryState(journeyId, activities, data);
-        
-    protected internal override AggregateRootState Apply(DomainEvent domainEvent)
-    {
-        return domainEvent switch
-        {
-            JourneyStoryActivityStartingEvent activityStartingEvent => Apply(activityStartingEvent),
-            JourneyStoryStartedEvent storyStartedEvent => Apply(storyStartedEvent),
-            JourneyStoryCompletedEvent storyCompletedEvent => Apply(storyCompletedEvent),
-            _ => throw new NotImplementedException()
-        };
-    }
-
-    private AggregateRootState Apply(JourneyStoryActivityStartingEvent activityStartingEvent)
-    {
-        return this;
-    }
-    
-    private AggregateRootState Apply(JourneyStoryStartedEvent startedEvent)
-    {
-        var activityId = startedEvent.ActivityId;
-        var activity = GetOrCreateActivity(activityId, () => new JourneyStoryActivity(activityId, startedEvent.ActivityName, JourneyActivityStatus.Started));
-        
-        activity.Start();
-
-        _data.EnrihWithEventResponse(startedEvent.ActivityName, startedEvent.EventName, startedEvent.Body);
-        
-        var employeeIdKey = new StoryDataKey("EmployeeId", startedEvent.ActivityName, startedEvent.EventName);
-
-        if (GetData<Guid>(employeeIdKey).TryGetValue(out var employeeIdResult))
-        {
-            EmployeeId = new EmployeeId(employeeIdResult);
-        }
-        
-        return this;
-    }
-
-    private AggregateRootState Apply(JourneyStoryCompletedEvent completedEvent)
-    {
-        var activityId = completedEvent.ActivityId;
-        var activity = GetOrCreateActivity(activityId, () => new JourneyStoryActivity(activityId, completedEvent.ActivityName, JourneyActivityStatus.Draft));
-        
-        activity.Finish();
-        
-        _data.EnrihWithEventResponse(completedEvent.ActivityName, completedEvent.EventName, completedEvent.Body);
-        
-        return this;
-    }
-
-    private JourneyStoryActivity GetOrCreateActivity(JourneyActivityId activityId, Func<JourneyStoryActivity> createActivity)
-    {
-        if (_activities.TryGetValue(activityId, out var activity))
-        {
-            return activity;
-        }
-        
-        activity = createActivity();
-        _activities[activityId] = activity;
-        
-        return activity;
-    }
-    
-    public Result<T> GetData<T>(StoryDataKey key)
-    {
-        try
-        {
-            if (!_data.TryGetValue(key, out var data))
-            {
-                return Result.Failure<T>($"Data is missing for the requested key: '{key}'");
-            }
-            
-            return data.Deserialize<T>() ?? throw new InvalidOperationException();
-        }
-        catch (JsonException je)
-        {
-            return Result.Failure<T>(je.Message);   
-        }
-        catch (NotSupportedException nse)
-        {
-            return Result.Failure<T>(nse.Message);
-        }
-    }
-    
-    // TODO: refactor
-    public Result<Dictionary<string, JsonElement>, JourneyStoryError> GetEventBody(IReadOnlyCollection<JourneyActivityTemplateDependency>? activityDependencies) 
-        => _data.GetEventBody(activityDependencies);
-    
+    Ready,
+    Starting,
+    Started,
+    Finished
 }
 
-public sealed record JourneyStoryEvent(JourneyActivityId Id, JourneyActivityEventName Name, EventBody? Body);
-
-public sealed record JourneyStoryEventContext(JourneyActivityName Name, JourneyActivityEventType Type, JourneyInitializationData? InitializationData, JourneyActivityId? NextActivityId, IReadOnlyCollection<JourneyActivityTemplateDependency>? NextActivityDependencies);
-
-public sealed record JourneyStoryActivity(JourneyActivityId Id, JourneyActivityName ActivityName, JourneyActivityStatus Status) 
+public sealed record JourneyStoryActivity(JourneyActivityId Id, JourneyActivityName ActivityName, JourneyStoryActivityStatus Status) 
     : NestedDomainEntity<JourneyActivityId>(Id)
 {
-    internal JourneyActivityStatus Status { get; private set; } = Status;
+    internal JourneyStoryActivityStatus Status { get; private set; } = Status;
     
+    public void SetStarted()
+    {
+        Status = JourneyStoryActivityStatus.Started;
+    }
+
     public void Start()
     {
-        Status = JourneyActivityStatus.Started;
+        Status = JourneyStoryActivityStatus.Starting;
     }
     
-    public void Finish()
+    public void SetFinished()
     {
-        Status = JourneyActivityStatus.Finished;
+        Status = JourneyStoryActivityStatus.Finished;
     }
 }
 

@@ -9,6 +9,7 @@ using Odyssey.HRMS.Domain.JourneyEntity.ActivityTemplate;
 using Odyssey.HRMS.Domain.JourneyEntity.Story;
 using System.Collections.Immutable;
 using System.Text.Json;
+
 // ReSharper disable NullableWarningSuppressionIsUsed
 #pragma warning disable CS8604 // Possible null reference argument.
 
@@ -35,7 +36,7 @@ public sealed class JourneyStoryTests
     private readonly ImmutableDictionary<JourneyId, Journey> _journeys;
     private readonly ImmutableDictionary<JourneyActivityId, JourneyId> _activitiesMap;
     private readonly ImmutableDictionary<JourneyActivityName, JourneyActivityTemplate> _activityTemplatesMap;
-    
+
     public JourneyStoryTests()
     {
         var startDate = DateTimeOffset.UtcNow.AddDays(1);
@@ -57,87 +58,112 @@ public sealed class JourneyStoryTests
             BuildPaidHolidayAccrualActivityTemplate(),
             BuildNotifyEmployeeActivityTemplate()
         ];
-        
+
         var journeys = new[] { Journey.Create(name, activities, startup, initializationData).GetValueOrDefault() };
-        
+
         _journeys = journeys.ToImmutableDictionary(v => v.Id, v => v);
         _activitiesMap = journeys.SelectMany(jrn => jrn.Activities.Select(act => new KeyValuePair<JourneyActivityId, JourneyId>(act.Id, jrn.Id)))
-            .ToImmutableDictionary(v=>v.Key, v=>v.Value);
+            .ToImmutableDictionary(v => v.Key, v => v.Value);
         _activityTemplatesMap = templates.ToImmutableDictionary(v => v.Name, v => v);
     }
-    
+
     [Fact]
-    public void Test1()
+    public void ShouldStartStoryAndMoveNext()
     {
         var journeyActivityId = _teamImportActivityId;
         var journeyStoryId = JourneyStoryId.New();
         var atTime = DateTimeOffset.UtcNow;
         var storyState = BuildState(journeyActivityId);
         var journeyStory = JourneyStory.Create(journeyStoryId, storyState);
-        var employeeAddedEventBody = EventBody.Create()
+        var employeeAddedEventBody = StoryEventBody.Create()
             .With(TestSource.TeamIdResultKey, _teamId)
             .With(TestSource.EmployeeIdResultKey, _employeeId.Value);
 
         var storyEvent = new JourneyStoryEvent(journeyActivityId, _employeeAddedEventName, employeeAddedEventBody);
         var storyEventContext = BuildEventContext(storyEvent);
         var maybeError = journeyStory.Handle(storyEvent, storyEventContext, atTime);
-        var state = journeyStory.GetState();
+        var events = journeyStory.GetEvents();
+        var storyStartedEvent = events.Length > 0 ? events[0] as JourneyStoryStartedEvent: null;
+        var activityStartingEvent = events.Length > 1 ? events[1] as JourneyStoryActivityStartingEvent: null;
 
         using var scope = new AssertionScope();
         maybeError.HasNoValue.Should().BeTrue();
-        state.Should().NotBeNull();
-        state.EmployeeId.Should().Be(_employeeId);
-        state.JourneyId.Should().Be(_journeys.Keys.First());
-        state.GetData<Guid>(StoryDataKey.Create(TestSource.TeamIdResultKey)).GetValueOrDefault().Should().Be(_teamId);
-        state.GetData<Guid>(StoryDataKey.Create(TestSource.TeamIdResultKey, _teamImportActivityName, _employeeAddedEventName)).GetValueOrDefault().Should().Be(_teamId);
-        state.GetData<Guid>(StoryDataKey.Create(TestSource.EmployeeIdResultKey, _teamImportActivityName, _employeeAddedEventName)).GetValueOrDefault().Should().Be(_employeeId.Value);
+        events.Length.Should().Be(2);
+
+        storyStartedEvent.Should().NotBeNull();
+        storyStartedEvent!.StoryId.Should().Be(journeyStoryId);
+        storyStartedEvent.ActivityId.Should().Be(_teamImportActivityId);
+        storyStartedEvent.ActivityName.Should().Be(_teamImportActivityName);
+        storyStartedEvent.EventName.Should().Be(_employeeAddedEventName);
+        storyStartedEvent.EventType.Should().Be(JourneyActivityEventType.Source);
+        storyStartedEvent.EventBody.Should().NotBeNull();
+        storyStartedEvent.EventBody!.Data.Should().ContainKey("TeamId");
+        storyStartedEvent.EventBody.Data.Should().ContainKey("EmployeeId");
+        storyStartedEvent.Version.Should().Be(new DomainVersion(1UL));
+        
+        activityStartingEvent.Should().NotBeNull();
+        activityStartingEvent!.StoryId.Should().Be(journeyStoryId);
+        activityStartingEvent.ActivityId.Should().Be(_paidHolidayAccrualActivityId);
+        activityStartingEvent.ActivityName.Should().Be(_paidHolidayAccrualActivityName);
+        activityStartingEvent.ActivityData.Should().NotBeNull();
+        activityStartingEvent.ActivityData.Data.Should().ContainKey("EmployeeId");
+        activityStartingEvent.Version.Should().Be(new DomainVersion(2UL));
+        
+        // var state = journeyStory.GetState();
+        // state.Should().NotBeNull();
+        // state.EmployeeId.Should().Be(_employeeId);
+        // state.JourneyId.Should().Be(_journeys.Keys.First());
+        // state.GetData<Guid>(TestSource.TeamIdResultKey).GetValueOrDefault().Should().Be(_teamId);
+        // state.GetData<Guid>(TestSource.TeamIdResultKey, _teamImportActivityName, _employeeAddedEventName).GetValueOrDefault().Should().Be(_teamId);
+        // state.GetData<Guid>(TestSource.EmployeeIdResultKey, _teamImportActivityName, _employeeAddedEventName).GetValueOrDefault().Should().Be(_employeeId.Value);
     }
 
     [Fact]
     public void Test2()
-    {  
+    {
         var atTime = DateTimeOffset.UtcNow;
         var journeyStoryId = JourneyStoryId.New();
-        var employeeAddedEventBody = EventBody.Create().With(TestSource.TeamIdResultKey, _teamId)
+        var employeeAddedEventBody = StoryEventBody.Create().With(TestSource.TeamIdResultKey, _teamId)
             .With(TestSource.EmployeeIdResultKey, _employeeId.Value);
-        var employeeAddedEvent = new JourneyStoryCompletedEvent(journeyStoryId, _teamImportActivityId, _teamImportActivityName, 
+        var employeeAddedEvent = new JourneyStoryCompletedEvent(journeyStoryId, _teamImportActivityId, _teamImportActivityName,
             _employeeAddedEventName, JourneyActivityEventType.Source, employeeAddedEventBody, atTime, DomainVersion.New);
     }
 
     private JourneyStoryEventContext BuildEventContext(JourneyStoryEvent storyEvent)
     {
         var activityId = storyEvent.Id;
-        _  = _activitiesMap.TryGetValue(activityId, out var journeyId);
+        _ = _activitiesMap.TryGetValue(activityId, out var journeyId);
         _ = _journeys.TryGetValue(journeyId, out var journey);
         var initializationData = journey!.InitializationData;
-        var activity = journey!.Activities.Single(v=>v.Id == activityId);
-        var activityEvent = activity.Events.Single(v => v.Name == storyEvent.Name); 
+        var activity = journey!.Activities.Single(v => v.Id == activityId);
+        var activityEvent = activity.Events.Single(v => v.Name == storyEvent.Name);
         var activityName = activity.Name;
         var eventType = activityEvent.Type;
         var nextActivityId = activityEvent.NextActivityId;
-        var nextActivity = journey!.Activities.SingleOrDefault(v=>v.Id == nextActivityId);
+        var nextActivity = journey!.Activities.SingleOrDefault(v => v.Id == nextActivityId);
         _ = _activityTemplatesMap.TryGetValue(nextActivity?.Name, out var nextActivityTemplate);
         var nextActivityDependencies = nextActivityTemplate?.Dependencies;
-        
-        var storyEventContext = new JourneyStoryEventContext(activityName, eventType, initializationData, nextActivityId, nextActivityDependencies);
+
+        var storyEventContext = new JourneyStoryEventContext(activityName, eventType, initializationData, nextActivityId, nextActivity?.Name,
+            nextActivityDependencies);
         return storyEventContext;
     }
 
     private JourneyStoryState BuildState(JourneyActivityId activityId)
     {
-        _  = _activitiesMap.TryGetValue(activityId, out var journeyId);
+        _ = _activitiesMap.TryGetValue(activityId, out var journeyId);
         _ = _journeys.TryGetValue(journeyId, out var journey);
 
-        var activities = journey!.Activities.Select(v => new JourneyStoryActivity(v.Id, v.Name, JourneyActivityStatus.Ready))
-            .ToDictionary(v=>v.Id, v=>v);
+        var activities = journey!.Activities.Select(v => new JourneyStoryActivity(v.Id, v.Name, JourneyStoryActivityStatus.Ready))
+            .ToDictionary(v => v.Id, v => v);
 
         var data = journey.InitializationData != null
             ? journey.InitializationData!.Data.ToDictionary(v => StoryDataKey.Create(v.Key), v => v.Value)
             : new Dictionary<StoryDataKey, JsonElement>();
-        
+
         return JourneyStoryState.Create(journeyId, activities!, data);
     }
-    
+
     private JourneyActivity BuildTeamImportActivity()
     {
         var teamImportActivityEvents = BuildTeamImportActivityEvents();
@@ -148,17 +174,19 @@ public sealed class JourneyStoryTests
     private JourneyActivity BuildPaidHolidayAccrualActivity()
     {
         var paidHolidayAccrualActivityEvents = BuildPaidHolidayAccrualActivityEvents();
-        var result = JourneyActivity.Create(_paidHolidayAccrualActivityId, _paidHolidayAccrualActivityName, JourneyActivityStatus.Draft, paidHolidayAccrualActivityEvents);
+        var result = JourneyActivity.Create(_paidHolidayAccrualActivityId, _paidHolidayAccrualActivityName, JourneyActivityStatus.Draft,
+            paidHolidayAccrualActivityEvents);
         return result.GetValueOrDefault();
     }
 
     private JourneyActivity BuildNotifyEmployeeActivity()
     {
         var notifyEmployeeActivityEvents = BuildNotifyEmployeeActivityEvents();
-        var result = JourneyActivity.Create(_notifyEmployeeActivityId, _notifyEmployeeActivityName, JourneyActivityStatus.Draft, notifyEmployeeActivityEvents);
+        var result = JourneyActivity.Create(_notifyEmployeeActivityId, _notifyEmployeeActivityName, JourneyActivityStatus.Draft,
+            notifyEmployeeActivityEvents);
         return result.GetValueOrDefault();
     }
-    
+
     private JourneyActivityTemplate BuildTeamImportActivityTemplate()
     {
         var teamIdDependency = new JourneyActivityTemplateDependency(TestSource.TeamIdDependencyKey, JourneyActivityTemplateDependencySource.Unset);
@@ -176,7 +204,8 @@ public sealed class JourneyStoryTests
 
     private JourneyActivityTemplate BuildPaidHolidayAccrualActivityTemplate()
     {
-        var employeeIdDependency = new JourneyActivityTemplateDependency(TestSource.EmployeeIdDependencyKey, new JourneyActivityTemplateDependencySource(_teamImportActivityName, _employeeAddedEventName));
+        var employeeIdDependency = new JourneyActivityTemplateDependency(TestSource.EmployeeIdDependencyKey,
+            new JourneyActivityTemplateDependencySource(_teamImportActivityName, _employeeAddedEventName));
 
         var events = new[]
         {
@@ -209,19 +238,22 @@ public sealed class JourneyStoryTests
         var result = JourneyActivityTemplate.Create(_notifyEmployeeActivityName, events, dependencies);
         return result.GetValueOrDefault();
     }
-    
-    private JourneyActivityEvent[] BuildTeamImportActivityEvents() =>  [
+
+    private JourneyActivityEvent[] BuildTeamImportActivityEvents() =>
+    [
         new JourneyActivityEvent(_employeeAddedEventName, JourneyActivityEventType.Source, _paidHolidayAccrualActivityId),
         new JourneyActivityEvent(_teamImportFailedEventName, JourneyActivityEventType.Completion, _endOfJourneyActivityId)
     ];
-    
-    private JourneyActivityEvent[] BuildPaidHolidayAccrualActivityEvents() =>  [
+
+    private JourneyActivityEvent[] BuildPaidHolidayAccrualActivityEvents() =>
+    [
         // JourneyActivityEvent.ActivityStarted,
         new JourneyActivityEvent(_paidHolidayAccruedEventName, JourneyActivityEventType.Action, _notifyEmployeeActivityId),
         new JourneyActivityEvent(_paidHolidayAccrualFailedEventName, JourneyActivityEventType.Completion, _endOfJourneyActivityId)
     ];
-    
-    private JourneyActivityEvent[] BuildNotifyEmployeeActivityEvents() =>  [
+
+    private JourneyActivityEvent[] BuildNotifyEmployeeActivityEvents() =>
+    [
         // JourneyActivityEvent.ActivityStarted,
         new JourneyActivityEvent(_notificationSentEventName, JourneyActivityEventType.Completion, _endOfJourneyActivityId),
         new JourneyActivityEvent(_notificationFailedEventName, JourneyActivityEventType.Completion, _endOfJourneyActivityId)

@@ -1,5 +1,4 @@
-using System.Text.Json;
-using Odyssey.HRMS.Domain.JourneyEntity.ActivityTemplate;
+using System.Collections.Immutable;
 
 namespace Odyssey.HRMS.Domain.Base;
 
@@ -7,8 +6,8 @@ public abstract class AggregateRoot<TId, TState> where TState : AggregateRootSta
 {
     protected TId Id { get; init; }
     protected TState State { get; init; }
-    protected DomainVersion Version { get; private set; }
-    protected List<DomainEvent> Events { get; } = new();
+    private DomainVersion Version { get; set; }
+    private Queue<DomainEvent> Events { get; } = new();
     
     protected AggregateRoot(TId id, TState state, IReadOnlyCollection<DomainEvent> domainEvents)
     {
@@ -17,7 +16,7 @@ public abstract class AggregateRoot<TId, TState> where TState : AggregateRootSta
         
         foreach (var @event in domainEvents)
         {
-            state = (TState)state.Apply(@event);
+            state.Apply(@event);
             Version++;
         }
 
@@ -31,14 +30,18 @@ public abstract class AggregateRoot<TId, TState> where TState : AggregateRootSta
 
     protected void AddEvent(DomainEvent @event)
     {
-        Events.Add(@event);
+        Events.Enqueue(@event);
     }
+
+    protected void ApplyState(DomainEvent @event)
+    {
+        State.Apply(@event);
+    }
+    
+    public ImmutableArray<DomainEvent> GetEvents() => [..Events];
 }
 
 public abstract class AggregateRootState
 {
-    private readonly Dictionary<JourneyActivityTemplateDependency, JsonElement> _data =
-        new Dictionary<JourneyActivityTemplateDependency, JsonElement>();
-
-    protected internal abstract AggregateRootState Apply(DomainEvent domainEvent);
+    protected internal abstract void Apply(DomainEvent domainEvent);
 }

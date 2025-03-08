@@ -17,9 +17,7 @@ public sealed record JourneyStoryActivityStartingEvent(
     JourneyStoryId StoryId,
     JourneyActivityId ActivityId,
     JourneyActivityName ActivityName,
-    JourneyActivityEventName EventName,
-    JourneyActivityEventType EventType,
-    EventBody? Body,
+    StoryActivityData ActivityData,
     DateTimeOffset CreatedAt,
     DomainVersion Version)
     : JourneyStoryChangedEvent(StoryId, ActivityId, CreatedAt, Version);
@@ -30,7 +28,7 @@ public sealed record JourneyStoryActivityStartedEvent(
     JourneyActivityName ActivityName,
     JourneyActivityEventName EventName,
     JourneyActivityEventType EventType,
-    EventBody? Body,
+    StoryEventBody? Body,
     DateTimeOffset CreatedAt,
     DomainVersion Version)
     : JourneyStoryChangedEvent(StoryId, ActivityId, CreatedAt, Version);
@@ -41,7 +39,7 @@ public sealed record JourneyStoryActivityCompletedEvent(
     JourneyActivityName ActivityName,
     JourneyActivityEventName EventName,
     JourneyActivityEventType EventType,
-    EventBody? Body,
+    StoryEventBody? Body,
     DateTimeOffset CreatedAt,
     DomainVersion Version)
     : JourneyStoryChangedEvent(StoryId, ActivityId, CreatedAt, Version);
@@ -53,7 +51,7 @@ public sealed record JourneyStoryStartedEvent(
     JourneyActivityName ActivityName,
     JourneyActivityEventName EventName,
     JourneyActivityEventType EventType,
-    EventBody? Body,
+    StoryEventBody? EventBody,
     DateTimeOffset CreatedAt,
     DomainVersion Version)
     : JourneyStoryChangedEvent(StoryId, ActivityId, CreatedAt, Version);
@@ -65,31 +63,34 @@ public sealed record JourneyStoryCompletedEvent(
     JourneyActivityName ActivityName,
     JourneyActivityEventName EventName,
     JourneyActivityEventType EventType,
-    EventBody? Body,
+    StoryEventBody? Body,
     DateTimeOffset CreatedAt,
     DomainVersion Version)
     : JourneyStoryChangedEvent(StoryId, ActivityId, CreatedAt, Version);
 
-public sealed record EventBody(IReadOnlyDictionary<string, JsonElement> Data)
+public sealed record StoryEventBody(IReadOnlyDictionary<string, JsonElement> Data)
 {
-    public static readonly EventBody? Unset = null;
+    public static readonly StoryEventBody? Unset = null;
 
-    public static EventBody Create(string key, JsonElement rawData)
+    public static StoryEventBody Create(string key, JsonElement rawData)
     {
         var data = new Dictionary<string, JsonElement>() { { key, rawData } };
-        return new EventBody(data);
+        return new StoryEventBody(data);
     }
 
-    public static EventBody Create()
+    public static StoryEventBody Create()
     {
         var data = new Dictionary<string, JsonElement> { };
-        return new EventBody(data);
+        return new StoryEventBody(data);
     }
 
-    public EventBody With<TValue>(string key, TValue value)
+    public StoryEventBody With<TValue>(string key, TValue value)
     {
         var newData = Data.ToDictionary();
         newData[key] = JsonSerializer.SerializeToElement(value);
-        return new EventBody(newData);
+        return new StoryEventBody(newData);
     }
 }
+
+
+public sealed record StoryActivityData(IReadOnlyDictionary<string, JsonElement> Data);
