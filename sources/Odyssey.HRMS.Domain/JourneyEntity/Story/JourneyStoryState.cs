@@ -32,26 +32,33 @@ public sealed class JourneyStoryState : AggregateRootState
 
     protected internal override void Apply(DomainEvent domainEvent)
     {
-        _ = domainEvent switch
+        switch (domainEvent)
         {
-            JourneyStoryActivityStartingEvent activityStartingEvent => Apply(activityStartingEvent),
-            JourneyStoryStartedEvent storyStartedEvent => Apply(storyStartedEvent),
-            JourneyStoryCompletedEvent storyCompletedEvent => Apply(storyCompletedEvent),
-            _ => throw new NotImplementedException()
-        };
+            case JourneyStoryActivityStartingEvent activityStartingEvent:
+                Apply(activityStartingEvent);
+                break;
+            case JourneyStoryActivityStartedEvent activityStartedEvent:
+                Apply(activityStartedEvent);
+                break;
+            case JourneyStoryStartedEvent storyStartedEvent:
+                Apply(storyStartedEvent);
+                break;
+            case JourneyStoryCompletedEvent storyCompletedEvent:
+                Apply(storyCompletedEvent);
+                break;
+            default: throw new NotImplementedException();
+        }
     }
 
-    private AggregateRootState Apply(JourneyStoryActivityStartingEvent activityStartingEvent)
+    private void Apply(JourneyStoryActivityStartingEvent activityStartingEvent)
     {
         var activityId = activityStartingEvent.ActivityId;
         var activity = GetActivityOrThrowException(activityId);
         
         activity.Start();
-        
-        return this;
     }
 
-    private AggregateRootState Apply(JourneyStoryStartedEvent storyStartedEvent)
+    private void Apply(JourneyStoryStartedEvent storyStartedEvent)
     {
         var activityId = storyStartedEvent.ActivityId;
         var activity = GetActivityOrThrowException(activityId);
@@ -66,8 +73,6 @@ public sealed class JourneyStoryState : AggregateRootState
         }
 
         EmployeeId = new EmployeeId(employeeIdResult);
-
-        return this;
     }
 
     private JourneyStoryActivity GetActivityOrThrowException(JourneyActivityId activityId)
@@ -81,7 +86,7 @@ public sealed class JourneyStoryState : AggregateRootState
     }
 
 
-    private AggregateRootState Apply(JourneyStoryCompletedEvent storyCompletedEvent)
+    private void Apply(JourneyStoryCompletedEvent storyCompletedEvent)
     {
         var activityId = storyCompletedEvent.ActivityId;
         var activity = GetActivityOrThrowException(activityId);
@@ -90,8 +95,15 @@ public sealed class JourneyStoryState : AggregateRootState
         activity!.SetFinished();
 
         _data.EnrichWithEventResponse(storyCompletedEvent.ActivityName, storyCompletedEvent.EventName, storyCompletedEvent.Body);
+    }
+    
+    private void Apply(JourneyStoryActivityStartedEvent activityStartedEvent)
+    {
+        var activityId = activityStartedEvent.ActivityId;
+        var activity = GetActivityOrThrowException(activityId);
+        activity.SetStarted();
 
-        return this;
+        _data.EnrichWithEventResponse(activityStartedEvent.ActivityName, activityStartedEvent.EventName, activityStartedEvent.Body);
     }
 
     public Result<T> GetData<T>(string key, JourneyActivityName? activityName = null, JourneyActivityEventName? eventName = null)

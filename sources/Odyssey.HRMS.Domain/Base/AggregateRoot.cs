@@ -20,6 +20,7 @@ public abstract class AggregateRoot<TId, TState> where TState : AggregateRootSta
             Version++;
         }
 
+        Events = new  Queue<DomainEvent>(domainEvents);
         State = state;
     }
 

@@ -122,7 +122,9 @@ public sealed record Journey(JourneyId Id, JourneyName Name, IReadOnlyCollection
 
         private Maybe<string> Handle(JourneyActivityName name, IReadOnlyCollection<JourneyActivityEvent> events, Stack<FlowStep> flowStepsStack)
         {
-            foreach (var item in events)
+            var filteredEvents = events.SkipWhile(v=>v.Type == JourneyActivityEventType.Flow).ToArray();
+            
+            foreach (var item in filteredEvents)
             {
                 if (!TryGetActivity(item.NextActivityId, out var nextActivity))
                 {

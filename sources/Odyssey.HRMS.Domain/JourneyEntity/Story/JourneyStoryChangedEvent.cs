@@ -71,25 +71,6 @@ public sealed record JourneyStoryCompletedEvent(
 public sealed record StoryEventBody(IReadOnlyDictionary<string, JsonElement> Data)
 {
     public static readonly StoryEventBody? Unset = null;
-
-    public static StoryEventBody Create(string key, JsonElement rawData)
-    {
-        var data = new Dictionary<string, JsonElement>() { { key, rawData } };
-        return new StoryEventBody(data);
-    }
-
-    public static StoryEventBody Create()
-    {
-        var data = new Dictionary<string, JsonElement> { };
-        return new StoryEventBody(data);
-    }
-
-    public StoryEventBody With<TValue>(string key, TValue value)
-    {
-        var newData = Data.ToDictionary();
-        newData[key] = JsonSerializer.SerializeToElement(value);
-        return new StoryEventBody(newData);
-    }
 }
 
 

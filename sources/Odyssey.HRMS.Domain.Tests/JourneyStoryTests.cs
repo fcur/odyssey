@@ -75,11 +75,11 @@ public sealed class JourneyStoryTests
         var atTime = DateTimeOffset.UtcNow;
         var storyState = BuildState(journeyActivityId);
         var journeyStory = JourneyStory.Create(journeyStoryId, storyState);
-        var employeeAddedEventBody = StoryEventBody.Create()
+        var container1 =  RawDataContainer.Create()
             .With(TestSource.TeamIdResultKey, _teamId)
             .With(TestSource.EmployeeIdResultKey, _employeeId.Value);
 
-        var storyEvent = new JourneyStoryEvent(journeyActivityId, _employeeAddedEventName, employeeAddedEventBody);
+        var storyEvent = new JourneyStoryEvent(journeyActivityId, _employeeAddedEventName, new StoryEventBody(container1.GetData()));
         var storyEventContext = BuildEventContext(storyEvent);
         var maybeError = journeyStory.Handle(storyEvent, storyEventContext, atTime);
         var events = journeyStory.GetEvents();
@@ -97,8 +97,8 @@ public sealed class JourneyStoryTests
         storyStartedEvent.EventName.Should().Be(_employeeAddedEventName);
         storyStartedEvent.EventType.Should().Be(JourneyActivityEventType.Source);
         storyStartedEvent.EventBody.Should().NotBeNull();
-        storyStartedEvent.EventBody!.Data.Should().ContainKey("TeamId");
-        storyStartedEvent.EventBody.Data.Should().ContainKey("EmployeeId");
+        storyStartedEvent.EventBody!.Data.Should().ContainKey(TestSource.TeamIdResultKey);
+        storyStartedEvent.EventBody.Data.Should().ContainKey(TestSource.EmployeeIdResultKey);
         storyStartedEvent.Version.Should().Be(new DomainVersion(1UL));
         
         activityStartingEvent.Should().NotBeNull();
@@ -106,7 +106,7 @@ public sealed class JourneyStoryTests
         activityStartingEvent.ActivityId.Should().Be(_paidHolidayAccrualActivityId);
         activityStartingEvent.ActivityName.Should().Be(_paidHolidayAccrualActivityName);
         activityStartingEvent.ActivityData.Should().NotBeNull();
-        activityStartingEvent.ActivityData.Data.Should().ContainKey("EmployeeId");
+        activityStartingEvent.ActivityData.Data.Should().ContainKey(TestSource.EmployeeIdResultKey);
         activityStartingEvent.Version.Should().Be(new DomainVersion(2UL));
         
         // var state = journeyStory.GetState();
@@ -119,16 +119,44 @@ public sealed class JourneyStoryTests
     }
 
     [Fact]
-    public void Test2()
+    public void ShouldHandleStartedActivity()
     {
+        var container1 = RawDataContainer.Create().With(TestSource.TeamIdResultKey, _teamId).With(TestSource.EmployeeIdResultKey, _employeeId.Value);
+        var container2 = RawDataContainer.Create().With(TestSource.EmployeeIdResultKey, _employeeId.Value);
         var atTime = DateTimeOffset.UtcNow;
         var journeyStoryId = JourneyStoryId.New();
-        var employeeAddedEventBody = StoryEventBody.Create().With(TestSource.TeamIdResultKey, _teamId)
-            .With(TestSource.EmployeeIdResultKey, _employeeId.Value);
-        var employeeAddedEvent = new JourneyStoryCompletedEvent(journeyStoryId, _teamImportActivityId, _teamImportActivityName,
-            _employeeAddedEventName, JourneyActivityEventType.Source, employeeAddedEventBody, atTime, DomainVersion.New);
+
+        var storyStartedEvent = new JourneyStoryStartedEvent(journeyStoryId, _teamImportActivityId, _teamImportActivityName, _employeeAddedEventName, 
+            JourneyActivityEventType.Source, new StoryEventBody(container1.GetData()), atTime, new DomainVersion(1L));
+        var paidHolidayAccrualStartingEvent = new JourneyStoryActivityStartingEvent(journeyStoryId, _paidHolidayAccrualActivityId,
+            _paidHolidayAccrualActivityName, new StoryActivityData(container2.GetData()), atTime, new DomainVersion(2L));
+        
+        var journeyActivityId = _paidHolidayAccrualActivityId;
+        var storyState = BuildState(journeyActivityId);
+        var journeyStory = JourneyStory.Create(journeyStoryId, storyState, [storyStartedEvent, paidHolidayAccrualStartingEvent]);
+        
+        var storyEvent = new JourneyStoryEvent(journeyActivityId, JourneyActivityEventName.ActivityStarted, StoryEventBody.Unset);
+        var storyEventContext = BuildEventContext(storyEvent);
+        var maybeError = journeyStory.Handle(storyEvent, storyEventContext, atTime);
+        var events = journeyStory.GetEvents();
+        var activityStartedEvent = events[^1] as JourneyStoryActivityStartedEvent;
+        
+        using var scope = new AssertionScope();
+        maybeError.HasNoValue.Should().BeTrue();
+        events.Length.Should().Be(3);
+        activityStartedEvent.Should().NotBeNull();
+        activityStartedEvent!.StoryId.Should().Be(journeyStoryId);
+        activityStartedEvent.ActivityId.Should().Be(journeyActivityId);
+        activityStartedEvent.ActivityName.Should().Be(_paidHolidayAccrualActivityName);
+        activityStartedEvent.EventName.Should().Be(JourneyActivityEventName.ActivityStarted);
+        activityStartedEvent.Body.Should().BeNull();
+        activityStartedEvent.CreatedAt.Should().Be(atTime);
+        activityStartedEvent.Version.Should().Be(new DomainVersion(3UL));
     }
 
+    // var employeeAddedEvent = new JourneyStoryCompletedEvent(journeyStoryId, _teamImportActivityId, _teamImportActivityName,
+    // _employeeAddedEventName, JourneyActivityEventType.Source, new StoryEventBody(data1), atTime, DomainVersion.New);
+    
     private JourneyStoryEventContext BuildEventContext(JourneyStoryEvent storyEvent)
     {
         var activityId = storyEvent.Id;
@@ -141,11 +169,14 @@ public sealed class JourneyStoryTests
         var eventType = activityEvent.Type;
         var nextActivityId = activityEvent.NextActivityId;
         var nextActivity = journey!.Activities.SingleOrDefault(v => v.Id == nextActivityId);
-        _ = _activityTemplatesMap.TryGetValue(nextActivity?.Name, out var nextActivityTemplate);
+        JourneyActivityTemplate? nextActivityTemplate = null;
+        if (nextActivity != null)
+        {
+            _ = _activityTemplatesMap.TryGetValue(nextActivity?.Name, out nextActivityTemplate);
+        }
         var nextActivityDependencies = nextActivityTemplate?.Dependencies;
 
-        var storyEventContext = new JourneyStoryEventContext(activityName, eventType, initializationData, nextActivityId, nextActivity?.Name,
-            nextActivityDependencies);
+        var storyEventContext = new JourneyStoryEventContext(activityName, eventType, initializationData, nextActivityId, nextActivity?.Name, nextActivityDependencies);
         return storyEventContext;
     }
 
@@ -247,7 +278,7 @@ public sealed class JourneyStoryTests
 
     private JourneyActivityEvent[] BuildPaidHolidayAccrualActivityEvents() =>
     [
-        // JourneyActivityEvent.ActivityStarted,
+        JourneyActivityEvent.ActivityStarted,
         new JourneyActivityEvent(_paidHolidayAccruedEventName, JourneyActivityEventType.Action, _notifyEmployeeActivityId),
         new JourneyActivityEvent(_paidHolidayAccrualFailedEventName, JourneyActivityEventType.Completion, _endOfJourneyActivityId)
     ];
@@ -258,4 +289,27 @@ public sealed class JourneyStoryTests
         new JourneyActivityEvent(_notificationSentEventName, JourneyActivityEventType.Completion, _endOfJourneyActivityId),
         new JourneyActivityEvent(_notificationFailedEventName, JourneyActivityEventType.Completion, _endOfJourneyActivityId)
     ];
+
+    internal sealed class RawDataContainer(Dictionary<string, JsonElement> data)
+    {
+        public static RawDataContainer Create(string key, JsonElement rawData)
+        {
+            var data = new Dictionary<string, JsonElement>() { { key, rawData } };
+            return new RawDataContainer(data);
+        }
+        
+        public static RawDataContainer Create()
+        {
+            var data = new Dictionary<string, JsonElement> { };
+            return new RawDataContainer(data);
+        }
+        
+        public RawDataContainer With<TValue>(string key, TValue value)
+        {
+            data[key] = JsonSerializer.SerializeToElement(value); 
+            return this;
+        }
+
+        public IReadOnlyDictionary<string, JsonElement> GetData() => data;
+    }
 }

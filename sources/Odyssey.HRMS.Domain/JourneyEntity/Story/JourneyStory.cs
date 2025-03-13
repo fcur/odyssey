@@ -50,10 +50,10 @@ public sealed class JourneyStory : AggregateRoot<JourneyStoryId, JourneyStorySta
         var eventBody = storyEvent.Body;
         var version = IncrementVersion();
         
-        var completedEvent = new JourneyStoryStartedEvent(storyId, activityId, activityName, eventName, eventType, eventBody, atTime, version);
+        var startedEvent = new JourneyStoryActivityStartedEvent(storyId, activityId, activityName, eventName, eventType, eventBody, atTime, version);
 
-        ApplyState(completedEvent);
-        AddEvent(completedEvent);
+        ApplyState(startedEvent);
+        AddEvent(startedEvent);
         
         return Maybe<JourneyStoryError>.None;
     }
@@ -225,6 +225,8 @@ public enum JourneyStoryActivityStatus: byte
     Ready,
     Starting,
     Started,
+    Cancellation,
+    Cancelled,
     Finished
 }
 
