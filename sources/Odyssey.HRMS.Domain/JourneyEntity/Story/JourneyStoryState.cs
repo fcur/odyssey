@@ -46,6 +46,9 @@ public sealed class JourneyStoryState : AggregateRootState
             case JourneyStoryCompletedEvent storyCompletedEvent:
                 Apply(storyCompletedEvent);
                 break;
+            case JourneyStoryActivityCompletedEvent activityCompletedEvent:
+                Apply(activityCompletedEvent);
+                break;
             default: throw new NotImplementedException();
         }
     }
@@ -85,6 +88,16 @@ public sealed class JourneyStoryState : AggregateRootState
         return activity;
     }
 
+    public Result<JourneyStoryActivity> GetActivity(JourneyActivityId activityId)
+    {
+        if (!_activities.TryGetValue(activityId, out var activity))
+        {
+            return Result.Failure<JourneyStoryActivity>($"Activity {activityId} does not exist");
+        }
+
+        return activity;
+    }
+
 
     private void Apply(JourneyStoryCompletedEvent storyCompletedEvent)
     {
@@ -95,6 +108,16 @@ public sealed class JourneyStoryState : AggregateRootState
         activity!.SetFinished();
 
         _data.EnrichWithEventResponse(storyCompletedEvent.ActivityName, storyCompletedEvent.EventName, storyCompletedEvent.Body);
+    }
+
+    private void Apply(JourneyStoryActivityCompletedEvent activityCompletedEvent)
+    {
+        var activityId = activityCompletedEvent.ActivityId;
+        var activity = GetActivityOrThrowException(activityId);
+
+        activity.SetFinished();
+
+        _data.EnrichWithEventResponse(activityCompletedEvent.ActivityName, activityCompletedEvent.EventName, activityCompletedEvent.Body);
     }
     
     private void Apply(JourneyStoryActivityStartedEvent activityStartedEvent)
@@ -112,7 +135,7 @@ public sealed class JourneyStoryState : AggregateRootState
         return GetData<T>(storyDataKey);
     }
 
-    public Result<T> GetData<T>(StoryDataKey key)
+    private Result<T> GetData<T>(StoryDataKey key)
     {
         try
         {

@@ -31,13 +31,13 @@ public sealed class JourneyStory : AggregateRoot<JourneyStoryId, JourneyStorySta
         {
             // TBD: to const
             nameof(JourneyActivityEventType.Flow) when storyEvent.Name == JourneyActivityEventName.ActivityStarted => StartActivity(storyEvent, context, atTime),
-            nameof(JourneyActivityEventType.Source) => HandleSourceActivityAndStartStory(storyEvent, context, atTime),
             nameof(JourneyActivityEventType.Action) => HandleActionAndMoveNext(storyEvent, context, atTime),
+            nameof(JourneyActivityEventType.Source) => HandleSourceActivityAndStartStory(storyEvent, context, atTime),
             nameof(JourneyActivityEventType.Completion) => HandleCompletionActivityAndStopStory(storyEvent, context, atTime),
             _ => JourneyStoryError.UnsupportedEvent(storyEvent.Name.Value)
         };
 
-        return maybeError;
+        return maybeError; 
     }
 
     private Maybe<JourneyStoryError> StartActivity(JourneyStoryEvent storyEvent, JourneyStoryEventContext context, DateTimeOffset atTime)
@@ -68,12 +68,12 @@ public sealed class JourneyStory : AggregateRoot<JourneyStoryId, JourneyStorySta
         var eventBody = storyEvent.Body;
         var version = IncrementVersion();
         
-        var completedEvent = new JourneyStoryCompletedEvent(storyId, activityId, activityName, eventName, eventType, eventBody, atTime, version);
+        var completedEvent = new JourneyStoryActivityCompletedEvent(storyId, activityId, activityName, eventName, eventType, eventBody, atTime, version);
 
         ApplyState(completedEvent);
         AddEvent(completedEvent);
         
-        return Maybe<JourneyStoryError>.None;
+        return StartNextActivity(context, atTime);
     }
     
     private Maybe<JourneyStoryError> HandleSourceActivityAndStartStory(JourneyStoryEvent storyEvent, JourneyStoryEventContext context, DateTimeOffset atTime)
@@ -124,7 +124,7 @@ public sealed class JourneyStory : AggregateRoot<JourneyStoryId, JourneyStorySta
         var activityId = nextActivityId;
         var activityName = context.NextActivityName;
 
-        var eventDataResult = State.GetEventBody(context.NextActivityDependencies);
+        var eventDataResult = GetEventBody(context.NextActivityDependencies);
         if (eventDataResult.IsFailure)
         {
             return eventDataResult.Error;
@@ -141,6 +141,8 @@ public sealed class JourneyStory : AggregateRoot<JourneyStoryId, JourneyStorySta
         return Maybe<JourneyStoryError>.None;
     }
     
+    private Result<Dictionary<string, JsonElement>, JourneyStoryError> GetEventBody(IReadOnlyCollection<JourneyActivityTemplateDependency>? activityDependencies)
+        => State.GetEventBody(activityDependencies);
 }
 
 public readonly record struct StoryDataKey(string Key, JourneyActivityName? ActivityName, JourneyActivityEventName? EventName)
@@ -214,6 +216,8 @@ public sealed record JourneyStoryData(Dictionary<StoryDataKey, JsonElement> Data
             Data[dataKey] = eventBody.Data[key];
         }
     }
+    
+    
 }
 
 public sealed record JourneyStoryEvent(JourneyActivityId Id, JourneyActivityEventName Name, StoryEventBody? Body);
@@ -233,7 +237,7 @@ public enum JourneyStoryActivityStatus: byte
 public sealed record JourneyStoryActivity(JourneyActivityId Id, JourneyActivityName ActivityName, JourneyStoryActivityStatus Status) 
     : NestedDomainEntity<JourneyActivityId>(Id)
 {
-    internal JourneyStoryActivityStatus Status { get; private set; } = Status;
+    public JourneyStoryActivityStatus Status { get; private set; } = Status;
     
     public void SetStarted()
     {

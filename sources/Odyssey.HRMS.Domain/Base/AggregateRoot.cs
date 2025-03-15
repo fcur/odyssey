@@ -4,9 +4,9 @@ namespace Odyssey.HRMS.Domain.Base;
 
 public abstract class AggregateRoot<TId, TState> where TState : AggregateRootState
 {
-    protected TId Id { get; init; }
-    protected TState State { get; init; }
-    private DomainVersion Version { get; set; }
+    protected TId Id { get; }
+    protected TState State { get; }
+    public DomainVersion Version { get; private set; }
     private Queue<DomainEvent> Events { get; } = new();
     
     protected AggregateRoot(TId id, TState state, IReadOnlyCollection<DomainEvent> domainEvents)
@@ -17,16 +17,16 @@ public abstract class AggregateRoot<TId, TState> where TState : AggregateRootSta
         foreach (var @event in domainEvents)
         {
             state.Apply(@event);
-            Version++;
+            IncrementVersion();
         }
 
-        Events = new  Queue<DomainEvent>(domainEvents);
+        Events = new Queue<DomainEvent>(domainEvents);
         State = state;
     }
 
     protected DomainVersion IncrementVersion()
     {
-        return Version++;
+        return ++Version;
     }
 
     protected void AddEvent(DomainEvent @event)
