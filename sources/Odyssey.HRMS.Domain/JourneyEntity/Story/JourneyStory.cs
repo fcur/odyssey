@@ -42,6 +42,18 @@ public sealed class JourneyStory : AggregateRoot<JourneyStoryId, JourneyStorySta
 
     private Maybe<JourneyStoryError> StartActivity(JourneyStoryEvent storyEvent, JourneyStoryEventContext context, DateTimeOffset atTime)
     {
+        var activityResult = State.GetActivity(storyEvent.Id);
+        
+        if (!activityResult.TryGetValue(out var activity))
+        {
+            return JourneyStoryError.Validation(activityResult.Error);
+        }
+        
+        if (!activity.CouldBeStarted)
+        {
+            return JourneyStoryError.UnsupportedActivityAction(context.Name.Value, storyEvent.Name.Value);
+        }
+        
         var storyId = Id;
         var activityId = storyEvent.Id;
         var activityName = context.Name;
@@ -104,20 +116,25 @@ public sealed class JourneyStory : AggregateRoot<JourneyStoryId, JourneyStorySta
         var eventBody = storyEvent.Body;
         var version = IncrementVersion();
         
-        var completedEvent = new JourneyStoryCompletedEvent(storyId, activityId, activityName, eventName, eventType, eventBody, atTime, version);
+        var completedEvent = new JourneyStoryActivityCompletedEvent(storyId, activityId, activityName, eventName, eventType, eventBody, atTime, version);
 
         ApplyState(completedEvent);
         AddEvent(completedEvent);
-
-        return Maybe<JourneyStoryError>.None;
+        
+        return StartNextActivity(context, atTime);
     }
-
+    
     private Maybe<JourneyStoryError> StartNextActivity(JourneyStoryEventContext context, DateTimeOffset atTime)
     {
         var nextActivityId = context.NextActivityId;
         if (nextActivityId == null)
         {
             return Maybe<JourneyStoryError>.None;
+        }
+
+        if (context.NextActivityName == JourneyActivityName.EndOfJourney)
+        {
+            return FinishStory(context, atTime);
         }
         
         var storyId = Id;
@@ -137,6 +154,25 @@ public sealed class JourneyStory : AggregateRoot<JourneyStoryId, JourneyStorySta
         
         ApplyState(activityStartingEvent);
         AddEvent(activityStartingEvent);
+        
+        return Maybe<JourneyStoryError>.None;
+    }
+    
+    private Maybe<JourneyStoryError> FinishStory(JourneyStoryEventContext context, DateTimeOffset atTime)
+    {
+        var storyId = Id;
+        var nextActivityId = context.NextActivityId;
+        var activityId = nextActivityId;
+        var activityName = JourneyActivityName.EndOfJourney;
+        var eventName = JourneyActivityEventName.ActivityCompleted;
+        var eventType = JourneyActivityEventType.Completion;
+        var eventBody = StoryEventBody.Unset;
+        var version = IncrementVersion();
+
+        var storyCompletedEvent = new JourneyStoryCompletedEvent(storyId, activityId!, activityName, eventName, eventType, eventBody, atTime, version);
+
+        ApplyState(storyCompletedEvent);
+        AddEvent(storyCompletedEvent);
         
         return Maybe<JourneyStoryError>.None;
     }
@@ -253,12 +289,34 @@ public sealed record JourneyStoryActivity(JourneyActivityId Id, JourneyActivityN
     {
         Status = JourneyStoryActivityStatus.Finished;
     }
+
+    public void SetCancelled()
+    {
+        Status = JourneyStoryActivityStatus.Cancelled;
+    }
+    
+    
+    public bool IsStarted => Status == JourneyStoryActivityStatus.Started;
+    public bool IsFinished => Status is JourneyStoryActivityStatus.Finished or JourneyStoryActivityStatus.Cancelled;
+
+    public bool CouldBeStarted => Status is JourneyStoryActivityStatus.Starting;
+
+    public bool CouldBeFinished => Status is JourneyStoryActivityStatus.Started;
+
+    public bool CouldBeCancelled => Status is JourneyStoryActivityStatus.Starting 
+            or JourneyStoryActivityStatus.Started 
+            or JourneyStoryActivityStatus.Cancellation;
 }
 
 
 public sealed record JourneyStoryError : DomainError
 {
     private JourneyStoryError(string type, string message) : base(type, message) { }
+
+    public static JourneyStoryError Validation(string message) => new JourneyStoryError("Validation", message);
+    
+    public static JourneyStoryError UnsupportedActivity(Guid activityId) => new JourneyStoryError("UnsupportedActivity", $"Unsupported activity '{activityId:D}'");
+    public static JourneyStoryError UnsupportedActivityAction(string activityName, string action) => new JourneyStoryError("UnsupportedActivityAction", $"Can't handle action '{action}' for activity '{activityName}'");
 
     
     public static JourneyStoryError UnsupportedEvent(string eventName) => new JourneyStoryError("UnsupportedEvent", $"Can't handle not supported event '{eventName}'");

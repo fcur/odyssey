@@ -14,6 +14,8 @@ public sealed class JourneyStoryState : AggregateRootState
 
     public EmployeeId EmployeeId { get; private set; }
     public JourneyId JourneyId { get; init; }
+    
+    public bool IsFinished { get; private set; }
 
     private JourneyStoryState(JourneyId journeyId, Dictionary<JourneyActivityId, JourneyStoryActivity> activities,
         Dictionary<StoryDataKey, JsonElement> data)
@@ -63,6 +65,7 @@ public sealed class JourneyStoryState : AggregateRootState
 
     private void Apply(JourneyStoryStartedEvent storyStartedEvent)
     {
+        // TODO: add started time
         var activityId = storyStartedEvent.ActivityId;
         var activity = GetActivityOrThrowException(activityId);
 
@@ -98,16 +101,23 @@ public sealed class JourneyStoryState : AggregateRootState
         return activity;
     }
 
-
     private void Apply(JourneyStoryCompletedEvent storyCompletedEvent)
     {
+        // TODO: add finished time
         var activityId = storyCompletedEvent.ActivityId;
         var activity = GetActivityOrThrowException(activityId);
-
-        // TBD: finish story
-        activity!.SetFinished();
-
+        activity.SetFinished();
         _data.EnrichWithEventResponse(storyCompletedEvent.ActivityName, storyCompletedEvent.EventName, storyCompletedEvent.Body);
+
+        var unwantedActivities = _activities.Values.Where(v => v.Status != JourneyStoryActivityStatus.Finished);
+        // TODO: investigate notification for canceled activities
+        foreach (var unwantedActivity in unwantedActivities)
+        {
+            activity = GetActivityOrThrowException(unwantedActivity.Id);
+            activity.SetCancelled();
+        }
+
+        IsFinished = true;
     }
 
     private void Apply(JourneyStoryActivityCompletedEvent activityCompletedEvent)
