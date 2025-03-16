@@ -18,7 +18,7 @@ public sealed class JourneyStoryState : AggregateRootState
     public bool IsFinished { get; private set; }
 
     private JourneyStoryState(JourneyId journeyId, Dictionary<JourneyActivityId, JourneyStoryActivity> activities,
-        Dictionary<StoryDataKey, JsonElement> data)
+        Dictionary<JourneyStoryDataKey, JsonElement> data)
     {
         _activities = activities;
         _data = new JourneyStoryData(data);
@@ -26,10 +26,10 @@ public sealed class JourneyStoryState : AggregateRootState
     }
 
     public static JourneyStoryState Create(JourneyId journeyId, Dictionary<JourneyActivityId, JourneyStoryActivity> activities)
-        => Create(journeyId, activities, new Dictionary<StoryDataKey, JsonElement>());
+        => Create(journeyId, activities, new Dictionary<JourneyStoryDataKey, JsonElement>());
 
     public static JourneyStoryState Create(JourneyId journeyId, Dictionary<JourneyActivityId, JourneyStoryActivity> activities,
-        Dictionary<StoryDataKey, JsonElement> data)
+        Dictionary<JourneyStoryDataKey, JsonElement> data)
         => new JourneyStoryState(journeyId, activities, data);
 
     protected internal override void Apply(DomainEvent domainEvent)
@@ -69,7 +69,7 @@ public sealed class JourneyStoryState : AggregateRootState
         var activityId = storyStartedEvent.ActivityId;
         var activity = GetActivityOrThrowException(activityId);
 
-        activity!.SetFinished();
+        activity.SetFinished();
 
         _data.EnrichWithEventResponse(storyStartedEvent.ActivityName, storyStartedEvent.EventName, storyStartedEvent.EventBody);
 
@@ -141,11 +141,11 @@ public sealed class JourneyStoryState : AggregateRootState
 
     public Result<T> GetData<T>(string key, JourneyActivityName? activityName = null, JourneyActivityEventName? eventName = null)
     {
-        var storyDataKey = new StoryDataKey(key, activityName, eventName);
+        var storyDataKey = new JourneyStoryDataKey(key, activityName, eventName);
         return GetData<T>(storyDataKey);
     }
 
-    private Result<T> GetData<T>(StoryDataKey key)
+    private Result<T> GetData<T>(JourneyStoryDataKey key)
     {
         try
         {

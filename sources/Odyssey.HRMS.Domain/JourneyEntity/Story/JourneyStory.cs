@@ -2,7 +2,6 @@ using CSharpFunctionalExtensions;
 using Odyssey.HRMS.Domain.Base;
 using Odyssey.HRMS.Domain.JourneyEntity.Activity;
 using Odyssey.HRMS.Domain.JourneyEntity.ActivityTemplate;
-using System.Text.Json;
 
 namespace Odyssey.HRMS.Domain.JourneyEntity.Story;
 
@@ -25,11 +24,10 @@ public sealed class JourneyStory : AggregateRoot<JourneyStoryId, JourneyStorySta
 
     public Maybe<JourneyStoryError> Handle(JourneyStoryEvent storyEvent, JourneyStoryEventContext context, DateTimeOffset atTime)
     {
-        // add generic code 
-        
+        // TODO: add generic code 
+        // TODO: to const
         var maybeError = context.Type.Name switch
         {
-            // TBD: to const
             nameof(JourneyActivityEventType.Flow) when storyEvent.Name == JourneyActivityEventName.ActivityStarted => StartActivity(storyEvent, context, atTime),
             nameof(JourneyActivityEventType.Action) => HandleActionAndMoveNext(storyEvent, context, atTime),
             nameof(JourneyActivityEventType.Source) => HandleSourceActivityAndStartStory(storyEvent, context, atTime),
@@ -42,8 +40,11 @@ public sealed class JourneyStory : AggregateRoot<JourneyStoryId, JourneyStorySta
 
     private Maybe<JourneyStoryError> StartActivity(JourneyStoryEvent storyEvent, JourneyStoryEventContext context, DateTimeOffset atTime)
     {
-        var activityResult = State.GetActivity(storyEvent.Id);
+        var activityId = storyEvent.Id;
+        var activityName = context.Name;
+        var eventName = storyEvent.Name;
         
+        var activityResult = State.GetActivity(activityId);
         if (!activityResult.TryGetValue(out var activity))
         {
             return JourneyStoryError.Validation(activityResult.Error);
@@ -51,18 +52,14 @@ public sealed class JourneyStory : AggregateRoot<JourneyStoryId, JourneyStorySta
         
         if (!activity.CouldBeStarted)
         {
-            return JourneyStoryError.UnsupportedActivityAction(context.Name.Value, storyEvent.Name.Value);
+            return JourneyStoryError.UnsupportedActivityAction(activityName.Value, eventName.Value);
         }
         
-        var storyId = Id;
-        var activityId = storyEvent.Id;
-        var activityName = context.Name;
-        var eventName = storyEvent.Name;
         var eventType = context.Type;
         var eventBody = storyEvent.Body;
         var version = IncrementVersion();
         
-        var startedEvent = new JourneyStoryActivityStartedEvent(storyId, activityId, activityName, eventName, eventType, eventBody, atTime, version);
+        var startedEvent = new JourneyStoryActivityStartedEvent(Id, activityId, activityName, eventName, eventType, eventBody, atTime, version);
 
         ApplyState(startedEvent);
         AddEvent(startedEvent);
@@ -72,15 +69,26 @@ public sealed class JourneyStory : AggregateRoot<JourneyStoryId, JourneyStorySta
     
     private Maybe<JourneyStoryError> HandleActionAndMoveNext(JourneyStoryEvent storyEvent, JourneyStoryEventContext context, DateTimeOffset atTime)
     {
-        var storyId = Id;
         var activityId = storyEvent.Id;
         var activityName = context.Name;
         var eventName = storyEvent.Name;
+        
+        var activityResult = State.GetActivity(activityId);
+        if (!activityResult.TryGetValue(out var activity))
+        {
+            return JourneyStoryError.Validation(activityResult.Error);
+        }
+        
+        if (!activity.CouldBeFinished)
+        {
+            return JourneyStoryError.UnsupportedActivityAction(activityName.Value, eventName.Value);
+        }
+        
         var eventType = context.Type;
         var eventBody = storyEvent.Body;
         var version = IncrementVersion();
         
-        var completedEvent = new JourneyStoryActivityCompletedEvent(storyId, activityId, activityName, eventName, eventType, eventBody, atTime, version);
+        var completedEvent = new JourneyStoryActivityCompletedEvent(Id, activityId, activityName, eventName, eventType, eventBody, atTime, version);
 
         ApplyState(completedEvent);
         AddEvent(completedEvent);
@@ -116,10 +124,10 @@ public sealed class JourneyStory : AggregateRoot<JourneyStoryId, JourneyStorySta
         var eventBody = storyEvent.Body;
         var version = IncrementVersion();
         
-        var completedEvent = new JourneyStoryActivityCompletedEvent(storyId, activityId, activityName, eventName, eventType, eventBody, atTime, version);
+        var storyActivityCompletedEvent = new JourneyStoryActivityCompletedEvent(storyId, activityId, activityName, eventName, eventType, eventBody, atTime, version);
 
-        ApplyState(completedEvent);
-        AddEvent(completedEvent);
+        ApplyState(storyActivityCompletedEvent);
+        AddEvent(storyActivityCompletedEvent);
         
         return StartNextActivity(context, atTime);
     }
@@ -141,7 +149,7 @@ public sealed class JourneyStory : AggregateRoot<JourneyStoryId, JourneyStorySta
         var activityId = nextActivityId;
         var activityName = context.NextActivityName;
 
-        var eventDataResult = GetEventBody(context.NextActivityDependencies);
+        var eventDataResult = State.GetEventBody(context.NextActivityDependencies);
         if (eventDataResult.IsFailure)
         {
             return eventDataResult.Error;
@@ -176,150 +184,9 @@ public sealed class JourneyStory : AggregateRoot<JourneyStoryId, JourneyStorySta
         
         return Maybe<JourneyStoryError>.None;
     }
-    
-    private Result<Dictionary<string, JsonElement>, JourneyStoryError> GetEventBody(IReadOnlyCollection<JourneyActivityTemplateDependency>? activityDependencies)
-        => State.GetEventBody(activityDependencies);
 }
 
-public readonly record struct StoryDataKey(string Key, JourneyActivityName? ActivityName, JourneyActivityEventName? EventName)
-{
-    public static StoryDataKey Create(string key) => new StoryDataKey(key, null, null);
-    public static StoryDataKey Create(string key, JourneyActivityName activityName, JourneyActivityEventName eventName) => new StoryDataKey(key, activityName, eventName);
-
-    public override string ToString()
-    {
-        if (ActivityName != null && EventName != null)
-        {
-            return $"{ActivityName}:{EventName}:{Key}";
-        }
-        
-        return Key;
-    }
-
-    public override int GetHashCode()
-    {
-        var baseHashCode = base.GetHashCode();
-        if (ActivityName != null && EventName != null)
-        {
-            return  baseHashCode + EqualityComparer<string>.Default.GetHashCode(Key) 
-                                + EqualityComparer<string>.Default.GetHashCode(EventName.Value)
-                                + EqualityComparer<string>.Default.GetHashCode(ActivityName.Value);
-        }
-
-        return baseHashCode + EqualityComparer<string>.Default.GetHashCode(Key);
-    }
-}
-
-
-
-public sealed record JourneyStoryData(Dictionary<StoryDataKey, JsonElement> Data)
-{
-    public Result<Dictionary<string, JsonElement>, JourneyStoryError> GetEventBody(IReadOnlyCollection<JourneyActivityTemplateDependency>? activityDependencies)
-    {
-        var result = new Dictionary<string, JsonElement>();
-        if (activityDependencies == null)
-        {
-            return result;
-        }
-
-        foreach (var item in activityDependencies)
-        {
-            var key = new StoryDataKey(item.Key, item.Source?.ActivityName, item.Source?.EventName);
-
-            if (!Data.TryGetValue(key, out var jsonValue))
-            {
-                return JourneyStoryError.MissingDependency(item.Key);
-            }
-
-            result[item.Key] = jsonValue;
-        }
-
-        return result;
-    }
-
-    public bool TryGetValue(StoryDataKey key, out JsonElement data) => Data.TryGetValue(key, out data);
-    
-    public void EnrichWithEventResponse(JourneyActivityName activityName, JourneyActivityEventName eventName, StoryEventBody? eventBody)
-    {
-        if (eventBody == null)
-        {
-            return;
-        }
-        
-        foreach (var key in eventBody.Data.Keys)
-        {
-            var dataKey = new StoryDataKey(key, activityName, eventName);
-            Data[dataKey] = eventBody.Data[key];
-        }
-    }
-    
-    
-}
 
 public sealed record JourneyStoryEvent(JourneyActivityId Id, JourneyActivityEventName Name, StoryEventBody? Body);
 
-public sealed record JourneyStoryEventContext(JourneyActivityName Name, JourneyActivityEventType Type, JourneyInitializationData? InitializationData, JourneyActivityId? NextActivityId, JourneyActivityName? NextActivityName,  IReadOnlyCollection<JourneyActivityTemplateDependency>? NextActivityDependencies);
-
-public enum JourneyStoryActivityStatus: byte
-{
-    Ready,
-    Starting,
-    Started,
-    Cancellation,
-    Cancelled,
-    Finished
-}
-
-public sealed record JourneyStoryActivity(JourneyActivityId Id, JourneyActivityName ActivityName, JourneyStoryActivityStatus Status) 
-    : NestedDomainEntity<JourneyActivityId>(Id)
-{
-    public JourneyStoryActivityStatus Status { get; private set; } = Status;
-    
-    public void SetStarted()
-    {
-        Status = JourneyStoryActivityStatus.Started;
-    }
-
-    public void Start()
-    {
-        Status = JourneyStoryActivityStatus.Starting;
-    }
-    
-    public void SetFinished()
-    {
-        Status = JourneyStoryActivityStatus.Finished;
-    }
-
-    public void SetCancelled()
-    {
-        Status = JourneyStoryActivityStatus.Cancelled;
-    }
-    
-    
-    public bool IsStarted => Status == JourneyStoryActivityStatus.Started;
-    public bool IsFinished => Status is JourneyStoryActivityStatus.Finished or JourneyStoryActivityStatus.Cancelled;
-
-    public bool CouldBeStarted => Status is JourneyStoryActivityStatus.Starting;
-
-    public bool CouldBeFinished => Status is JourneyStoryActivityStatus.Started;
-
-    public bool CouldBeCancelled => Status is JourneyStoryActivityStatus.Starting 
-            or JourneyStoryActivityStatus.Started 
-            or JourneyStoryActivityStatus.Cancellation;
-}
-
-
-public sealed record JourneyStoryError : DomainError
-{
-    private JourneyStoryError(string type, string message) : base(type, message) { }
-
-    public static JourneyStoryError Validation(string message) => new JourneyStoryError("Validation", message);
-    
-    public static JourneyStoryError UnsupportedActivity(Guid activityId) => new JourneyStoryError("UnsupportedActivity", $"Unsupported activity '{activityId:D}'");
-    public static JourneyStoryError UnsupportedActivityAction(string activityName, string action) => new JourneyStoryError("UnsupportedActivityAction", $"Can't handle action '{action}' for activity '{activityName}'");
-
-    
-    public static JourneyStoryError UnsupportedEvent(string eventName) => new JourneyStoryError("UnsupportedEvent", $"Can't handle not supported event '{eventName}'");
-    
-    public static JourneyStoryError MissingDependency(string key) => new JourneyStoryError("MissingDependency", $"Can't find dependency '{key}'");
-}
+public sealed record JourneyStoryEventContext(JourneyActivityName Name, JourneyActivityEventType Type, JourneyActivityId? NextActivityId, JourneyActivityName? NextActivityName,  IReadOnlyCollection<JourneyActivityTemplateDependency>? NextActivityDependencies);
