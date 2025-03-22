@@ -3,12 +3,12 @@ using Odyssey.HRMS.Domain.JourneyEntity.Story;
 
 namespace Odyssey.HRMS.Domain.EmployeeEntity;
 
-public sealed class EmployeeTimeOff : AggregateRoot<EmployeeId, EmployeeTimeOffState>
+public sealed class EmployeeTimeOff : AggregateRoot<EmployeeId, EmployeeTimeOffState, HolidayEvent>
 {
-    private EmployeeTimeOff(EmployeeId id, EmployeeTimeOffState state, IReadOnlyCollection<DomainEvent> domainEvents)
+    private EmployeeTimeOff(EmployeeId id, EmployeeTimeOffState state, IReadOnlyCollection<HolidayEvent> domainEvents)
         : base(id, state, domainEvents) { }
     
-    public static EmployeeTimeOff Create(EmployeeId id, IReadOnlyCollection<DomainEvent> domainEvents)
+    public static EmployeeTimeOff Create(EmployeeId id, IReadOnlyCollection<HolidayEvent> domainEvents)
     {
         var state = EmployeeTimeOffState.Create();
         
@@ -16,27 +16,31 @@ public sealed class EmployeeTimeOff : AggregateRoot<EmployeeId, EmployeeTimeOffS
     }
 }
 
-public sealed class EmployeeTimeOffState : AggregateRootState
+public sealed class EmployeeTimeOffState : AggregateRootState<HolidayEvent>
 {
     public static EmployeeTimeOffState Create() => new EmployeeTimeOffState();
-    protected internal override void Apply(DomainEvent domainEvent)
+    protected internal override void Apply(HolidayEvent domainEvent)
     {
-        _ =  domainEvent switch
-        {
-            PaidHolidayAccruedEvent accruedEvent => Apply(accruedEvent),
-            PaidHolidayUsedEvent usedEvent => Apply(usedEvent),
-            _ => throw new NotImplementedException()
-        };
+        switch (domainEvent)
+        {   
+            case  PaidHolidayAccruedEvent accruedEvent:
+                Apply(accruedEvent);
+                break;
+            case PaidHolidayUsedEvent usedEvent:
+                Apply(usedEvent);
+                break;
+            default: throw new NotImplementedException();
+        }
     }
     
-    private AggregateRootState Apply(PaidHolidayAccruedEvent accruedEvent)
+    private void Apply(PaidHolidayAccruedEvent accruedEvent)
     {
-        return this;
+        throw new NotImplementedException();
     }
     
-    private AggregateRootState Apply(PaidHolidayUsedEvent usedEvent)
+    private void Apply(PaidHolidayUsedEvent usedEvent)
     {
-        return this;
+        throw new NotImplementedException();
     }
 }
 

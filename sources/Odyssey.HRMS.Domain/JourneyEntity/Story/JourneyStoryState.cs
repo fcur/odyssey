@@ -7,15 +7,16 @@ using System.Text.Json;
 
 namespace Odyssey.HRMS.Domain.JourneyEntity.Story;
 
-public sealed class JourneyStoryState : AggregateRootState
+public sealed class JourneyStoryState : AggregateRootState<JourneyStoryChangedEvent>
 {
     private readonly JourneyStoryData _data;
     private readonly Dictionary<JourneyActivityId, JourneyStoryActivity> _activities;
 
     public EmployeeId EmployeeId { get; private set; }
     public JourneyId JourneyId { get; init; }
-    
-    public bool IsFinished { get; private set; }
+    public DateTimeOffset StartedAt { get; private set; }
+    public DateTimeOffset? FinishedAt { get; private set; }
+    public bool IsFinished => FinishedAt.HasValue;
 
     private JourneyStoryState(JourneyId journeyId, Dictionary<JourneyActivityId, JourneyStoryActivity> activities,
         Dictionary<JourneyStoryDataKey, JsonElement> data)
@@ -32,7 +33,8 @@ public sealed class JourneyStoryState : AggregateRootState
         Dictionary<JourneyStoryDataKey, JsonElement> data)
         => new JourneyStoryState(journeyId, activities, data);
 
-    protected internal override void Apply(DomainEvent domainEvent)
+    
+    protected internal override void Apply(JourneyStoryChangedEvent domainEvent)
     {
         switch (domainEvent)
         {
@@ -65,7 +67,6 @@ public sealed class JourneyStoryState : AggregateRootState
 
     private void Apply(JourneyStoryStartedEvent storyStartedEvent)
     {
-        // TODO: add started time
         var activityId = storyStartedEvent.ActivityId;
         var activity = GetActivityOrThrowException(activityId);
 
@@ -75,9 +76,10 @@ public sealed class JourneyStoryState : AggregateRootState
 
         if (!GetData<Guid>("EmployeeId", storyStartedEvent.ActivityName, storyStartedEvent.EventName).TryGetValue(out var employeeIdResult))
         {
-            throw new ArgumentException("TBD");
+            throw new ArgumentException("EmployeeId");
         }
 
+        StartedAt = storyStartedEvent.CreatedAt;
         EmployeeId = new EmployeeId(employeeIdResult);
     }
 
@@ -103,7 +105,6 @@ public sealed class JourneyStoryState : AggregateRootState
 
     private void Apply(JourneyStoryCompletedEvent storyCompletedEvent)
     {
-        // TODO: add finished time
         var activityId = storyCompletedEvent.ActivityId;
         var activity = GetActivityOrThrowException(activityId);
         activity.SetFinished();
@@ -117,7 +118,7 @@ public sealed class JourneyStoryState : AggregateRootState
             activity.SetCancelled();
         }
 
-        IsFinished = true;
+        FinishedAt = storyCompletedEvent.CreatedAt;
     }
 
     private void Apply(JourneyStoryActivityCompletedEvent activityCompletedEvent)

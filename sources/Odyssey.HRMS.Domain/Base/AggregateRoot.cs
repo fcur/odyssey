@@ -2,14 +2,14 @@ using System.Collections.Immutable;
 
 namespace Odyssey.HRMS.Domain.Base;
 
-public abstract class AggregateRoot<TId, TState> where TState : AggregateRootState
+public abstract class AggregateRoot<TId, TState, TDomainEvent> where TState : AggregateRootState<TDomainEvent> where TDomainEvent : DomainEvent
 {
+    private readonly List<TDomainEvent> _events;
     protected TId Id { get; }
     protected TState State { get; }
     public DomainVersion Version { get; private set; }
-    private Queue<DomainEvent> Events { get; } = new();
     
-    protected AggregateRoot(TId id, TState state, IReadOnlyCollection<DomainEvent> domainEvents)
+    protected AggregateRoot(TId id, TState state, IReadOnlyCollection<TDomainEvent> domainEvents)
     {
         Id = id;
         Version = DomainVersion.New;
@@ -20,7 +20,7 @@ public abstract class AggregateRoot<TId, TState> where TState : AggregateRootSta
             IncrementVersion();
         }
 
-        Events = new Queue<DomainEvent>(domainEvents);
+        _events = new List<TDomainEvent>(domainEvents);
         State = state;
     }
 
@@ -29,20 +29,20 @@ public abstract class AggregateRoot<TId, TState> where TState : AggregateRootSta
         return ++Version;
     }
 
-    protected void AddEvent(DomainEvent @event)
+    protected void AddEvent(TDomainEvent @event)
     {
-        Events.Enqueue(@event);
+        _events.Add(@event);
     }
 
-    protected void ApplyState(DomainEvent @event)
+    protected void ApplyState(TDomainEvent @event)
     {
         State.Apply(@event);
     }
     
-    public ImmutableArray<DomainEvent> GetEvents() => [..Events];
+    public ImmutableArray<DomainEvent> GetEvents() => [.._events];
 }
 
-public abstract class AggregateRootState
+public abstract class AggregateRootState<TDomainEvent> where TDomainEvent : DomainEvent
 {
-    protected internal abstract void Apply(DomainEvent domainEvent);
+    protected internal abstract void Apply(TDomainEvent domainEvent);
 }

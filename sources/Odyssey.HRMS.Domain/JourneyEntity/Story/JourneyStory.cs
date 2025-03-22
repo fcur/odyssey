@@ -5,7 +5,7 @@ using Odyssey.HRMS.Domain.JourneyEntity.ActivityTemplate;
 
 namespace Odyssey.HRMS.Domain.JourneyEntity.Story;
 
-public sealed class JourneyStory : AggregateRoot<JourneyStoryId, JourneyStoryState>
+public sealed class JourneyStory : AggregateRoot<JourneyStoryId, JourneyStoryState, JourneyStoryChangedEvent>
 {
     private JourneyStory(JourneyStoryId id, JourneyStoryState state, IReadOnlyCollection<JourneyStoryChangedEvent> domainEvents)
         : base(id, state, domainEvents)
