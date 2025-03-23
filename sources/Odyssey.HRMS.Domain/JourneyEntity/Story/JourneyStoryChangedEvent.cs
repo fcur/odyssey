@@ -17,6 +17,7 @@ public sealed record JourneyStoryActivityStartingEvent(
     JourneyStoryId StoryId,
     JourneyActivityId ActivityId,
     JourneyActivityName ActivityName,
+    JourneyActivityEventType EventType,
     StoryActivityData ActivityData,
     DateTimeOffset CreatedAt,
     DomainVersion Version)

@@ -24,20 +24,54 @@ public sealed class JourneyStory : AggregateRoot<JourneyStoryId, JourneyStorySta
 
     public Maybe<JourneyStoryError> Handle(JourneyStoryEvent storyEvent, JourneyStoryEventContext context, DateTimeOffset atTime)
     {
-        // TODO: add generic code 
-        // TODO: to const
-        var maybeError = context.Type.Name switch
+        var maybeError = context.Type switch
         {
-            nameof(JourneyActivityEventType.Flow) when storyEvent.Name == JourneyActivityEventName.ActivityStarted => StartActivity(storyEvent, context, atTime),
-            nameof(JourneyActivityEventType.Action) => HandleActionAndMoveNext(storyEvent, context, atTime),
-            nameof(JourneyActivityEventType.Source) => HandleSourceActivityAndStartStory(storyEvent, context, atTime),
-            nameof(JourneyActivityEventType.Completion) => HandleCompletionActivityAndStopStory(storyEvent, context, atTime),
-            _ => JourneyStoryError.UnsupportedEvent(storyEvent.Name.Value)
+            SourceJourneyActivityEventType => HandleSourceActivityAndStartStory(storyEvent, context, atTime),
+            FlowJourneyActivityEventType when storyEvent.Name == JourneyActivityEventName.ActivityStarted 
+                => StartActivity(storyEvent, context, atTime),
+            ActionJourneyActivityEventType => HandleActionResultsAndMoveNext(storyEvent, context, atTime),
+            CompletionJourneyActivityEventType => HandleCompletionActivityAndStopStory(storyEvent, context, atTime),
+            _ => JourneyStoryError.UnsupportedEvent(storyEvent.Name.Value, context.Type.Name)
         };
 
-        return maybeError; 
+        return maybeError;
     }
+    
+    private Maybe<JourneyStoryError> HandleSourceActivityAndStartStory(JourneyStoryEvent storyEvent, JourneyStoryEventContext context, DateTimeOffset atTime)
+    {
+        if (State.IsFinished)
+        {
+            return JourneyStoryError.Validation("Can't start finished story");
+        }
+        
+        var activityId = storyEvent.Id;
+        
+        var activityResult = State.GetActivity(activityId);
+        if (!activityResult.TryGetValue(out var activity))
+        {
+            return JourneyStoryError.Validation(activityResult.Error);
+        }
+        
+        if(activity.IsFinished)
+        {
+            return JourneyStoryError.Validation("Can't start finished activity");
+        }
+        
+        var storyId = Id;
+        var activityName = context.Name;
+        var eventName = storyEvent.Name;
+        var eventType = context.Type;
+        var eventBody = storyEvent.Body;
+        var version = IncrementVersion();
+        
+        var storyStartedEvent = new JourneyStoryStartedEvent(storyId, activityId, activityName, eventName, eventType, eventBody, atTime, version);
 
+        ApplyState(storyStartedEvent);
+        AddEvent(storyStartedEvent);
+        
+        return StartNextActivity(context, atTime);
+    }
+    
     private Maybe<JourneyStoryError> StartActivity(JourneyStoryEvent storyEvent, JourneyStoryEventContext context, DateTimeOffset atTime)
     {
         var activityId = storyEvent.Id;
@@ -48,6 +82,11 @@ public sealed class JourneyStory : AggregateRoot<JourneyStoryId, JourneyStorySta
         if (!activityResult.TryGetValue(out var activity))
         {
             return JourneyStoryError.Validation(activityResult.Error);
+        }
+
+        if (activity.IsStarted || activity.IsFinished)
+        {
+            return Maybe<JourneyStoryError>.None;
         }
         
         if (!activity.CouldBeStarted)
@@ -67,17 +106,23 @@ public sealed class JourneyStory : AggregateRoot<JourneyStoryId, JourneyStorySta
         return Maybe<JourneyStoryError>.None;
     }
     
-    private Maybe<JourneyStoryError> HandleActionAndMoveNext(JourneyStoryEvent storyEvent, JourneyStoryEventContext context, DateTimeOffset atTime)
+    private Maybe<JourneyStoryError> HandleActionResultsAndMoveNext(JourneyStoryEvent storyEvent, JourneyStoryEventContext context, DateTimeOffset atTime)
     {
         var activityId = storyEvent.Id;
-        var activityName = context.Name;
-        var eventName = storyEvent.Name;
         
         var activityResult = State.GetActivity(activityId);
         if (!activityResult.TryGetValue(out var activity))
         {
             return JourneyStoryError.Validation(activityResult.Error);
         }
+
+        if (activity.IsFinished)
+        {
+            return Maybe<JourneyStoryError>.None;
+        }
+        
+        var activityName = context.Name;
+        var eventName = storyEvent.Name;
         
         if (!activity.CouldBeFinished)
         {
@@ -96,30 +141,25 @@ public sealed class JourneyStory : AggregateRoot<JourneyStoryId, JourneyStorySta
         return StartNextActivity(context, atTime);
     }
     
-    private Maybe<JourneyStoryError> HandleSourceActivityAndStartStory(JourneyStoryEvent storyEvent, JourneyStoryEventContext context, DateTimeOffset atTime)
-    {
-        var storyId = Id;
-        var activityId = storyEvent.Id;
-        var activityName = context.Name;
-        var eventName = storyEvent.Name;
-        var eventType = context.Type;
-        var eventBody = storyEvent.Body;
-        var version = IncrementVersion();
-        
-        var storyStartedEvent = new JourneyStoryStartedEvent(storyId, activityId, activityName, eventName, eventType, eventBody, atTime, version);
-
-        ApplyState(storyStartedEvent);
-        AddEvent(storyStartedEvent);
-        
-        return StartNextActivity(context, atTime);
-    }
-    
     private Maybe<JourneyStoryError> HandleCompletionActivityAndStopStory(JourneyStoryEvent storyEvent, JourneyStoryEventContext context, DateTimeOffset atTime)
     {
-        var storyId = Id;
         var activityId = storyEvent.Id;
+        
+        var activityResult = State.GetActivity(activityId);
+        if (!activityResult.TryGetValue(out var activity))
+        {
+            return JourneyStoryError.Validation(activityResult.Error);
+        }
+        
         var activityName = context.Name;
         var eventName = storyEvent.Name;
+        
+        if (!activity.CouldBeFinished)
+        {
+            return JourneyStoryError.UnsupportedActivityAction(activityName.Value, eventName.Value);
+        }
+        
+        var storyId = Id;
         var eventType = context.Type;
         var eventBody = storyEvent.Body;
         var version = IncrementVersion();
@@ -148,7 +188,7 @@ public sealed class JourneyStory : AggregateRoot<JourneyStoryId, JourneyStorySta
         var storyId = Id;
         var activityId = nextActivityId;
         var activityName = context.NextActivityName;
-
+        var eventType = context.Type;
         var eventDataResult = State.GetEventBody(context.NextActivityDependencies);
         if (eventDataResult.IsFailure)
         {
@@ -158,7 +198,7 @@ public sealed class JourneyStory : AggregateRoot<JourneyStoryId, JourneyStorySta
         var activityData = new StoryActivityData(eventDataResult.Value);
         var version = IncrementVersion();
         
-        var activityStartingEvent = new JourneyStoryActivityStartingEvent(storyId, activityId, activityName!, activityData, atTime, version);
+        var activityStartingEvent = new JourneyStoryActivityStartingEvent(storyId, activityId, activityName!, eventType, activityData, atTime, version);
         
         ApplyState(activityStartingEvent);
         AddEvent(activityStartingEvent);
@@ -185,7 +225,6 @@ public sealed class JourneyStory : AggregateRoot<JourneyStoryId, JourneyStorySta
         return Maybe<JourneyStoryError>.None;
     }
 }
-
 
 public sealed record JourneyStoryEvent(JourneyActivityId Id, JourneyActivityEventName Name, StoryEventBody? Body);
 

@@ -87,7 +87,7 @@ public sealed class JourneyStoryState : AggregateRootState<JourneyStoryChangedEv
     {
         if (!_activities.TryGetValue(activityId, out var activity))
         {
-            throw new ArgumentException("TBD");
+            throw new ArgumentOutOfRangeException(activityId.ToString());
         }
 
         return activity;
