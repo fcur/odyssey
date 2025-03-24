@@ -449,7 +449,7 @@ public sealed class JourneyStoryTests
         journeyStoryChangedEvent.ActivityId.Should().Be(_endOfJourneyActivityId);
         journeyStoryChangedEvent.ActivityName.Should().Be(JourneyActivityName.EndOfJourney);
         journeyStoryChangedEvent.EventName.Should().Be(JourneyActivityEventName.ActivityCompleted);
-        journeyStoryChangedEvent.EventType.Should().Be(JourneyActivityEventType.Completion);
+        journeyStoryChangedEvent.EventType.Should().Be(JourneyActivityEventType.Exit);
         journeyStoryChangedEvent.Body.Should().BeNull();
         journeyStoryChangedEvent.CreatedAt.Should().BeCloseTo(DateTimeOffset.UtcNow, TimeSpan.FromSeconds(10));
         journeyStoryChangedEvent.Version.Should().Be(TestSource.Version9);
@@ -519,7 +519,7 @@ public sealed class JourneyStoryTests
         JourneyActivityEvent[] BuildTeamImportActivityEvents() =>
         [
             new(_employeeAddedEventName, JourneyActivityEventType.Source, _paidHolidayAccrualActivityId),
-            new(_teamImportFailedEventName, JourneyActivityEventType.Completion, _endOfJourneyActivityId)
+            new(_teamImportFailedEventName, JourneyActivityEventType.Fail, _endOfJourneyActivityId)
         ];
     }
 
@@ -533,8 +533,8 @@ public sealed class JourneyStoryTests
         JourneyActivityEvent[] BuildPaidHolidayAccrualActivityEvents() =>
         [
             JourneyActivityEvent.ActivityStarted,
-            new (_paidHolidayAccruedEventName, JourneyActivityEventType.Action, _notifyEmployeeActivityId),
-            new (_paidHolidayAccrualFailedEventName, JourneyActivityEventType.Completion, _endOfJourneyActivityId)
+            new (_paidHolidayAccruedEventName, JourneyActivityEventType.Success, _notifyEmployeeActivityId),
+            new (_paidHolidayAccrualFailedEventName, JourneyActivityEventType.Fail, _endOfJourneyActivityId)
         ];
     }
 
@@ -548,8 +548,8 @@ public sealed class JourneyStoryTests
         JourneyActivityEvent[] BuildNotifyEmployeeActivityEvents() =>
         [
             JourneyActivityEvent.ActivityStarted,
-            new (_notificationSentEventName, JourneyActivityEventType.Completion, _endOfJourneyActivityId),
-            new (_notificationFailedEventName, JourneyActivityEventType.Completion, _endOfJourneyActivityId)
+            new (_notificationSentEventName, JourneyActivityEventType.Success, _endOfJourneyActivityId),
+            new (_notificationFailedEventName, JourneyActivityEventType.Fail, _endOfJourneyActivityId)
         ];
     }
 
@@ -618,11 +618,11 @@ public sealed class JourneyStoryTests
         var storyStartedEvent = new JourneyStoryStartedEvent(journeyStoryId, _teamImportActivityId, _teamImportActivityName, _employeeAddedEventName, JourneyActivityEventType.Source, storyStartedEventData, atTime, ++domainEventVersion);
         var paidHolidayAccrualStartingEvent = new JourneyStoryActivityStartingEvent(journeyStoryId, _paidHolidayAccrualActivityId, _paidHolidayAccrualActivityName, JourneyActivityEventType.Flow,  paidHolidayAccrualStartingActivityData, atTime, ++domainEventVersion);
         var paidHolidayAccrualStartedEvent = new JourneyStoryActivityStartedEvent(journeyStoryId, _paidHolidayAccrualActivityId, _paidHolidayAccrualActivityName, JourneyActivityEventName.ActivityStarted, JourneyActivityEventType.Flow, StoryEventBody.Unset, atTime, ++domainEventVersion);
-        var paidHolidayAccrualCompletedEvent = new JourneyStoryActivityCompletedEvent(journeyStoryId, _paidHolidayAccrualActivityId, _paidHolidayAccrualActivityName, _paidHolidayAccruedEventName, JourneyActivityEventType.Action, paidHolidayAccruedEventData, atTime, ++domainEventVersion);
+        var paidHolidayAccrualCompletedEvent = new JourneyStoryActivityCompletedEvent(journeyStoryId, _paidHolidayAccrualActivityId, _paidHolidayAccrualActivityName, _paidHolidayAccruedEventName, JourneyActivityEventType.Success, paidHolidayAccruedEventData, atTime, ++domainEventVersion);
         var notifyEmployeeStartingEvent = new JourneyStoryActivityStartingEvent(journeyStoryId, _notifyEmployeeActivityId, _notifyEmployeeActivityName, JourneyActivityEventType.Flow, notifyEmployeeStartingEventData, atTime, ++domainEventVersion);
         var notifyEmployeeStartedEvent = new JourneyStoryActivityStartedEvent(journeyStoryId, _notifyEmployeeActivityId, _notifyEmployeeActivityName, JourneyActivityEventName.ActivityStarted, JourneyActivityEventType.Flow, StoryEventBody.Unset, atTime, ++domainEventVersion);
-        var notifyEmployeeSentEvent = new JourneyStoryActivityCompletedEvent(journeyStoryId, _notifyEmployeeActivityId, _notifyEmployeeActivityName, _notificationSentEventName, JourneyActivityEventType.Completion, notifyEmployeeSentEventData, atTime, ++domainEventVersion );
-        var storyCompletedEvent = new JourneyStoryCompletedEvent(journeyStoryId, _endOfJourneyActivityId, JourneyActivityName.EndOfJourney, JourneyActivityEventName.ActivityCompleted, JourneyActivityEventType.Completion, StoryEventBody.Unset, atTime, ++domainEventVersion);
+        var notifyEmployeeSentEvent = new JourneyStoryActivityCompletedEvent(journeyStoryId, _notifyEmployeeActivityId, _notifyEmployeeActivityName, _notificationSentEventName, JourneyActivityEventType.Fail, notifyEmployeeSentEventData, atTime, ++domainEventVersion );
+        var storyCompletedEvent = new JourneyStoryCompletedEvent(journeyStoryId, _endOfJourneyActivityId, JourneyActivityName.EndOfJourney, JourneyActivityEventName.ActivityCompleted, JourneyActivityEventType.Fail, StoryEventBody.Unset, atTime, ++domainEventVersion);
         
         return new (
             storyStartedEvent, 

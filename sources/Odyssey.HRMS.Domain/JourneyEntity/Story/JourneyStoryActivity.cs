@@ -34,7 +34,7 @@ public sealed record JourneyStoryActivity(JourneyActivityId Id, JourneyActivityN
 
     public bool CouldBeStarted => Status is JourneyStoryActivityStatus.Starting;
 
-    public bool CouldBeFinished => Status is JourneyStoryActivityStatus.Started;
+    public bool CanBeFinished => Status is JourneyStoryActivityStatus.Started;
 
     public bool CouldBeCancelled => Status is JourneyStoryActivityStatus.Starting 
         or JourneyStoryActivityStatus.Started 

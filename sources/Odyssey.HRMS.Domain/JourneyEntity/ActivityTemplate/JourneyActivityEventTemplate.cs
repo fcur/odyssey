@@ -12,11 +12,11 @@ public sealed record JourneyActivityEventTemplate(
     
     public static JourneyActivityEventTemplate CreateAction(JourneyActivityEventName eventName, params string[] resultKeys)
     {
-        return new JourneyActivityEventTemplate(eventName, JourneyActivityEventType.Action, resultKeys);
+        return new JourneyActivityEventTemplate(eventName, JourneyActivityEventType.Success, resultKeys);
     }
     
     public static JourneyActivityEventTemplate CreateExit(JourneyActivityEventName eventName, params string[] resultKeys)
     {
-        return new JourneyActivityEventTemplate(eventName, JourneyActivityEventType.Completion, resultKeys);
+        return new JourneyActivityEventTemplate(eventName, JourneyActivityEventType.Fail, resultKeys);
     }
 }

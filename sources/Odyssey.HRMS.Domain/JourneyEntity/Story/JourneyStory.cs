@@ -29,8 +29,9 @@ public sealed class JourneyStory : AggregateRoot<JourneyStoryId, JourneyStorySta
             SourceJourneyActivityEventType => HandleSourceActivityAndStartStory(storyEvent, context, atTime),
             FlowJourneyActivityEventType when storyEvent.Name == JourneyActivityEventName.ActivityStarted 
                 => StartActivity(storyEvent, context, atTime),
-            ActionJourneyActivityEventType => HandleActionResultsAndMoveNext(storyEvent, context, atTime),
-            CompletionJourneyActivityEventType => HandleCompletionActivityAndStopStory(storyEvent, context, atTime),
+            SuccessJourneyActivityEventType => HandleSuccesfullResultsAndMoveNext(storyEvent, context, atTime),
+            // TODO: handle timeout events like failure results
+            FailJourneyActivityEventType => HandleFailureResultsAndMoveNext(storyEvent, context, atTime),
             _ => JourneyStoryError.UnsupportedEvent(storyEvent.Name.Value, context.Type.Name)
         };
 
@@ -106,7 +107,7 @@ public sealed class JourneyStory : AggregateRoot<JourneyStoryId, JourneyStorySta
         return Maybe<JourneyStoryError>.None;
     }
     
-    private Maybe<JourneyStoryError> HandleActionResultsAndMoveNext(JourneyStoryEvent storyEvent, JourneyStoryEventContext context, DateTimeOffset atTime)
+    private Maybe<JourneyStoryError> HandleSuccesfullResultsAndMoveNext(JourneyStoryEvent storyEvent, JourneyStoryEventContext context, DateTimeOffset atTime)
     {
         var activityId = storyEvent.Id;
         
@@ -124,7 +125,7 @@ public sealed class JourneyStory : AggregateRoot<JourneyStoryId, JourneyStorySta
         var activityName = context.Name;
         var eventName = storyEvent.Name;
         
-        if (!activity.CouldBeFinished)
+        if (!activity.CanBeFinished)
         {
             return JourneyStoryError.UnsupportedActivityAction(activityName.Value, eventName.Value);
         }
@@ -141,7 +142,7 @@ public sealed class JourneyStory : AggregateRoot<JourneyStoryId, JourneyStorySta
         return StartNextActivity(context, atTime);
     }
     
-    private Maybe<JourneyStoryError> HandleCompletionActivityAndStopStory(JourneyStoryEvent storyEvent, JourneyStoryEventContext context, DateTimeOffset atTime)
+    private Maybe<JourneyStoryError> HandleFailureResultsAndMoveNext(JourneyStoryEvent storyEvent, JourneyStoryEventContext context, DateTimeOffset atTime)
     {
         var activityId = storyEvent.Id;
         
@@ -154,7 +155,7 @@ public sealed class JourneyStory : AggregateRoot<JourneyStoryId, JourneyStorySta
         var activityName = context.Name;
         var eventName = storyEvent.Name;
         
-        if (!activity.CouldBeFinished)
+        if (!activity.CanBeFinished)
         {
             return JourneyStoryError.UnsupportedActivityAction(activityName.Value, eventName.Value);
         }
@@ -164,10 +165,10 @@ public sealed class JourneyStory : AggregateRoot<JourneyStoryId, JourneyStorySta
         var eventBody = storyEvent.Body;
         var version = IncrementVersion();
         
-        var storyActivityCompletedEvent = new JourneyStoryActivityCompletedEvent(storyId, activityId, activityName, eventName, eventType, eventBody, atTime, version);
+        var completedEvent = new JourneyStoryActivityCompletedEvent(storyId, activityId, activityName, eventName, eventType, eventBody, atTime, version);
 
-        ApplyState(storyActivityCompletedEvent);
-        AddEvent(storyActivityCompletedEvent);
+        ApplyState(completedEvent);
+        AddEvent(completedEvent);
         
         return StartNextActivity(context, atTime);
     }
@@ -213,7 +214,7 @@ public sealed class JourneyStory : AggregateRoot<JourneyStoryId, JourneyStorySta
         var activityId = nextActivityId;
         var activityName = JourneyActivityName.EndOfJourney;
         var eventName = JourneyActivityEventName.ActivityCompleted;
-        var eventType = JourneyActivityEventType.Completion;
+        var eventType = JourneyActivityEventType.Exit;
         var eventBody = StoryEventBody.Unset;
         var version = IncrementVersion();
 
