@@ -29,9 +29,10 @@ public sealed class JourneyStory : AggregateRoot<JourneyStoryId, JourneyStorySta
             SourceJourneyActivityEventType => HandleSourceActivityAndStartStory(storyEvent, context, atTime),
             FlowJourneyActivityEventType when storyEvent.Name == JourneyActivityEventName.ActivityStarted 
                 => StartActivity(storyEvent, context, atTime),
-            SuccessJourneyActivityEventType => HandleSuccesfullResultsAndMoveNext(storyEvent, context, atTime),
+            SuccessJourneyActivityEventType => HandleSuccessfulResultsAndMoveNext(storyEvent, context, atTime),
             // TODO: handle timeout events like failure results
             FailJourneyActivityEventType => HandleFailureResultsAndMoveNext(storyEvent, context, atTime),
+            ExitJourneyActivityEventType => HandleExitAndCompleteStory(storyEvent, context, atTime),
             _ => JourneyStoryError.UnsupportedEvent(storyEvent.Name.Value, context.Type.Name)
         };
 
@@ -107,7 +108,7 @@ public sealed class JourneyStory : AggregateRoot<JourneyStoryId, JourneyStorySta
         return Maybe<JourneyStoryError>.None;
     }
     
-    private Maybe<JourneyStoryError> HandleSuccesfullResultsAndMoveNext(JourneyStoryEvent storyEvent, JourneyStoryEventContext context, DateTimeOffset atTime)
+    private Maybe<JourneyStoryError> HandleSuccessfulResultsAndMoveNext(JourneyStoryEvent storyEvent, JourneyStoryEventContext context, DateTimeOffset atTime)
     {
         var activityId = storyEvent.Id;
         
@@ -173,6 +174,12 @@ public sealed class JourneyStory : AggregateRoot<JourneyStoryId, JourneyStorySta
         return StartNextActivity(context, atTime);
     }
     
+    private Maybe<JourneyStoryError> HandleExitAndCompleteStory(JourneyStoryEvent storyEvent, JourneyStoryEventContext context, DateTimeOffset atTime)
+    {
+        var activityId = storyEvent.Id;
+        return FinishStory(activityId, context, atTime);
+    }
+    
     private Maybe<JourneyStoryError> StartNextActivity(JourneyStoryEventContext context, DateTimeOffset atTime)
     {
         var nextActivityId = context.NextActivityId;
@@ -183,7 +190,7 @@ public sealed class JourneyStory : AggregateRoot<JourneyStoryId, JourneyStorySta
 
         if (context.NextActivityName == JourneyActivityName.EndOfJourney)
         {
-            return FinishStory(context, atTime);
+            return FinishStory(nextActivityId, context, atTime);
         }
         
         var storyId = Id;
@@ -207,11 +214,9 @@ public sealed class JourneyStory : AggregateRoot<JourneyStoryId, JourneyStorySta
         return Maybe<JourneyStoryError>.None;
     }
     
-    private Maybe<JourneyStoryError> FinishStory(JourneyStoryEventContext context, DateTimeOffset atTime)
+    private Maybe<JourneyStoryError> FinishStory(JourneyActivityId activityId, JourneyStoryEventContext context, DateTimeOffset atTime)
     {
         var storyId = Id;
-        var nextActivityId = context.NextActivityId;
-        var activityId = nextActivityId;
         var activityName = JourneyActivityName.EndOfJourney;
         var eventName = JourneyActivityEventName.ActivityCompleted;
         var eventType = JourneyActivityEventType.Exit;

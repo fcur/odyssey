@@ -6,7 +6,16 @@ using Odyssey.HRMS.Domain.JourneyEntity.ActivityTemplate;
 
 namespace Odyssey.HRMS.Domain.JourneyEntity;
 
-public sealed record Journey(JourneyId Id, JourneyName Name, IReadOnlyCollection<JourneyActivity> Activities, JourneyStatus Status, JourneyStartup? Startup, JourneyInitializationData? InitializationData, DateTimeOffset ChangedAt, DomainVersion Version, ulong RowVersion)
+public sealed record Journey(
+    JourneyId Id, 
+    JourneyName Name, 
+    IReadOnlyCollection<JourneyActivity> Activities, 
+    JourneyStatus Status, 
+    JourneyStartup? Startup, 
+    JourneyInitializationData? InitializationData, 
+    DateTimeOffset ChangedAt, 
+    DomainVersion Version, 
+    ulong RowVersion)
     : DomainEntity<JourneyId>(Id, ChangedAt, Version)
 {
     public static Result<Journey, JourneyValidationError> Create(JourneyName name, IReadOnlyCollection<JourneyActivity> activities, JourneyStartup? startup = null, JourneyInitializationData? initializationData = null)

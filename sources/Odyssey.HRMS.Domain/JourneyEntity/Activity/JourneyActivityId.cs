@@ -20,4 +20,6 @@ public sealed record JourneyActivityId(Guid Value)
     {
         return Value.ToString("D");
     }
+
+    public static JourneyActivityId? Unset = null;
 }
