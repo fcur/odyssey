@@ -1,0 +1,29 @@
+user:
+  email: foo@bar.com
+  name: John Fitzgerald Kennedy
+start-date: 2023-02-13 0:00:00 +02:00
+leave-settings:
+  - type: paid-time-off
+    details:
+      duration: 20.00:00:00
+      policy: yearly
+  - type: unpaid-time-off
+    details:
+      duration: 20.00:00:00
+      policy: yearly
+  - type: sick-leave
+  - type: bank-holiday
+    details:
+      days:
+        - 2025-01-01
+  - type: custom-1
+time-off-requests:
+  - type: paid
+    start: 2023-08-01 0:00:00 +03:00
+    finish: 2023-08-05 0:00:00 +03:00
+  - type: paid
+    start: 2023-10-01 0:00:00 +03:00
+    finish: 2023-10-03 0:00:00 +03:00
+  - type: unpaid
+    start: 2023-11-20 0:00:00 +02:00
+    finish: 2023-11-30 0:00:00 +02:00

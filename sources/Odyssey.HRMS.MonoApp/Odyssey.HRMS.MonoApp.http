@@ -1,0 +1,6 @@
+@Odyssey.MonoApp_HostAddress = http://localhost:5018
+
+GET {{Odyssey.MonoApp_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
