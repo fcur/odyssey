@@ -513,7 +513,7 @@ public sealed class JourneyStoryTests
     private JourneyActivity BuildTeamImportActivity()
     {
         var teamImportActivityEvents = BuildTeamImportActivityEvents();
-        var result = JourneyActivity.Create(_teamImportActivityId, _teamImportActivityName, JourneyActivityStatus.Draft, teamImportActivityEvents, JourneyActivityTtl.Unset);
+        var result = JourneyActivity.Create(_teamImportActivityId, _teamImportActivityName, JourneyActivityStatus.Draft, teamImportActivityEvents);
         return result.GetValueOrDefault();
 
         JourneyActivityEvent[] BuildTeamImportActivityEvents() =>
@@ -527,7 +527,7 @@ public sealed class JourneyStoryTests
     {
         var paidHolidayAccrualActivityEvents = BuildPaidHolidayAccrualActivityEvents();
         var result = JourneyActivity.Create(_paidHolidayAccrualActivityId, _paidHolidayAccrualActivityName, JourneyActivityStatus.Draft,
-            paidHolidayAccrualActivityEvents, JourneyActivityTtl.Unset);
+            paidHolidayAccrualActivityEvents);
         return result.GetValueOrDefault();
 
         JourneyActivityEvent[] BuildPaidHolidayAccrualActivityEvents() =>
@@ -542,7 +542,7 @@ public sealed class JourneyStoryTests
     {
         var notifyEmployeeActivityEvents = BuildNotifyEmployeeActivityEvents();
         var result = JourneyActivity.Create(_notifyEmployeeActivityId, _notifyEmployeeActivityName, JourneyActivityStatus.Draft,
-            notifyEmployeeActivityEvents, JourneyActivityTtl.Unset);
+            notifyEmployeeActivityEvents);
         return result.GetValueOrDefault();
         
         JourneyActivityEvent[] BuildNotifyEmployeeActivityEvents() =>

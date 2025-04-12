@@ -1,5 +1,6 @@
 namespace Odyssey.HRMS.Domain.JourneyEntity.Activity;
 
+// TODO: move TTL to Story start stage
 public sealed record JourneyActivityTtl: IComparable, IComparable<JourneyActivityTtl>
 {
     private readonly long _ticks;

@@ -119,20 +119,17 @@ public sealed class JourneyTests
                 teamImportId,
                 _teamImportActivityName,
                 JourneyActivityStatus.Draft,
-                teamImportActivityEvents,
-                JourneyActivityTtl.Unset).GetValueOrDefault(),
+                teamImportActivityEvents).GetValueOrDefault(),
             JourneyActivity.Create(
                 paidHolidayAccrualId,
                 _paidHolidayAccrualActivityName,
                 JourneyActivityStatus.Draft,
-                paidHolidayAccrualActivityEvents,
-                JourneyActivityTtl.Unset).GetValueOrDefault(),
+                paidHolidayAccrualActivityEvents).GetValueOrDefault(),
             JourneyActivity.Create(
                 notifyEmployeeId,
                 _notifyEmployeeActivityName,
                 JourneyActivityStatus.Draft,
-                notifyEmployeeActivityEvents,
-                JourneyActivityTtl.Unset).GetValueOrDefault(),
+                notifyEmployeeActivityEvents).GetValueOrDefault(),
             JourneyActivity.CreateEndOfJourney(endOfJourneyId)
         ];
 

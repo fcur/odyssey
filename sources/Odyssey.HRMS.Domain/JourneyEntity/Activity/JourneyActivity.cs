@@ -8,18 +8,16 @@ public sealed record JourneyActivity(
     JourneyActivityId Id,
     JourneyActivityName Name,
     JourneyActivityStatus Status,
-    IReadOnlyCollection<JourneyActivityEvent> Events,
-    JourneyActivityTtl? Ttl)
+    IReadOnlyCollection<JourneyActivityEvent> Events)
     : NestedDomainEntity<JourneyActivityId>(Id)
 {
     public static Result<JourneyActivity> Create(
         JourneyActivityId id,
         JourneyActivityName name,
         JourneyActivityStatus status,
-        IReadOnlyCollection<JourneyActivityEvent> events,
-        JourneyActivityTtl? ttl)
+        IReadOnlyCollection<JourneyActivityEvent> events)
     {
-        var result = new JourneyActivity(id, name, status, events, ttl);
+        var result = new JourneyActivity(id, name, status, events);
         return result;
     }
 
@@ -27,7 +25,6 @@ public sealed record JourneyActivity(
     {
         var status = JourneyActivityStatus.Draft;
         var events = Array.Empty<JourneyActivityEvent>();
-        var ttl = JourneyActivityTtl.Unset;
-        return new JourneyActivity(id, JourneyActivityName.EndOfJourney, status, events, ttl);
+        return new JourneyActivity(id, JourneyActivityName.EndOfJourney, status, events);
     }
 }
