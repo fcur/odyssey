@@ -15,8 +15,7 @@ public static class Extensions
 
             builder.UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking);
         });
-
-
+        
         services.AddHostedService<DatabaseMigrationService>();
         services.AddTransient<IJourneyRepository, JourneyRepository>();
 

@@ -16,12 +16,13 @@ internal sealed class JourneyDal
     [Required]
     [StringLength(50)] 
     public string Name { get; set; } = null!;
-    [Column(TypeName = "jsonb")]
-    [DefaultValue("'{}'")]
+    
+    // [Column(TypeName = "jsonb")]
+    // [DefaultValue("'[]'")]
     public JourneyActivityDal[] Activities { get; set; } = null!;
     [StringLength(10)] 
     public string Status { get; set; } = null!;
-    [Column(TypeName = "jsonb")]
+    // [Column(TypeName = "jsonb")]
     public JourneyStartupDal? Startup { get; set; }
     public DateTimeOffset ChangedAt { get; set; }
     public long Version { get; set; }
@@ -33,6 +34,18 @@ internal sealed class JourneyDal
         // builder.Property(v=>v.Id).ValueGeneratedOnAdd();
         builder.Property(v => v.RowVersion).IsRowVersion();
         builder.Property(v => v.ChangedAt).HasConversion<DateTimeOffsetToBinaryConverter>();
+        // builder.Property(v => v.Activities).HasDefaultValue(Array.Empty<JourneyActivityDal>());
+        builder.OwnsMany(v => v.Activities).ToJson();
+        
+        // builder.OwnsMany(v => v.Activities, cb =>
+        // {
+        //     cb.ToJson();
+        // });
+
+        builder.OwnsOne(v => v.Startup, cb =>
+        {
+            cb.ToJson();
+        });
     }
 }
 
