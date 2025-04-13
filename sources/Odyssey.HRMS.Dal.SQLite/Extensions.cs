@@ -1,5 +1,4 @@
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Odyssey.HRMS.Domain.JourneyEntity;
 
@@ -7,12 +6,10 @@ namespace Odyssey.HRMS.Dal.SQLite;
 
 public static class Extensions
 {
-    public static IServiceCollection ConfigureDb(IServiceCollection services, IConfiguration configuration)
+    public static IServiceCollection ConfigureDb(this IServiceCollection services, string? connectionString)
     {
         services.AddDbContextPool<JourneyDbContext>(builder =>
         {
-            var connectionString = configuration.GetConnectionString("DefaultConnection");
-
             connectionString ??= "Data Source=:memory:";
             builder.UseSqlite(connectionString);
 
@@ -20,7 +17,6 @@ public static class Extensions
         });
 
         services.AddHostedService<DatabaseMigrationService>();
-
         services.AddTransient<IJourneyRepository, JourneyRepository>();
 
         return services;

@@ -20,5 +20,8 @@
             <DependentUpon>appsettings.json</DependentUpon>
         </None>
     </ItemGroup>
+    <ItemGroup>
+      <ProjectReference Include="..\Odyssey.HRMS.Dal.SQLite\Odyssey.HRMS.Dal.SQLite.csproj" />
+    </ItemGroup>
 
 </Project>
