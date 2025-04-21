@@ -1,62 +1,74 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
-using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Text.Json;
 
 namespace Odyssey.HRMS.Dal.SQLite.Entities;
 
 [Table("Journeys")]
 internal sealed class JourneyDal
 {
-    [Key] 
-    [Required]
-    public Guid Id { get; set; }
-    [Required]
-    [StringLength(50)] 
-    public string Name { get; set; } = null!;
-    
-    // [Column(TypeName = "jsonb")]
-    // [DefaultValue("'[]'")]
-    public JourneyActivityDal[] Activities { get; set; } = null!;
-    [StringLength(10)] 
-    public string Status { get; set; } = null!;
-    // [Column(TypeName = "jsonb")]
+    [Key]
+    public required Guid Id { get; set; }
+    public required string Name { get; set; } = null!;
+    public required JourneyActivityDal[] Activities { get; set; } = [];
+    public required string Status { get; set; } = null!;
     public JourneyStartupDal? Startup { get; set; }
-    public DateTimeOffset ChangedAt { get; set; }
-    public long Version { get; set; }
-    [DefaultValue(0)] 
-    public int RowVersion { get; set; }
-
+    public Dictionary<string, JsonElement>? InitializationData { get; set; }
+    public required DateTimeOffset ChangedAt { get; set; }
+    public required long Version { get; set; }
+    public required long RowVersion { get; set; }
+    
     internal static void Setup(EntityTypeBuilder<JourneyDal> builder)
     {
-        // builder.Property(v=>v.Id).ValueGeneratedOnAdd();
-        builder.Property(v => v.RowVersion).IsRowVersion();
-        builder.Property(v => v.ChangedAt).HasConversion<DateTimeOffsetToBinaryConverter>();
-        // builder.Property(v => v.Activities).HasDefaultValue(Array.Empty<JourneyActivityDal>());
-        builder.OwnsMany(v => v.Activities).ToJson();
-        
-        // builder.OwnsMany(v => v.Activities, cb =>
-        // {
-        //     cb.ToJson();
-        // });
-
-        builder.OwnsOne(v => v.Startup, cb =>
+        builder.Property(v => v.Id).HasColumnType("BLOB").ValueGeneratedOnAdd().HasConversion<GuidToBlobConverter>().IsRequired();
+        builder.Property(v => v.Name).HasMaxLength(50).IsRequired();
+        builder.OwnsMany<JourneyActivityDal>(v => v.Activities, cb =>
         {
             cb.ToJson();
+            cb.OwnsMany<JourneyActivityEventDal>(v=>v.Events);
         });
+        builder.Property(v => v.Status).HasMaxLength(10).IsRequired();
+        builder.OwnsOne(v => v.Startup).ToJson();
+        builder.OwnsOne(v => v.InitializationData).ToJson();
+        builder.Property(v => v.ChangedAt).HasConversion<DateTimeOffsetToBinaryConverter>().IsRequired();
+        builder.Property(v => v.Version).IsRequired();
+        builder.Property(v => v.RowVersion).IsRowVersion().HasDefaultValue(0);
     }
 }
 
 [Owned]
 internal sealed class JourneyActivityDal
 {
-    public Guid ActivityId { get; set; }
+    public Guid Id { get; set; }
+    
+    public required string Name { get; set; }
+    
+    public required string Status { get; set; }
+    public required JourneyActivityEventDal[] Events { get; set; } = [];
+}
+
+[Owned]
+internal sealed class JourneyActivityEventDal
+{
+    public required string Name { get; set; }
+    
+    public required string Type { get; set; }
+    
+    public Guid? NextActivityId { get; set; }
 }
 
 [Owned]
 internal sealed class JourneyStartupDal
 {
-    
+    public DateTimeOffset? StartAt { get; set; }
+    public string? RepeatingRule { get; set; }
+}
+
+public sealed class GuidToBlobConverter : ValueConverter<Guid, byte[]>
+{
+    // ReSharper disable once ConvertToPrimaryConstructor
+    public GuidToBlobConverter() : base(x => x.ToByteArray(), y => new Guid(y)) { }
 }

@@ -35,14 +35,14 @@ public static class TestSource
     #endregion
 
     #region domain versions
-    public static DomainVersion Version1 = new DomainVersion(1UL);
-    public static DomainVersion Version2 = new DomainVersion(2UL);
-    public static DomainVersion Version3 = new DomainVersion(3UL);
-    public static DomainVersion Version4 = new DomainVersion(4UL);
-    public static DomainVersion Version5 = new DomainVersion(5UL);
-    public static DomainVersion Version6 = new DomainVersion(6UL);
-    public static DomainVersion Version7 = new DomainVersion(7UL);
-    public static DomainVersion Version8 = new DomainVersion(8UL);
-    public static DomainVersion Version9 = new DomainVersion(9UL);
+    public static DomainVersion Version1 = new DomainVersion(1L);
+    public static DomainVersion Version2 = new DomainVersion(2L);
+    public static DomainVersion Version3 = new DomainVersion(3L);
+    public static DomainVersion Version4 = new DomainVersion(4L);
+    public static DomainVersion Version5 = new DomainVersion(5L);
+    public static DomainVersion Version6 = new DomainVersion(6L);
+    public static DomainVersion Version7 = new DomainVersion(7L);
+    public static DomainVersion Version8 = new DomainVersion(8L);
+    public static DomainVersion Version9 = new DomainVersion(9L);
     #endregion
 }

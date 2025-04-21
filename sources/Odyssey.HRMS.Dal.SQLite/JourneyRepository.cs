@@ -1,21 +1,43 @@
-﻿using Odyssey.HRMS.Domain.JourneyEntity;
+﻿using Microsoft.EntityFrameworkCore;
+using Odyssey.HRMS.Domain.JourneyEntity;
 
 namespace Odyssey.HRMS.Dal.SQLite;
 
-public sealed class JourneyRepository: IJourneyRepository
+public sealed class JourneyRepository : IJourneyRepository
 {
-    public async Task<Journey?> Find(JourneyId journeyId, CancellationToken cancellationToken = default)
+    private readonly JourneyDbContext _dbContext;
+
+    public JourneyRepository(JourneyDbContext dbContext)
     {
-        throw new NotImplementedException();
+        ArgumentNullException.ThrowIfNull(dbContext);
+
+        _dbContext = dbContext;
     }
 
-    public async Task Insert(Journey journey, CancellationToken cancellationToken = default)
+    public async Task<Journey?> Find(JourneyId journeyId, CancellationToken cancellationToken = default)
     {
-        throw new NotImplementedException();
+        var entity = await _dbContext.Journeys.AsNoTracking()
+            .FirstOrDefaultAsync(v => v.Id == journeyId.Value, cancellationToken);
+
+        return entity?.ToDomain();
+    }
+
+    public async Task<JourneyId> Insert(Journey journey, CancellationToken cancellationToken = default)
+    {
+        var entity = journey.ToDal();
+        var result = await _dbContext.Journeys.AddAsync(entity, cancellationToken);
+
+        // MAYBE: publish journey-changed event
+
+        return new JourneyId(result.Entity.Id);
     }
 
     public async Task Update(Journey journey, CancellationToken cancellationToken = default)
     {
-        throw new NotImplementedException();
+        var entity = journey.ToDal();
+        _ = _dbContext.Journeys.Update(entity);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        // MAYBE: publish journey-changed event
     }
 }

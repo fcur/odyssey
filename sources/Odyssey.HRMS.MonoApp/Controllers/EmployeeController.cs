@@ -1,5 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
-using Odyssey.HRMS.MonoApp.Dto.Employee;
+using Odyssey.HRMS.MonoApp.Entities.Employee;
 
 namespace Odyssey.HRMS.MonoApp.Controllers;
 

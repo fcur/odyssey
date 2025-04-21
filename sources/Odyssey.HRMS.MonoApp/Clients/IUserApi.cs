@@ -1,6 +1,7 @@
+using Odyssey.HRMS.MonoApp.Entities.User;
 using Refit;
 
-namespace Odyssey.HRMS.MonoApp.Dto.User;
+namespace Odyssey.HRMS.MonoApp.Clients;
 
 public interface IUserApi
 {

@@ -15,7 +15,7 @@ public sealed record Journey(
     JourneyInitializationData? InitializationData, 
     DateTimeOffset ChangedAt, 
     DomainVersion Version, 
-    ulong RowVersion)
+    long RowVersion)
     : DomainEntity<JourneyId>(Id, ChangedAt, Version)
 {
     public static Result<Journey, JourneyValidationError> Create(JourneyName name, IReadOnlyCollection<JourneyActivity> activities, JourneyStartup? startup = null, JourneyInitializationData? initializationData = null)
@@ -31,7 +31,7 @@ public sealed record Journey(
         var status = JourneyStatus.Draft;
         var changedAt = DateTimeOffset.UtcNow;
         var version = DomainVersion.New;
-        var rowVersion = 0UL;
+        var rowVersion = 0L;
 
         // warn: 'StartAt' field is required for 'Ready' journeys.
         // > check it on journey status update

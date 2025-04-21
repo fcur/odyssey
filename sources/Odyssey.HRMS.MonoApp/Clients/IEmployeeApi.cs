@@ -1,6 +1,7 @@
+using Odyssey.HRMS.MonoApp.Entities.Employee;
 using Refit;
 
-namespace Odyssey.HRMS.MonoApp.Dto.Employee;
+namespace Odyssey.HRMS.MonoApp.Clients;
 
 public interface IEmployeeApi
 {
