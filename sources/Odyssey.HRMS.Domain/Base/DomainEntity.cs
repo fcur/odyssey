@@ -6,8 +6,8 @@ public abstract record DomainEntity<TId>()
 {
     private readonly Queue<DomainEvent> _domainEvents;
     public TId Id { get; init; }
-    protected DateTimeOffset ChangedAt { get; set; }
-    protected DomainVersion Version { get; set; }
+    public DateTimeOffset ChangedAt { get; set; }
+    public DomainVersion Version { get; set; }
 
     protected DomainEntity(TId id, DateTimeOffset changedAt, DomainVersion version) : this()
     {
