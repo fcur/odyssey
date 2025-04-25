@@ -8,6 +8,7 @@
 
     <ItemGroup>
       <ProjectReference Include="..\Odyssey.HRMS.Domain\Odyssey.HRMS.Domain.csproj" />
+      <ProjectReference Include="..\Odyssey.HRMS.EventLogLite\Odyssey.HRMS.EventLogLite.csproj" />
     </ItemGroup>
 
     <ItemGroup>

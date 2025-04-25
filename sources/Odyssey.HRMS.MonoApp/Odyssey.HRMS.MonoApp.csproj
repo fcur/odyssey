@@ -27,6 +27,7 @@
     </ItemGroup>
     <ItemGroup>
       <ProjectReference Include="..\Odyssey.HRMS.Dal.SQLite\Odyssey.HRMS.Dal.SQLite.csproj" />
+      <ProjectReference Include="..\Odyssey.HRMS.EventLogLite\Odyssey.HRMS.EventLogLite.csproj" />
     </ItemGroup>
 
 </Project>

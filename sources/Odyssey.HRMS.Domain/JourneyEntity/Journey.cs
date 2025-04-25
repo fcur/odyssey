@@ -16,7 +16,7 @@ public sealed record Journey(
     DateTimeOffset ChangedAt, 
     DomainVersion Version, 
     long RowVersion)
-    : DomainEntity<JourneyId>(Id, ChangedAt, Version)
+    : DomainEntity<JourneyId, JourneyChangedEvent>(Id, ChangedAt, Version)
 {
     public static Result<Journey, JourneyValidationError> Create(JourneyName name, IReadOnlyCollection<JourneyActivity> activities, JourneyStartup? startup = null, JourneyInitializationData? initializationData = null)
     {
