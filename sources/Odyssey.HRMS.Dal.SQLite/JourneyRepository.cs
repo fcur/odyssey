@@ -1,6 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Odyssey.HRMS.Domain.JourneyEntity;
 using Odyssey.HRMS.EventLogLite;
+using Odyssey.HRMS.EventLogLite.Base;
 
 namespace Odyssey.HRMS.Dal.SQLite;
 
@@ -49,7 +50,8 @@ public sealed class JourneyRepository : IJourneyRepository
     {
         while (journey.TryDequeueEvent(out var domainEvent))
         {
-            await _domainEventProducer.Publish(domainEvent, cancellationToken);
+            var key = domainEvent.Id.ToString();
+            await _domainEventProducer.Publish(key, domainEvent, cancellationToken);
         }
     }
 }

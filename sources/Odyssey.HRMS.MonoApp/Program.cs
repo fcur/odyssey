@@ -6,9 +6,6 @@ using Odyssey.HRMS.MonoApp;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// var eventLogBuilder = EventLogBuilder.Create(builder.Services, builder.Configuration.GetRequiredSection("EventLogging"));
-
-
 // Add services to the container.
 
 builder.Services.AddControllers();
@@ -16,8 +13,11 @@ builder.Services.AddControllers();
 builder.Services.AddOpenApi();
 builder.Services.ConfigureDb(builder.Configuration.GetConnectionString("DefaultConnection"));
 
-builder.Services.RegisterProducer<JourneyChangedEvent>(builder.Configuration)
-    .RegisterProducer<JourneyStoryChangedEvent>(builder.Configuration);
+builder.Services.RegisterProducer<TestEvent>(builder.Configuration)
+    .RegisterProducer<JourneyChangedEvent>(builder.Configuration)
+    .RegisterProducer<JourneyStoryChangedEvent>(builder.Configuration)
+    .RegisterConsumer<TestEvent>(builder.Configuration, "test1")
+    .RegisterConsumer<TestEvent>(builder.Configuration, "test2");
 builder.Services.AddHostedService<EventLogSetupService>();
 
 

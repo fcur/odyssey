@@ -1,11 +1,14 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Odyssey.HRMS.EventLogLite.Base;
+using Odyssey.HRMS.EventLogLite.Consumer;
+using Odyssey.HRMS.EventLogLite.Producer;
 
 namespace Odyssey.HRMS.EventLogLite;
 
 public static class Extensions
 {
-    public static IServiceCollection RegisterProducer<TEvent>(this IServiceCollection services,  IConfigurationRoot configuration) where TEvent : class
+    public static IServiceCollection RegisterProducer<TEvent>(this IServiceCollection services, IConfigurationRoot configuration) where TEvent : class
     {
         var producerConfiguration = new EventProducerSettings();
         var key = $"{EventLogSettings.ConfigurationSectionName}:{EventLogSettings.ProducerSectionName}:{typeof(TEvent).Name}";
@@ -19,7 +22,7 @@ public static class Extensions
         return services;
     }
     
-    public static IServiceCollection RegisterConsumer<TEvent>(this IServiceCollection services,  IConfigurationRoot configuration) where TEvent : class
+    public static IServiceCollection RegisterConsumer<TEvent>(this IServiceCollection services, IConfigurationRoot configuration, string name) where TEvent : class
     {
         throw new NotImplementedException();
         

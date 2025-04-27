@@ -16,7 +16,7 @@ public sealed class EmployeeController: ControllerBase
 
     [HttpPut]
     [ProducesResponseType<EmployeeDto>(StatusCodes.Status201Created)]
-    public IActionResult CreateEmployee([FromBody] CreateEmployeeRequestDto requestDto)
+    public IActionResult CreateEmployee([FromBody] CreateEmployeeRequestDto requestDto, CancellationToken ct)
     {
         return Ok(new EmployeeDto(Guid.NewGuid()));
     }
@@ -25,7 +25,7 @@ public sealed class EmployeeController: ControllerBase
     [ProducesResponseType<EmployeeDto>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
-    public IActionResult UpdateEmployee([FromRoute] Guid id, [FromBody] UpdateEmployeeRequestDto requestDto)
+    public IActionResult UpdateEmployee([FromRoute] Guid id, [FromBody] UpdateEmployeeRequestDto requestDto, CancellationToken ct)
     {
         return Ok(new EmployeeDto(id));
     }

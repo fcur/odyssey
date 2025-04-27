@@ -1,4 +1,4 @@
-using Odyssey.HRMS.EventLogLite;
+using Odyssey.HRMS.EventLogLite.Base;
 
 namespace Odyssey.HRMS.MonoApp;
 
@@ -18,13 +18,15 @@ public sealed class EventLogSetupService : IHostedService
 
     public async Task StartAsync(CancellationToken cancellationToken)
     {
-        var tasks = _producers.Select(v => v.Start(cancellationToken)).ToArray();
-        await Task.WhenAll(tasks);
+        var producers = _producers.Select(v => v.Start(cancellationToken)).ToArray();
+        var consumers = _consumers.Select(v => v.Start(cancellationToken)).ToArray();
+        await Task.WhenAll(producers.Concat(consumers));
     }
 
     public async Task StopAsync(CancellationToken cancellationToken)
     {
-        var tasks = _producers.Select(v=>v.Stop(cancellationToken)).ToArray();
-        await Task.WhenAll(tasks);
+        var producers = _producers.Select(v=>v.Stop(cancellationToken)).ToArray();
+        var consumers = _consumers.Select(v=>v.Stop(cancellationToken)).ToArray();
+        await Task.WhenAll(producers.Concat(consumers));
     }
 }
