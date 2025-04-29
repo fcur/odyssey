@@ -9,7 +9,7 @@ public sealed class EventConsumer<TEvent>(EventConsumerSettings settings) : IEve
     public Task Start(CancellationToken cancellationToken = default)
     {
         EnsureTopicDirectoryExists();
-        
+
         return Task.CompletedTask;
     }
 

@@ -16,8 +16,8 @@ builder.Services.ConfigureDb(builder.Configuration.GetConnectionString("DefaultC
 builder.Services.RegisterProducer<TestEvent>(builder.Configuration)
     .RegisterProducer<JourneyChangedEvent>(builder.Configuration)
     .RegisterProducer<JourneyStoryChangedEvent>(builder.Configuration)
-    .RegisterConsumer<TestEvent>(builder.Configuration, "test1")
-    .RegisterConsumer<TestEvent>(builder.Configuration, "test2");
+    .RegisterConsumer<TestEventConsumer1, TestEvent>(builder.Configuration, "Test1")
+    .RegisterConsumer<TestEventConsumer2, TestEvent>(builder.Configuration, "Test2");
 builder.Services.AddHostedService<EventLogSetupService>();
 
 
