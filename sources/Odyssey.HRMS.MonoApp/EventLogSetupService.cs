@@ -1,3 +1,4 @@
+using Odyssey.HRMS.EventLogLite;
 using Odyssey.HRMS.EventLogLite.Base;
 
 namespace Odyssey.HRMS.MonoApp;
@@ -11,9 +12,13 @@ public sealed class EventLogSetupService : IHostedService
     {
         ArgumentNullException.ThrowIfNull(provider);
         ArgumentNullException.ThrowIfNull(configuration);
-        
-        _producers = provider.GetServices<IEventProducer>().ToArray();
-        _consumers = provider.GetServices<IEventConsumer>().ToArray();
+
+        var eventLogBuilder = EventLogBuilder.Create(provider, configuration).WithProducers()
+            .AddConsumerHandler<TestEventConsumer1, TestEvent>("Test1")
+            .AddConsumerHandler<TestEventConsumer2, TestEvent>("Test2");
+
+        _producers = eventLogBuilder.GetProducers();
+        _consumers = eventLogBuilder.GetConsumers();
     }
 
     public async Task StartAsync(CancellationToken cancellationToken)
@@ -25,8 +30,8 @@ public sealed class EventLogSetupService : IHostedService
 
     public async Task StopAsync(CancellationToken cancellationToken)
     {
-        var producers = _producers.Select(v=>v.Stop(cancellationToken)).ToArray();
-        var consumers = _consumers.Select(v=>v.Stop(cancellationToken)).ToArray();
+        var producers = _producers.Select(v => v.Stop(cancellationToken)).ToArray();
+        var consumers = _consumers.Select(v => v.Stop(cancellationToken)).ToArray();
         await Task.WhenAll(producers.Concat(consumers));
     }
 }

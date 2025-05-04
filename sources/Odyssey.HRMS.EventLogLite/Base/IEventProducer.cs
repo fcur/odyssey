@@ -11,6 +11,7 @@ public interface IEventProducer<TEvent> : IEventProducer where TEvent : class
         var request = new LogRequest<TEvent>() { Key = key, Payload = @event, PartitionId = 0 };
         return Publish(request, cancellationToken);
     }
+    
 }
 
 public interface IEventProducer : IEventLogLite

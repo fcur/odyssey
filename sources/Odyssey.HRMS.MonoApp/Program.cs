@@ -13,11 +13,13 @@ builder.Services.AddControllers();
 builder.Services.AddOpenApi();
 builder.Services.ConfigureDb(builder.Configuration.GetConnectionString("DefaultConnection"));
 
-builder.Services.RegisterProducer<TestEvent>(builder.Configuration)
+builder.Services
     .RegisterProducer<JourneyChangedEvent>(builder.Configuration)
     .RegisterProducer<JourneyStoryChangedEvent>(builder.Configuration)
-    .RegisterConsumer<TestEventConsumer1, TestEvent>(builder.Configuration, "Test1")
-    .RegisterConsumer<TestEventConsumer2, TestEvent>(builder.Configuration, "Test2");
+    .RegisterProducer<TestEvent>(builder.Configuration)
+    .RegisterConsumer<TestEventConsumer1, TestEvent>("Test1")
+    .RegisterConsumer<TestEventConsumer2, TestEvent>("Test2");
+
 builder.Services.AddHostedService<EventLogSetupService>();
 
 

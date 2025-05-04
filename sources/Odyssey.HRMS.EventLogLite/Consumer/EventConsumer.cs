@@ -1,10 +1,21 @@
 ﻿using Odyssey.HRMS.EventLogLite.Base;
+using Odyssey.HRMS.EventLogLite.Entities;
 
 namespace Odyssey.HRMS.EventLogLite.Consumer;
 
-public sealed class EventConsumer<TEvent>(EventConsumerSettings settings) : IEventConsumer<TEvent> where TEvent : class
+public sealed class EventConsumer<TEvent> : IEventConsumer<TEvent> where TEvent : class
 {
-    private readonly string _topicWorkingDirectory = settings.GetTopicWorkingDirectory();
+    private readonly EventConsumerSettings _settings;
+    private Func<LogRespone<TEvent>, CancellationToken, Task>? _handler;
+
+    public EventConsumer(EventConsumerSettings settings, Func<LogRespone<TEvent>, CancellationToken, Task> handler)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        ArgumentNullException.ThrowIfNull(handler);
+
+        _settings = settings;
+        _handler = handler;
+    }
 
     public Task Start(CancellationToken cancellationToken = default)
     {
@@ -18,8 +29,14 @@ public sealed class EventConsumer<TEvent>(EventConsumerSettings settings) : IEve
         return Task.CompletedTask;
     }
 
+    public void ApplyHandler(Func<LogRespone<TEvent>, CancellationToken, Task> handler)
+    {
+        _handler = handler;
+    }
+
     public void EnsureTopicDirectoryExists()
     {
-        Directory.CreateDirectory(_topicWorkingDirectory);
+        var topicWorkingDirectory = _settings.GetTopicWorkingDirectory();
+        Directory.CreateDirectory(topicWorkingDirectory);
     }
 }

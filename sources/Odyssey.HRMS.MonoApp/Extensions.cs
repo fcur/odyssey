@@ -20,20 +20,12 @@ public static class Extensions
         return services;
     }
 
-    public static IServiceCollection RegisterConsumer<TEventConsumer, TEvent>(this IServiceCollection services, IConfigurationRoot configuration,
-        string groupName)
-        where TEventConsumer : IEventConsumerImpl<TEvent>
+    public static IServiceCollection RegisterConsumer<TEventConsumerImpl, TEvent>(this IServiceCollection services, string groupName)
+        where TEventConsumerImpl : IEventConsumerImpl<TEvent>
         where TEvent : class
     {
-        // throw new NotImplementedException();
-        var consumerConfiguration = new EventConsumerSettings();
-        var key = $"{EventLogSettings.ConfigurationSectionName}:{EventLogSettings.ConsumerSectionName}:{groupName}";
-        configuration.GetRequiredSection(key).Bind(consumerConfiguration);
-
-        var consumer = new EventConsumer<TEvent>(consumerConfiguration);
-
-        services.AddSingleton<IEventConsumer<TEvent>>(consumer);
-        services.AddSingleton<IEventConsumer>(consumer);
+        services.AddKeyedTransient(typeof(IEventConsumerImpl<TEvent>), groupName, typeof(TEventConsumerImpl));
+        
         return services;
     }
 }
