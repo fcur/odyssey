@@ -1,42 +1,46 @@
 ﻿using Odyssey.HRMS.EventLogLite.Base;
 using Odyssey.HRMS.EventLogLite.Entities;
+using System.Threading.Channels;
 
 namespace Odyssey.HRMS.EventLogLite.Consumer;
 
 public sealed class EventConsumer<TEvent> : IEventConsumer<TEvent> where TEvent : class
 {
+    private readonly IEventConsumerImpl<TEvent> _handler;
     private readonly EventConsumerSettings _settings;
-    private Func<LogRespone<TEvent>, CancellationToken, Task>? _handler;
+    private readonly Channel<LogRespone<TEvent>> _channel;
 
-    public EventConsumer(EventConsumerSettings settings, Func<LogRespone<TEvent>, CancellationToken, Task> handler)
+    public EventConsumer(IEventConsumerImpl<TEvent> handler, EventConsumerSettings settings)
     {
-        ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(handler);
+        ArgumentNullException.ThrowIfNull(settings);
 
         _settings = settings;
         _handler = handler;
+        
+        var opt = new BoundedChannelOptions(1000) { SingleReader = true, SingleWriter = true, FullMode = BoundedChannelFullMode.Wait };
+        _channel = Channel.CreateBounded<LogRespone<TEvent>>(opt);
     }
 
-    public Task Start(CancellationToken cancellationToken = default)
+    public async Task Start(CancellationToken cancellationToken = default)
     {
-        EnsureTopicDirectoryExists();
-
-        return Task.CompletedTask;
+        while (await _channel.Reader.WaitToReadAsync(cancellationToken))
+        {
+            if (_channel.Reader.TryRead(out var item))
+            {
+                await _handler.Handle(item, cancellationToken);
+                // TBD: commit
+            }
+        }
     }
 
     public Task Stop(CancellationToken cancellationToken = default)
     {
         return Task.CompletedTask;
     }
-
-    public void ApplyHandler(Func<LogRespone<TEvent>, CancellationToken, Task> handler)
+    
+    public async Task Broadcast(LogRespone<TEvent> response, CancellationToken cancellationToken = default)
     {
-        _handler = handler;
-    }
-
-    public void EnsureTopicDirectoryExists()
-    {
-        var topicWorkingDirectory = _settings.GetTopicWorkingDirectory();
-        Directory.CreateDirectory(topicWorkingDirectory);
+        await _channel.Writer.WriteAsync(response,  cancellationToken);
     }
 }

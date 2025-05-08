@@ -39,18 +39,6 @@ public class EventLogBuilder
         
         return this;
     }
-    
-    public EventLogBuilder AddProducer<TEvent>() where TEvent : class
-    {
-        var producerConfiguration = new EventProducerSettings();
-        var key = $"{EventLogSettings.ConfigurationSectionName}:{EventLogSettings.ProducerSectionName}:{typeof(TEvent).Name}";
-        _configuration.GetRequiredSection(key).Bind(producerConfiguration);
-    
-        var producer = new EventProducer<TEvent>(producerConfiguration);
-        
-        _producers.Add(producer);
-        return this;
-    }
 
     public EventLogBuilder AddConsumerHandler<TEventConsumer, TEvent>(string groupName)  
         where TEventConsumer : IEventConsumerImpl<TEvent>
@@ -60,10 +48,13 @@ public class EventLogBuilder
         var key = $"{EventLogSettings.ConfigurationSectionName}:{EventLogSettings.ConsumerSectionName}:{groupName}";
         _configuration.GetRequiredSection(key).Bind(consumerConfiguration);
 
+        var broker = _provider.GetRequiredService<IEventBroker<TEvent>>();
         var handler = _provider.GetRequiredKeyedService<IEventConsumerImpl<TEvent>>(groupName);
-        var consumer = new EventConsumer<TEvent>(consumerConfiguration, handler.Handle);
-        
+        var consumer = new EventConsumer<TEvent>(handler, consumerConfiguration);
         _consumers.Add(consumer);
+        
+        broker.Join(consumer);
+        
         return this;
 
     }

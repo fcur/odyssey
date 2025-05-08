@@ -12,8 +12,10 @@ public static class Extensions
         var key = $"{EventLogSettings.ConfigurationSectionName}:{EventLogSettings.ProducerSectionName}:{typeof(TEvent).Name}";
         configuration.GetRequiredSection(key).Bind(producerConfiguration);
 
-        var producer = new EventProducer<TEvent>(producerConfiguration);
-
+        var broker = new FileEventLogBroker<TEvent>(new EventLogTopic(producerConfiguration.TopicName));
+        var producer = new EventProducer<TEvent>(broker, producerConfiguration);
+        
+        services.AddSingleton<IEventBroker<TEvent>>(broker);
         services.AddSingleton<IEventProducer<TEvent>>(producer);
         services.AddSingleton<IEventProducer>(producer);
 
