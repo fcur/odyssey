@@ -16,6 +16,7 @@ public interface IEventBroker<TEvent> where TEvent : class
 // https://github.com/cocowalla/serilog-sinks-file-gzip
 public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEvent : class
 {
+    private readonly EventLogTopic _topic;
     private readonly string _workingDirectory;
     private readonly Channel<LogRespone<TEvent>> _mainChannel;
     private readonly ConcurrentQueue<IEventConsumer<TEvent>> _consumers;
@@ -24,6 +25,8 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
     {
         ArgumentNullException.ThrowIfNull(topic);
 
+        _topic = topic;
+        
         _workingDirectory = Path.Combine(Environment.CurrentDirectory, topic.Value);
         Directory.CreateDirectory(_workingDirectory);
 
@@ -83,12 +86,28 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
 
     private string GetFileName(LogRequest<TEvent> request)
     {
+        var partitionId = GetPartition(request);
         var template = $"{request.Key}-{{0}}{EventLogSettings.LogFileExtension}";
 
         return string.Format(template, request.PartitionId);
+    }
+
+    private byte GetPartition(LogRequest<TEvent> request)
+    {
+        if (request.PartitionId.HasValue)
+        {
+            return request.PartitionId.Value!;
+        }
+
+        if (!string.IsNullOrEmpty(request.Key))
+        {
+            return (byte)(request.Key.GetHashCode() % _topic.Partitions);
+        }
+        
+        return 0;
     }
 }
 
 public sealed record EventLogOffset(long Value);
 
-public sealed record EventLogTopic(string Value);
+public sealed record EventLogTopic(string Value, byte Partitions);

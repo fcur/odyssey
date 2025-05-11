@@ -48,11 +48,11 @@ public class EventLogBuilder
         var key = $"{EventLogSettings.ConfigurationSectionName}:{EventLogSettings.ConsumerSectionName}:{groupName}";
         _configuration.GetRequiredSection(key).Bind(consumerConfiguration);
 
-        var broker = _provider.GetRequiredService<IEventBroker<TEvent>>();
         var handler = _provider.GetRequiredKeyedService<IEventConsumerImpl<TEvent>>(groupName);
         var consumer = new EventConsumer<TEvent>(handler, consumerConfiguration);
         _consumers.Add(consumer);
         
+        var broker = _provider.GetRequiredService<IEventBroker<TEvent>>();
         broker.Join(consumer);
         
         return this;
