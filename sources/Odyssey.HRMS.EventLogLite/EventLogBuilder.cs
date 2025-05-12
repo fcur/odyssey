@@ -11,6 +11,7 @@ public class EventLogBuilder
     private readonly IServiceProvider _provider;
     private readonly IConfiguration _configuration;
 
+    private readonly List<IEventBroker> _brokers = new();
     private readonly List<IEventProducer> _producers = new();
     private readonly List<IEventConsumer> _consumers = new();
 
@@ -23,6 +24,7 @@ public class EventLogBuilder
         _configuration = configuration;
     }
 
+    public IReadOnlyCollection<IEventBroker> GetBrokers() { return _brokers; }
     public IReadOnlyCollection<IEventProducer> GetProducers() { return _producers; }
     public IReadOnlyCollection<IEventConsumer> GetConsumers() {  return _consumers;}
     
@@ -33,9 +35,11 @@ public class EventLogBuilder
 
     public EventLogBuilder WithProducers()
     {
+        var brokers = _provider.GetServices<IEventBroker>();
         var producers = _provider.GetServices<IEventProducer>();
         
         _producers.AddRange(producers);
+        _brokers.AddRange(brokers);
         
         return this;
     }

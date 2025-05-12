@@ -14,8 +14,9 @@ public static class Extensions
 
         var broker = new FileEventLogBroker<TEvent>(new EventLogTopic(producerConfiguration.TopicName, producerConfiguration.Partitions));
         var producer = new EventProducer<TEvent>(broker, producerConfiguration);
-        
+
         services.AddSingleton<IEventBroker<TEvent>>(broker);
+        services.AddSingleton<IEventBroker>(broker);
         services.AddSingleton<IEventProducer<TEvent>>(producer);
         services.AddSingleton<IEventProducer>(producer);
 

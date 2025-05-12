@@ -21,9 +21,9 @@ public sealed class EventProducer<TEvent> : IEventProducer<TEvent> where TEvent 
         _channel= Channel.CreateBounded<LogRequest<TEvent>>(opt);
     }
     
-    public async Task Publish(LogRequest<TEvent> request, CancellationToken cancellationToken = default)
+    public ValueTask Publish(LogRequest<TEvent> request, CancellationToken cancellationToken = default)
     {
-        await _channel.Writer.WriteAsync(request, cancellationToken);
+        return _channel.Writer.WriteAsync(request, cancellationToken);
     }
 
     public async Task Start(CancellationToken cancellationToken = default)
@@ -36,9 +36,6 @@ public sealed class EventProducer<TEvent> : IEventProducer<TEvent> where TEvent 
             }
         }
     }
-
-
-    
 
     public Task Stop(CancellationToken cancellationToken = default)
     {
