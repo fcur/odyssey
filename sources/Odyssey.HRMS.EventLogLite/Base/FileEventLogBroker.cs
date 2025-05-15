@@ -36,7 +36,7 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
         // NOT possible to decrease partitions count
 
         InitWorkingDirectory();
-        InitCounters();
+        await InitCounters(cancellationToken);
 
         while (await _mainChannel.Reader.WaitToReadAsync(cancellationToken))
         {
@@ -113,31 +113,45 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
         return Convert.ToByte(_tempPartition);
     }
 
-    private string ReadLatestMessage(string filePath)
+    private async Task<LogMessage<TEvent>?> ReadLatestMessage(string filePath, CancellationToken cancellationToken)
     {
-        using var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read);
-        var offset = -1;
-
-        fs.Seek(offset, SeekOrigin.End);
-        byte[] buffer = new byte[1];
-        var sb = new StringBuilder();
-
-        while (fs.Position > 0)
+        var writeBuffer = new Stack<byte>();
+        var newLineCode = Convert.ToByte('\n');
+        
+        await using (var fs = new FileStream(filePath, FileMode.OpenOrCreate, FileAccess.Read))
         {
-            fs.ReadExactly(buffer, 0, 1);
-            char c = (char)buffer[0];
-
-            if (c == '\n')
+            if (fs.Length == 0)
             {
-                break;
+                return null;
             }
+            
+            var offset = -1;
+            
+            fs.Seek(offset, SeekOrigin.End);
+            var readBuffer = new byte[1];
+            while (fs.Position > 0)
+            {
+                await fs.ReadExactlyAsync(readBuffer, 0, 1, cancellationToken);
 
-            sb.Insert(0, c);
-            offset--;
-            fs.Seek(offset, SeekOrigin.Current);
+                if (readBuffer[0] == newLineCode)
+                {
+                    break;
+                }
+
+                writeBuffer.Push(readBuffer[0]);
+                fs.Seek(--offset, SeekOrigin.Current);
+            }
+        }
+        
+        if (writeBuffer.Count == 0)
+        {
+            return null;
         }
 
-        return sb.ToString();
+        using var ms = new MemoryStream(writeBuffer.ToArray());
+        var message = await JsonSerializer.DeserializeAsync<LogMessage<TEvent>>(ms, cancellationToken: cancellationToken);
+
+        return message;
     }
 
     private string[] GetOrCreateLogSegments()
@@ -151,8 +165,8 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
             return logSegments.ToArray();
         }
 
-        var fileNames = logSegments.Select(Path.GetFileNameWithoutExtension).Select(v => int.Parse(v!));
-        var maxSegment = fileNames.Max();
+        var fileNames = logSegments.Select(Path.GetFileNameWithoutExtension).Select(v => int.Parse(v!)).ToArray();
+        var maxSegment = fileNames.Length > 0 ? fileNames.Max() : -1;
         var newFiles = Enumerable.Range(maxSegment + 1, newFilesCount).Select(v => Path.Combine(_workingDirectory, $"{v}{logFileExtension}")).ToArray();
         logSegments.AddRange(newFiles);
 
@@ -165,18 +179,34 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
         Directory.CreateDirectory(_workingDirectory);
     }
 
-    private void InitCounters()
+    private async Task InitCounters(CancellationToken cancellationToken)
     {
         var logSegments = GetOrCreateLogSegments();
-        _partitionsCount = Convert.ToByte(logSegments.Length);
-
-        _partitionsMap = Enumerable.Range(0, _partitionsCount).Zip(logSegments, (k, v) => new { key = (byte)k, val = v })
+        var partitionsCount = Convert.ToByte(logSegments.Length);
+        var partitionsMap = Enumerable.Range(0, partitionsCount).Zip(logSegments, (k, v) => new { key = (byte)k, val = v })
             .ToDictionary(v => v.key, v => v.val);
+        var initialOffsets = await PrepareInitialOffsets(partitionsMap, cancellationToken);
 
-        // TODO: prepare initial offsets map
-        _offsets = new ConcurrentDictionary<byte, ulong>(Enumerable.Range(0, _partitionsCount).ToDictionary(v => (byte)v, k => 0UL));
-        var latestMessages = logSegments.Select(ReadLatestMessage).ToArray();
+        _partitionsMap = partitionsMap;        
+        _partitionsCount = partitionsCount;
+        _offsets = new ConcurrentDictionary<byte, ulong>(initialOffsets);
     }
+
+    private async Task<Dictionary<byte, ulong>> PrepareInitialOffsets(Dictionary<byte, string> partitionsMap, CancellationToken cancellationToken)
+    {
+        var result = new Dictionary<byte, ulong>();
+        
+        foreach (var item in partitionsMap)
+        {
+            var latestMsg = await ReadLatestMessage(item.Value, cancellationToken);
+            var offset = latestMsg?.Offset ?? 0UL;
+            
+            result.Add(item.Key, offset);
+        }
+        
+        return result;
+    }
+    
 }
 
 public interface IFileLogCleaner : IEventLogLite
