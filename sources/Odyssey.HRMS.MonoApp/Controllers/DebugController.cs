@@ -38,7 +38,7 @@ public sealed class DebugController : ControllerBase
             .ToArray();
     }
 
-    [HttpGet("test-event")]
+    [HttpPut("test-event")]
     public async Task<IActionResult> PublishTestEvent(CancellationToken ct)
     {
         var timeNow = DateTimeOffset.UtcNow;

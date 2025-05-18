@@ -26,13 +26,9 @@ builder.Services.AddHostedService<EventLogSetupService>();
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
-{
-    app.MapOpenApi();
-}
-
-app.UseAuthorization();
-
+app.MapOpenApi();
 app.MapControllers();
+app.UseSwaggerUI(c => c.SwaggerEndpoint("/openapi/v1.json", "v1"));
+
 
 app.Run();

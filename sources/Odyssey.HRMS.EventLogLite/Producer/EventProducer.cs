@@ -26,7 +26,14 @@ public sealed class EventProducer<TEvent> : IEventProducer<TEvent> where TEvent 
         return _channel.Writer.WriteAsync(request, cancellationToken);
     }
 
-    public async Task Start(CancellationToken cancellationToken = default)
+    public Task Start(CancellationToken cancellationToken = default)
+    {
+        _ = Task.Factory.StartNew(async () => await StartConsumeProducedEventsInternal(cancellationToken), TaskCreationOptions.LongRunning).Unwrap();
+        
+        return Task.CompletedTask;
+    }
+
+    private async Task StartConsumeProducedEventsInternal(CancellationToken cancellationToken)
     {
         while (await _channel.Reader.WaitToReadAsync(cancellationToken))
         {

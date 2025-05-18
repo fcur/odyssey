@@ -22,7 +22,14 @@ public sealed class EventConsumer<TEvent> : IEventConsumer<TEvent> where TEvent 
         _channel = Channel.CreateBounded<LogRespone<TEvent>>(opt);
     }
 
-    public async Task Start(CancellationToken cancellationToken = default)
+    public Task Start(CancellationToken cancellationToken = default)
+    {
+        _ = Task.Factory.StartNew(async () => await StartConsumeInternal(cancellationToken), TaskCreationOptions.LongRunning).Unwrap();
+        
+        return Task.CompletedTask;
+    }
+
+    private async Task StartConsumeInternal(CancellationToken cancellationToken)
     {
         while (await _channel.Reader.WaitToReadAsync(cancellationToken))
         {

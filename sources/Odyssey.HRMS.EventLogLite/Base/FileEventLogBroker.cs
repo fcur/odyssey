@@ -11,13 +11,18 @@ namespace Odyssey.HRMS.EventLogLite.Base;
 public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEvent : class
 {
     private readonly EventLogTopic _topic;
-    private string _workingDirectory;
     private readonly Channel<LogRespone<TEvent>> _mainChannel;
     private readonly ConcurrentQueue<IEventConsumer<TEvent>> _consumerChannels;
+    
+    private string _workingDirectory = null!;
     private byte _partitionsCount = 0;
     private int _tempPartition = 0;
-    private ConcurrentDictionary<byte, ulong> _offsets;
-    private Dictionary<byte, string> _partitionsMap;
+    private ConcurrentDictionary<byte, ulong> _offsets = null!;
+    private Dictionary<byte, string> _partitionsMap = null!;
+
+    // log divider symbol, equals to '\n'
+    private const byte EventLogDivider = 10;
+    private const string EventLogFileExtension = ".log";
 
     public FileEventLogBroker(EventLogTopic topic)
     {
@@ -38,6 +43,11 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
         InitWorkingDirectory();
         await InitCounters(cancellationToken);
 
+        //_ = Task.Factory.StartNew(async () => await StartConsumePublishedEventsInternal(cancellationToken), TaskCreationOptions.LongRunning).Unwrap();
+    }
+
+    private async Task StartConsumePublishedEventsInternal(CancellationToken cancellationToken)
+    {
         while (await _mainChannel.Reader.WaitToReadAsync(cancellationToken))
         {
             if (_mainChannel.Reader.TryRead(out var item))
@@ -52,37 +62,35 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
         return Task.CompletedTask;
     }
 
-    public async Task<EventLogOffset> LogEvent(LogRequest<TEvent> request, CancellationToken cancellationToken = default)
+    public async Task<EventLogResult> LogEvent(LogRequest<TEvent> request, CancellationToken cancellationToken = default)
     {
         var partitionId = GetPartition(request);
         var logFilePath = _partitionsMap[partitionId];
-        var logMessage = LogMessage<TEvent>.Create(request);
 
-        if (_offsets.TryGetValue(partitionId, out var offsetResult))
-        {
-        }
+        _offsets.TryGetValue(partitionId, out var offsetResult);
+
+        var logMessage = LogMessage<TEvent>.Create(request, offsetResult);
 
         await using (var fs = new FileStream(logFilePath, FileMode.OpenOrCreate, FileAccess.Write))
         {
             fs.Seek(0, SeekOrigin.End);
+
+            await fs.WriteAsync(new[] { EventLogDivider }, cancellationToken);
             await JsonSerializer.SerializeAsync(fs, logMessage, new JsonSerializerOptions { WriteIndented = false }, cancellationToken);
         }
 
-        var fileInfo = new FileInfo(logFilePath);
-        var offset = new EventLogOffset(fileInfo.Length);
-
         var response = new LogRespone<TEvent>
         {
-            Key = request.Key,
-            Payload = request.Payload,
+            Key = logMessage.Key,
+            Payload = logMessage.Payload,
             Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(logMessage.Timestamp),
-            Offset = offset.Value, // TBD unique number inside partition file
+            Offset = logMessage.Offset,
             PartitionId = partitionId
         };
 
         await _mainChannel.Writer.WriteAsync(response, cancellationToken);
 
-        return offset;
+        return new EventLogResult(_topic.Value, partitionId, logMessage.Offset);
     }
 
     public void Join(IEventConsumer<TEvent> consumer, CancellationToken cancellationToken = default)
@@ -99,7 +107,9 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
 
         if (!string.IsNullOrEmpty(request.Key))
         {
-            return Convert.ToByte(request.Key.GetHashCode() % _partitionsCount);
+            // partition = murmur2.hash(key) % numPartitions
+            var hash = MurmurHash2.Hash32(Encoding.UTF8.GetBytes(request.Key), 42);
+            return Convert.ToByte(hash % _partitionsCount);
         }
 
         Interlocked.Exchange(ref _tempPartition, (_tempPartition + 1) % _partitionsCount);
@@ -115,34 +125,29 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
 
     private async Task<LogMessage<TEvent>?> ReadLatestMessage(string filePath, CancellationToken cancellationToken)
     {
-        var writeBuffer = new Stack<byte>();
-        var newLineCode = Convert.ToByte('\n');
-        
-        await using (var fs = new FileStream(filePath, FileMode.OpenOrCreate, FileAccess.Read))
+        await using var fs = new FileStream(filePath, FileMode.OpenOrCreate, FileAccess.Read);
+        if (fs.Length == 0)
         {
-            if (fs.Length == 0)
-            {
-                return null;
-            }
-            
-            var offset = -1;
-            
-            fs.Seek(offset, SeekOrigin.End);
-            var readBuffer = new byte[1];
-            while (fs.Position > 0)
-            {
-                await fs.ReadExactlyAsync(readBuffer, 0, 1, cancellationToken);
-
-                if (readBuffer[0] == newLineCode)
-                {
-                    break;
-                }
-
-                writeBuffer.Push(readBuffer[0]);
-                fs.Seek(--offset, SeekOrigin.Current);
-            }
+            return null;
         }
-        
+
+        fs.Seek(-1, SeekOrigin.End);
+        var readBuffer = new byte[1];
+        var writeBuffer = new Stack<byte>();
+
+        while (fs.Position > 0)
+        {
+            await fs.ReadExactlyAsync(readBuffer, 0, 1, cancellationToken);
+            if (readBuffer[0] == EventLogDivider)
+            {
+                break;
+            }
+
+            writeBuffer.Push(readBuffer[0]);
+            fs.Seek(-2, SeekOrigin.Current);
+        }
+
+
         if (writeBuffer.Count == 0)
         {
             return null;
@@ -156,9 +161,7 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
 
     private string[] GetOrCreateLogSegments()
     {
-        const string logFileExtension = ".log";
-        
-        var logSegments = Directory.GetFiles(_workingDirectory, $"*{logFileExtension}").ToList();
+        var logSegments = Directory.GetFiles(_workingDirectory, $"*{EventLogFileExtension}").ToList();
         var newFilesCount = Math.Max(_topic.Partitions, logSegments.Count) - logSegments.Count;
         if (newFilesCount == 0)
         {
@@ -167,7 +170,8 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
 
         var fileNames = logSegments.Select(Path.GetFileNameWithoutExtension).Select(v => int.Parse(v!)).ToArray();
         var maxSegment = fileNames.Length > 0 ? fileNames.Max() : -1;
-        var newFiles = Enumerable.Range(maxSegment + 1, newFilesCount).Select(v => Path.Combine(_workingDirectory, $"{v}{logFileExtension}")).ToArray();
+        var newFiles = Enumerable.Range(maxSegment + 1, newFilesCount).Select(v => Path.Combine(_workingDirectory, $"{v}{EventLogFileExtension}"))
+            .ToArray();
         logSegments.AddRange(newFiles);
 
         return logSegments.ToArray();
@@ -187,7 +191,7 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
             .ToDictionary(v => v.key, v => v.val);
         var initialOffsets = await PrepareInitialOffsets(partitionsMap, cancellationToken);
 
-        _partitionsMap = partitionsMap;        
+        _partitionsMap = partitionsMap;
         _partitionsCount = partitionsCount;
         _offsets = new ConcurrentDictionary<byte, ulong>(initialOffsets);
     }
@@ -195,18 +199,17 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
     private async Task<Dictionary<byte, ulong>> PrepareInitialOffsets(Dictionary<byte, string> partitionsMap, CancellationToken cancellationToken)
     {
         var result = new Dictionary<byte, ulong>();
-        
+
         foreach (var item in partitionsMap)
         {
             var latestMsg = await ReadLatestMessage(item.Value, cancellationToken);
             var offset = latestMsg?.Offset ?? 0UL;
-            
+
             result.Add(item.Key, offset);
         }
-        
+
         return result;
     }
-    
 }
 
 public interface IFileLogCleaner : IEventLogLite
