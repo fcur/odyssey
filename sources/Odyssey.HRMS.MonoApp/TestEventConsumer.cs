@@ -8,6 +8,8 @@ public sealed class TestEventConsumer1 : IEventConsumerImpl<TestEvent>
 {
     private readonly ILogger<TestEventConsumer1> _logger;
 
+    public const string GroupName = "Test1";
+    
     public TestEventConsumer1(ILogger<TestEventConsumer1> logger)
     {
         _logger = logger;
@@ -29,6 +31,8 @@ public sealed class TestEventConsumer2 : IEventConsumerImpl<TestEvent>
 {
     private readonly ILogger<TestEventConsumer1> _logger;
 
+    public const string GroupName = "Test2";
+    
     public TestEventConsumer2(ILogger<TestEventConsumer1> logger)
     {
         _logger = logger;

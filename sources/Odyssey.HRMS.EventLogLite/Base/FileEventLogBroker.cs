@@ -1,5 +1,6 @@
 using Odyssey.HRMS.EventLogLite.Entities;
 using System.Collections.Concurrent;
+using System.Security.AccessControl;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Channels;
@@ -42,7 +43,9 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
 
         InitWorkingDirectory();
         await InitCounters(cancellationToken);
-
+        await AssignConsumers(cancellationToken);
+        
+        
         //_ = Task.Factory.StartNew(async () => await StartConsumePublishedEventsInternal(cancellationToken), TaskCreationOptions.LongRunning).Unwrap();
     }
 
@@ -195,6 +198,16 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
         _partitionsCount = partitionsCount;
         _offsets = new ConcurrentDictionary<byte, ulong>(initialOffsets);
     }
+
+    private Task AssignConsumers(CancellationToken cancellationToken)
+    {
+        
+        
+        
+        return Task.CompletedTask;
+    }
+    
+    
 
     private async Task<Dictionary<byte, ulong>> PrepareInitialOffsets(Dictionary<byte, string> partitionsMap, CancellationToken cancellationToken)
     {
