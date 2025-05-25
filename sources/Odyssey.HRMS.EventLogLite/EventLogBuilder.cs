@@ -26,8 +26,8 @@ public class EventLogBuilder
 
     public IReadOnlyCollection<IEventBroker> GetBrokers() { return _brokers; }
     public IReadOnlyCollection<IEventProducer> GetProducers() { return _producers; }
-    public IReadOnlyCollection<IEventConsumer> GetConsumers() {  return _consumers;}
-    
+    public IReadOnlyCollection<IEventConsumer> GetConsumers() { return _consumers; }
+
     public static EventLogBuilder Create(IServiceProvider provider, IConfiguration configuration)
     {
         return new EventLogBuilder(provider, configuration);
@@ -37,14 +37,14 @@ public class EventLogBuilder
     {
         var brokers = _provider.GetServices<IEventBroker>();
         var producers = _provider.GetServices<IEventProducer>();
-        
+
         _producers.AddRange(producers);
         _brokers.AddRange(brokers);
-        
+
         return this;
     }
 
-    public EventLogBuilder AddConsumerHandler<TEventConsumer, TEvent>(string groupName)  
+    public EventLogBuilder AddConsumerHandler<TEventConsumer, TEvent>(string groupName)
         where TEventConsumer : IEventConsumerImpl<TEvent>
         where TEvent : class
     {
@@ -52,14 +52,16 @@ public class EventLogBuilder
         var key = $"{EventLogSettings.ConfigurationSectionName}:{EventLogSettings.ConsumerSectionName}:{groupName}";
         _configuration.GetRequiredSection(key).Bind(consumerConfiguration);
 
-        var handler = _provider.GetRequiredKeyedService<IEventConsumerImpl<TEvent>>(groupName);
-        var consumer = new EventConsumer<TEvent>(handler, consumerConfiguration);
-        _consumers.Add(consumer);
-        
         var broker = _provider.GetRequiredService<IEventBroker<TEvent>>();
-        broker.Join(consumer);
-        
-        return this;
 
+        for (byte i = 0; i < consumerConfiguration.ReplicaCount; i++)
+        {
+            var handler = _provider.GetRequiredKeyedService<IEventConsumerImpl<TEvent>>(groupName);
+            var consumer = new EventConsumer<TEvent>(handler, consumerConfiguration, i);
+            _consumers.Add(consumer);
+            broker.Join(consumer);
+        }
+
+        return this;
     }
 }

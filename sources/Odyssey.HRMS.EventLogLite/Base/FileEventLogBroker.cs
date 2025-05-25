@@ -13,7 +13,7 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
 {
     private readonly EventLogTopic _topic;
     private readonly Channel<LogRespone<TEvent>> _mainChannel;
-    private readonly ConcurrentQueue<IEventConsumer<TEvent>> _consumerChannels;
+    private readonly ConcurrentQueue<IEventConsumer<TEvent>> _consumers;
     
     private string _workingDirectory = null!;
     private byte _partitionsCount = 0;
@@ -30,7 +30,7 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
         ArgumentNullException.ThrowIfNull(topic);
 
         _topic = topic;
-        _consumerChannels = [];
+        _consumers = [];
 
         var opt = new BoundedChannelOptions(1000) { SingleReader = false, SingleWriter = true, FullMode = BoundedChannelFullMode.Wait };
         _mainChannel = Channel.CreateBounded<LogRespone<TEvent>>(opt);
@@ -44,7 +44,6 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
         InitWorkingDirectory();
         await InitCounters(cancellationToken);
         await AssignConsumers(cancellationToken);
-        
         
         //_ = Task.Factory.StartNew(async () => await StartConsumePublishedEventsInternal(cancellationToken), TaskCreationOptions.LongRunning).Unwrap();
     }
@@ -98,7 +97,7 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
 
     public void Join(IEventConsumer<TEvent> consumer, CancellationToken cancellationToken = default)
     {
-        _consumerChannels.Enqueue(consumer);
+        _consumers.Enqueue(consumer);
     }
 
     private byte GetPartition(LogRequest<TEvent> request)
@@ -201,14 +200,34 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
 
     private Task AssignConsumers(CancellationToken cancellationToken)
     {
+        var consumers = _consumers.GroupBy(v=>v.GetGroupName()).ToArray();//.ToDictionary(v=>v.Key, v=>v.ToArray());
+        if (consumers.Length == 0)
+        {
+            return Task.CompletedTask;
+        }
         
-        
+        foreach (var item in consumers)
+        {
+            AssignGroupConsumers(item.ToArray());
+        }
         
         return Task.CompletedTask;
     }
-    
-    
 
+    private void AssignGroupConsumers(IEventConsumer<TEvent>[] consumers)
+    {
+        var consumersCount = consumers.Length;
+        
+        for (byte partition = 0; partition < _partitionsCount; partition++)
+        {
+            var consumerIndex = partition % consumersCount;
+            var logSegmentPath = _partitionsMap[partition];
+            var segment = new FileLogSegment(partition, logSegmentPath);
+            
+            consumers[consumerIndex].AssignSegment(segment);
+        }
+    }
+    
     private async Task<Dictionary<byte, ulong>> PrepareInitialOffsets(Dictionary<byte, string> partitionsMap, CancellationToken cancellationToken)
     {
         var result = new Dictionary<byte, ulong>();

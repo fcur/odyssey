@@ -17,7 +17,7 @@ builder.Services
     .RegisterProducer<JourneyChangedEvent>(builder.Configuration)
     .RegisterProducer<JourneyStoryChangedEvent>(builder.Configuration)
     .RegisterProducer<TestEvent>(builder.Configuration)
-    .RegisterConsumer<TestEventConsumer1, TestEvent>("Test1", 5)
+    .RegisterConsumer<TestEventConsumer1, TestEvent>("Test1")
     .RegisterConsumer<TestEventConsumer2, TestEvent>("Test2");
 
 builder.Services.AddHostedService<EventLogSetupService>();

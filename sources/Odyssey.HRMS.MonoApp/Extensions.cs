@@ -23,7 +23,7 @@ public static class Extensions
         return services;
     }
 
-    public static IServiceCollection RegisterConsumer<TEventConsumerImpl, TEvent>(this IServiceCollection services, string groupName, int replicaCount = 1)
+    public static IServiceCollection RegisterConsumer<TEventConsumerImpl, TEvent>(this IServiceCollection services, string groupName)
         where TEventConsumerImpl : IEventConsumerImpl<TEvent>
         where TEvent : class
     {
