@@ -11,10 +11,10 @@ public sealed class LogMessage<TEvent> where TEvent : class
     /// </summary>
     public ulong Offset { get; set; }
 
-    public static LogMessage<TEvent> Create(LogRequest<TEvent> request, ulong previousOffset)
+    public static LogMessage<TEvent> Create(LogRequest<TEvent> request, ulong offset)
     {
         var timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
-        return new LogMessage<TEvent> { Key = request.Key!, Payload = request.Payload, Timestamp = timestamp, Offset = previousOffset + 1 };
+        return new LogMessage<TEvent> { Key = request.Key!, Payload = request.Payload, Timestamp = timestamp, Offset = offset };
     }
 }
