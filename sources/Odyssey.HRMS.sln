@@ -14,6 +14,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Odyssey.HRMS.Dal.SQLite", "
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Odyssey.HRMS.EventLogLite", "Odyssey.HRMS.EventLogLite\Odyssey.HRMS.EventLogLite.csproj", "{8F40A45E-FC60-425C-B5ED-8649877AD1E4}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Odyssey.HRMS.EventLogLite.Tests", "Odyssey.HRMS.EventLogLite.Tests\Odyssey.HRMS.EventLogLite.Tests.csproj", "{9109BCE5-1523-4713-9E6B-104FC6750013}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -48,5 +50,9 @@ Global
 		{8F40A45E-FC60-425C-B5ED-8649877AD1E4}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{8F40A45E-FC60-425C-B5ED-8649877AD1E4}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{8F40A45E-FC60-425C-B5ED-8649877AD1E4}.Release|Any CPU.Build.0 = Release|Any CPU
+		{9109BCE5-1523-4713-9E6B-104FC6750013}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9109BCE5-1523-4713-9E6B-104FC6750013}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9109BCE5-1523-4713-9E6B-104FC6750013}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9109BCE5-1523-4713-9E6B-104FC6750013}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

@@ -1,6 +1,6 @@
 namespace Odyssey.HRMS.EventLogLite.Entities;
 
-public sealed class LogMessage<TEvent> where TEvent : class
+public sealed record LogMessage<TEvent> where TEvent : class
 {
     public string Key { get; set; }
     public TEvent Payload { get; set; }

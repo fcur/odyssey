@@ -12,6 +12,10 @@ public interface IEventConsumer : IEventLogLite
 {
     byte GetIndex();
     string GetGroupName();
-
+    /// <summary>
+    /// Avoid calling this method frequently due to blocking for concurrent dictionary.
+    /// </summary>
+    /// <returns>Count of assigned segments</returns>
+    int GetSegmentsCount();
     void AssignSegment(LogSegment segment);
 }

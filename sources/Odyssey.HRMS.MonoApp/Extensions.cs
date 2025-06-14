@@ -12,7 +12,10 @@ public static class Extensions
         var key = $"{EventLogSettings.ConfigurationSectionName}:{EventLogSettings.ProducerSectionName}:{typeof(TEvent).Name}";
         configuration.GetRequiredSection(key).Bind(producerConfiguration);
 
-        var broker = new FileEventLogBroker<TEvent>(new EventLogTopic(producerConfiguration.TopicName, producerConfiguration.Partitions));
+        var topic = new EventLogTopic(producerConfiguration.TopicName, producerConfiguration.Partitions);
+
+        var logger = new JsonFileEventLogger();
+        var broker = new FileEventLogBroker<TEvent>(logger, topic);
         var producer = new EventProducer<TEvent>(broker, producerConfiguration);
 
         services.AddSingleton<IEventBroker<TEvent>>(broker);
@@ -20,6 +23,8 @@ public static class Extensions
         services.AddSingleton<IEventProducer<TEvent>>(producer);
         services.AddSingleton<IEventProducer>(producer);
 
+        services.AddTransient<IFileEventLogger, JsonFileEventLogger>();
+        
         return services;
     }
 

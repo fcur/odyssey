@@ -29,6 +29,9 @@ public sealed class EventConsumer<TEvent> : IEventConsumer<TEvent> where TEvent 
     
     public byte GetIndex() => _index;
     public string GetGroupName() => _settings.GroupName;
+    
+    public int GetSegmentsCount()=> _logSegments.Count;
+    
     public void AssignSegment(LogSegment segment)
     {
         _logSegments.AddOrUpdate(segment.PartitionId, segment, (key, value) => segment);

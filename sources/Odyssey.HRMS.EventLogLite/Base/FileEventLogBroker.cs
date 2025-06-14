@@ -1,8 +1,6 @@
 using Odyssey.HRMS.EventLogLite.Entities;
 using System.Collections.Concurrent;
-using System.Globalization;
 using System.Text;
-using System.Threading.Channels;
 
 namespace Odyssey.HRMS.EventLogLite.Base;
 
@@ -10,25 +8,27 @@ namespace Odyssey.HRMS.EventLogLite.Base;
 // https://github.com/cocowalla/serilog-sinks-file-gzip
 public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEvent : class
 {
+    private readonly IFileEventLogger _eventLogger;
     private readonly EventLogTopic _topic;
     // private readonly Channel<LogRespone<TEvent>> _mainChannel;
     private readonly ConcurrentQueue<IEventConsumer<TEvent>> _consumers;
 
-    private string _workingDirectory = null!;
     private byte _partitionsCount = 0;
     private int _tempPartition = 0;
     private ConcurrentDictionary<byte, ulong> _offsets = null!;
     private Dictionary<byte, FileLogSegment> _segmentsMap = null!;
 
-    public FileEventLogBroker(EventLogTopic topic)
+    public FileEventLogBroker(IFileEventLogger eventLogger, EventLogTopic topic)
     {
+        ArgumentNullException.ThrowIfNull(eventLogger);
         ArgumentNullException.ThrowIfNull(topic);
 
+        _eventLogger = eventLogger;
         _topic = topic;
         _consumers = [];
 
         // var opt = new BoundedChannelOptions(1000) { SingleReader = false, SingleWriter = true, FullMode = BoundedChannelFullMode.Wait };
-        // _mainChannel = Channel.CreateBounded<LogRespone<TEvent>>(opt);
+        // _mainChannel = Channel.CreateBounded<LogResponse<TEvent>>(opt);
     }
 
     public async Task Start(CancellationToken cancellationToken = default)
@@ -37,7 +37,7 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
         // NOT possible to decrease partitions count for active topic
 
         await InitWorkingDirectory(cancellationToken);
-        await InitCounters(cancellationToken);
+        await InitBrokerCounters(cancellationToken);
         await AssignConsumers(cancellationToken);
 
         //_ = Task.Factory.StartNew(async () => await StartConsumePublishedEventsInternal(cancellationToken), TaskCreationOptions.LongRunning).Unwrap();
@@ -81,7 +81,7 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
             }
 
             var logMessage = LogMessage<TEvent>.Create(request, newOffset);
-            await segment.Write(logMessage, cancellationToken);
+            await _eventLogger.Write(logMessage,segment, cancellationToken);
 
             // var response = new LogRespone<TEvent>
             // {
@@ -131,15 +131,14 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
 
     private Task InitWorkingDirectory(CancellationToken cancellationToken)
     {
-        _workingDirectory = Path.Combine(Environment.CurrentDirectory, _topic.Value);
-        Directory.CreateDirectory(_workingDirectory);
+        FileLogSegment.InitWorkingDirectory(_topic);
 
         return Task.CompletedTask;
     }
 
-    private async Task InitCounters(CancellationToken cancellationToken)
+    private async Task InitBrokerCounters(CancellationToken cancellationToken)
     {
-        var segmentsMap = FileLogSegment.MapPartitionsWithSegments(_workingDirectory, _topic.Partitions);
+        var segmentsMap = FileLogSegment.MapPartitionsWithSegments(_topic);
         var initialOffsets = await PrepareInitialOffsets(segmentsMap, cancellationToken);
 
         _segmentsMap = segmentsMap;
@@ -149,15 +148,15 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
 
     private Task AssignConsumers(CancellationToken cancellationToken)
     {
-        var consumers = _consumers.GroupBy(v => v.GetGroupName()).ToArray();
-        if (consumers.Length == 0)
+        var groupedConsumers = _consumers.GroupBy(v => v.GetGroupName()).ToArray();
+        if (groupedConsumers.Length == 0)
         {
             return Task.CompletedTask;
         }
 
-        foreach (var item in consumers)
+        foreach (var consumers in groupedConsumers)
         {
-            AssignGroupConsumers(item.ToArray());
+            AssignGroupConsumers(consumers.ToArray());
         }
 
         return Task.CompletedTask;
@@ -176,15 +175,14 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
         }
     }
 
-    private async Task<Dictionary<byte, ulong>> PrepareInitialOffsets(Dictionary<byte, FileLogSegment> partitionsMap,
-        CancellationToken cancellationToken)
+    private async Task<Dictionary<byte, ulong>> PrepareInitialOffsets(Dictionary<byte, FileLogSegment> partitionsMap, CancellationToken cancellationToken)
     {
         var result = new Dictionary<byte, ulong>();
 
         foreach (var item in partitionsMap)
         {
             var segment = item.Value;
-            var latestMsg = await segment.ReadLastMessage<LogMessage<TEvent>>(cancellationToken);
+            var latestMsg = await _eventLogger.ReadLastMessage<TEvent>(segment, cancellationToken);
             var offset = latestMsg?.Offset ?? 0UL;
 
             result.Add(item.Key, offset);
