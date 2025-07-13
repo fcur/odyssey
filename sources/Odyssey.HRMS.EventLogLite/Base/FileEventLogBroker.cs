@@ -81,7 +81,7 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
             }
 
             var logMessage = LogMessage<TEvent>.Create(request, newOffset);
-            await _eventLogger.Write(logMessage,segment, cancellationToken);
+            await _eventLogger.Write(logMessage, segment, cancellationToken);
 
             // var response = new LogRespone<TEvent>
             // {
