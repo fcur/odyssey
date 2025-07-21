@@ -14,7 +14,7 @@ public sealed class EventProducer<TEvent> : IEventProducer<TEvent> where TEvent 
     {
         ArgumentNullException.ThrowIfNull(broker);
         ArgumentNullException.ThrowIfNull(settings);
-
+        // create logger
         _broker = broker;
         _settings = settings;
         var opt = new BoundedChannelOptions(1) { SingleReader = true, SingleWriter = true, FullMode = BoundedChannelFullMode.Wait, 
@@ -22,7 +22,8 @@ public sealed class EventProducer<TEvent> : IEventProducer<TEvent> where TEvent 
         };
         _channel = Channel.CreateBounded<LogRequest<TEvent>>(opt);
     }
-
+    
+    // TBD: publish batch
     public ValueTask Publish(LogRequest<TEvent> request, CancellationToken cancellationToken = default)
     {
         return _channel.Writer.WriteAsync(request, cancellationToken);

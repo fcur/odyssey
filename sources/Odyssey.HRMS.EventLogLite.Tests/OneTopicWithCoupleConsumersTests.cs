@@ -52,7 +52,7 @@ public sealed class OneTopicWithCoupleConsumersTests
     }
 
     [Fact]
-    public async Task Test_Consumers_Assignment()
+    public async Task Should_Assign_Consumers()
     {
         await _broker.Start();
 
@@ -66,18 +66,16 @@ public sealed class OneTopicWithCoupleConsumersTests
         EnsureConsumerAssigment(_consumers[4], 4, Group1Name, 1);
         EnsureConsumerAssigment(_consumers[5], 0, Group2Name, 5);
     }
-
+    
     [Theory, AutoData]
-    public async Task Test_PublishTo_Partition3(TestEvent payload)
+    public async Task Should_PublishTo_Partition3(TestEvent payload)
     {
         var key = "0342b673-b710-4a52-a60d-5993ae42d2ad";
         var ct = CancellationToken.None;
         var request = new LogRequest<TestEvent> { Key = key, Payload = payload };
 
-        await _broker.Start(ct);
-        await _producer.Start(ct);
-        await _producer.Publish(request, ct);
-        await Task.Delay(100, ct);
+        await Start(ct);
+        await Publish(ct, request);
         
         var loggedMessage = GetLoggedEvents(key).FirstOrDefault();
         
@@ -91,6 +89,29 @@ public sealed class OneTopicWithCoupleConsumersTests
         loggedMessage?.Offset.Should().Be(_initialOffsets[3] + 1);
         loggedMessage?.PartitionId.Should().Be(3);
     }
+
+    [Theory, AutoData]
+    public async Task Should_Consume(TestEvent payload1, Guid key1, TestEvent payload2, Guid key2)
+    {
+        var ct = CancellationToken.None;
+        var request1 = new LogRequest<TestEvent> { Key = key1.ToString("D"), Payload = payload1 };
+        var request2 = new LogRequest<TestEvent> { Key = key2.ToString("D"), Payload = payload2 };
+        
+        await Start(ct);
+        await Publish(ct, request1, request2);
+        
+        using var scope = new AssertionScope();
+        
+        
+        
+        
+        
+        
+        
+        
+        
+    }
+    
 
     private void PrepareTopicConsumers(string groupName, byte replicaCount)
     {
@@ -150,6 +171,29 @@ public sealed class OneTopicWithCoupleConsumersTests
         consumer.GetIndex().Should().Be(index);
         consumer.GetGroupName().Should().Be(groupName);
         consumer.GetSegmentsCount().Should().Be(segmentsCount);
+    }
+
+    private async Task Start(CancellationToken ct)
+    {
+        await _broker.Start(ct);
+        await _producer.Start(ct);
+        
+        var consumers = _consumers.Select(v => v.Start(ct)).ToArray();
+        await Task.WhenAll(consumers);
+    }
+
+    private async Task Publish( CancellationToken ct, params LogRequest<TestEvent>[] requests)
+    {
+        if (!requests.Any())
+        {
+            return;
+        }
+
+        foreach (var request in requests)
+        {
+            await _producer.Publish(request, ct);
+        }
+        await Task.Delay(100, ct);
     }
 
     public sealed record TestEvent

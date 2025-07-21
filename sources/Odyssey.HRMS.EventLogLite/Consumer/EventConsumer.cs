@@ -11,13 +11,13 @@ public sealed class EventConsumer<TEvent> : IEventConsumer<TEvent> where TEvent 
     private readonly EventConsumerSettings _settings;
     private readonly Channel<LogRespone<TEvent>> _channel;
     private readonly byte _index;
-    private ConcurrentDictionary<byte, LogSegment> _logSegments;
+    private readonly ConcurrentDictionary<byte, LogSegment> _logSegments;
 
     public EventConsumer(IEventConsumerImpl<TEvent> handler, EventConsumerSettings settings, byte index)
     {
         ArgumentNullException.ThrowIfNull(handler);
         ArgumentNullException.ThrowIfNull(settings);
-
+        // create logger
         _settings = settings;
         _handler = handler;
         _index = index;
