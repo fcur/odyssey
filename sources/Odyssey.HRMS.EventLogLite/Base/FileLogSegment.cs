@@ -11,7 +11,7 @@ public interface IEventLogger<in TSegment> where TSegment : LogSegment
 
     Task<LogMessage<TEvent>?> ReadLastMessage<TEvent>(TSegment segment, CancellationToken cancellationToken = default) where TEvent : class;
     
-    IAsyncEnumerable<LogMessage<TEvent>> Pull<TEvent>(FileLogSegment segment, int batchSize, CancellationToken cancellationToken = default) where TEvent : class;
+    IAsyncEnumerable<LogMessage<TEvent>> Poll<TEvent>(FileLogSegment segment, int batchSize, CancellationToken cancellationToken = default) where TEvent : class;
 }
 
 public interface IFileEventLogger : IEventLogger<FileLogSegment>
@@ -20,7 +20,7 @@ public interface IFileEventLogger : IEventLogger<FileLogSegment>
 
     new Task<LogMessage<TEvent>?> ReadLastMessage<TEvent>(FileLogSegment segment, CancellationToken cancellationToken = default) where TEvent : class;
 
-    new IAsyncEnumerable<LogMessage<TEvent>> Pull<TEvent>(FileLogSegment segment, int batchSize, CancellationToken cancellationToken = default) where TEvent : class;
+    new IAsyncEnumerable<LogMessage<TEvent>> Poll<TEvent>(FileLogSegment segment, int batchSize, CancellationToken cancellationToken = default) where TEvent : class;
 }
 
 public sealed class JsonFileEventLogger : IFileEventLogger
@@ -76,7 +76,7 @@ public sealed class JsonFileEventLogger : IFileEventLogger
         return message;
     }
 
-    public async IAsyncEnumerable<LogMessage<TEvent>> Pull<TEvent>(FileLogSegment segment, int batchSize,  [EnumeratorCancellation] CancellationToken cancellationToken = default) where TEvent : class
+    public async IAsyncEnumerable<LogMessage<TEvent>> Poll<TEvent>(FileLogSegment segment, int batchSize,  [EnumeratorCancellation] CancellationToken cancellationToken = default) where TEvent : class
     {
         await using var fs = new FileStream(segment.FilePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
         if (fs.Length == 0)

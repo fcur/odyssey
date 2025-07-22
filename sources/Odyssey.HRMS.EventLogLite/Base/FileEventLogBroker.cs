@@ -99,12 +99,12 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
         return new EventLogResult(_topic.Value, partitionId, newOffset);
     }
 
-    public void Join(IEventConsumer<TEvent> consumer, CancellationToken cancellationToken = default)
+    public void Join(IEventConsumer<TEvent> consumer)
     {
         _consumers.Enqueue(consumer);
     }
 
-    private async Task<IReadOnlyCollection<LogRespone<TEvent>>> PullEvents(FileLogSegment logSegment, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyCollection<LogRespone<TEvent>>> PollEvents(FileLogSegment logSegment, CancellationToken cancellationToken = default)
     {
         const int batchSize = 100;
         var pullDuration = TimeSpan.FromSeconds(10);
@@ -113,7 +113,7 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
         var cts = new CancellationTokenSource(pullDuration);
         var tokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, cts.Token);
         
-        await foreach (var logMessage in _eventLogger.Pull<TEvent>(logSegment, batchSize, tokenSource.Token))
+        await foreach (var logMessage in _eventLogger.Poll<TEvent>(logSegment, batchSize, tokenSource.Token))
         {
             var response = new LogRespone<TEvent>
             {
