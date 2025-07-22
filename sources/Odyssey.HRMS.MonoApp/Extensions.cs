@@ -14,8 +14,8 @@ public static class Extensions
 
         var topic = new EventLogTopic(producerConfiguration.TopicName, producerConfiguration.Partitions);
 
-        var logger = new JsonFileEventLogger();
-        var broker = new FileEventLogBroker<TEvent>(logger, topic);
+        var eventLogger = new JsonFileEventLogger();
+        var broker = new FileEventLogBroker<TEvent>(eventLogger, topic);
         var producer = new EventProducer<TEvent>(broker, producerConfiguration);
 
         services.AddSingleton<IEventBroker<TEvent>>(broker);

@@ -7,17 +7,21 @@ namespace Odyssey.HRMS.EventLogLite.Consumer;
 
 public sealed class EventConsumer<TEvent> : IEventConsumer<TEvent> where TEvent : class
 {
+    private readonly IEventBroker<TEvent> _broker;
     private readonly IEventConsumerImpl<TEvent> _handler;
     private readonly EventConsumerSettings _settings;
     private readonly Channel<LogRespone<TEvent>> _channel;
     private readonly byte _index;
     private readonly ConcurrentDictionary<byte, LogSegment> _logSegments;
 
-    public EventConsumer(IEventConsumerImpl<TEvent> handler, EventConsumerSettings settings, byte index)
+    public EventConsumer(IEventBroker<TEvent> broker, IEventConsumerImpl<TEvent> handler, EventConsumerSettings settings, byte index)
     {
+        ArgumentNullException.ThrowIfNull(broker);
         ArgumentNullException.ThrowIfNull(handler);
         ArgumentNullException.ThrowIfNull(settings);
         // create logger
+
+        _broker = broker;
         _settings = settings;
         _handler = handler;
         _index = index;

@@ -57,7 +57,7 @@ public class EventLogBuilder
         for (byte i = 0; i < consumerConfiguration.ReplicaCount; i++)
         {
             var handler = _provider.GetRequiredKeyedService<IEventConsumerImpl<TEvent>>(groupName);
-            var consumer = new EventConsumer<TEvent>(handler, consumerConfiguration, i);
+            var consumer = new EventConsumer<TEvent>(broker, handler, consumerConfiguration, i);
             _consumers.Add(consumer);
             broker.Join(consumer);
         }

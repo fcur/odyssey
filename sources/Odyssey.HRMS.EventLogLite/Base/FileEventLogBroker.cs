@@ -104,6 +104,32 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
         _consumers.Enqueue(consumer);
     }
 
+    private async Task<IReadOnlyCollection<LogRespone<TEvent>>> PullEvents(FileLogSegment logSegment, CancellationToken cancellationToken = default)
+    {
+        const int batchSize = 100;
+        var pullDuration = TimeSpan.FromSeconds(10);
+
+        var result = new List<LogRespone<TEvent>>(batchSize);
+        var cts = new CancellationTokenSource(pullDuration);
+        var tokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, cts.Token);
+        
+        await foreach (var logMessage in _eventLogger.Pull<TEvent>(logSegment, batchSize, tokenSource.Token))
+        {
+            var response = new LogRespone<TEvent>
+            {
+                Key = logMessage.Key,
+                Payload = logMessage.Payload,
+                Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(logMessage.Timestamp),
+                Offset = logMessage.Offset,
+                PartitionId = logSegment.PartitionId
+            };
+            
+            result.Add(response);
+        }
+        
+        return result.ToArray();
+    }
+    
     private byte GetPartition(LogRequest<TEvent> request)
     {
         if (request.PartitionId.HasValue)

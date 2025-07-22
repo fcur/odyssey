@@ -105,11 +105,6 @@ public sealed class OneTopicWithCoupleConsumersTests
         
         
         
-        
-        
-        
-        
-        
     }
     
 
@@ -125,7 +120,7 @@ public sealed class OneTopicWithCoupleConsumersTests
             var consumerImplMock = new Mock<IEventConsumerImpl<TestEvent>>();
             consumerImplMock.Setup(v => v.Handle(It.IsAny<LogRespone<TestEvent>>(), It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
 
-            var consumer = new EventConsumer<TestEvent>(consumerImplMock.Object, consumerSettings, i);
+            var consumer = new EventConsumer<TestEvent>(_broker, consumerImplMock.Object, consumerSettings, i);
             _broker.Join(consumer);
             _consumers.Add(consumer);
         }
