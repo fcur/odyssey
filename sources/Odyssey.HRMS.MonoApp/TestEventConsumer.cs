@@ -15,7 +15,7 @@ public sealed class TestEventConsumer1 : IEventConsumerImpl<TestEvent>
         _logger = logger;
     }
 
-    public Task Handle(LogRespone<TestEvent> message, CancellationToken cancellationToken)
+    public Task Handle(LogResponse<TestEvent> message, CancellationToken cancellationToken)
     {
         var payload = message.Payload;
         var offset = message.Offset;
@@ -38,7 +38,7 @@ public sealed class TestEventConsumer2 : IEventConsumerImpl<TestEvent>
         _logger = logger;
     }
 
-    public Task Handle(LogRespone<TestEvent> message, CancellationToken cancellationToken)
+    public Task Handle(LogResponse<TestEvent> message, CancellationToken cancellationToken)
     {
         var payload = message.Payload;
         var offset = message.Offset;

@@ -11,7 +11,7 @@ public interface IEventBroker<TEvent>: IEventBroker where TEvent : class
     Task<EventLogResult> LogEvent(LogRequest<TEvent> request, CancellationToken cancellationToken = default);
 
     void Join(IEventConsumer<TEvent> consumer);
-    Task<IReadOnlyCollection<LogRespone<TEvent>>> PollEvents(LogSegment logSegment, int batchSize, CancellationToken cancellationToken = default);
+    Task<IReadOnlyCollection<LogResponse<TEvent>>> PollEvents(LogSegment logSegment, int batchSize, CancellationToken cancellationToken = default);
 }
 
 

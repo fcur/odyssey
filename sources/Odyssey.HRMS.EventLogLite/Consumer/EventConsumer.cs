@@ -10,7 +10,7 @@ public sealed class EventConsumer<TEvent> : IEventConsumer<TEvent> where TEvent 
     private readonly IEventBroker<TEvent> _broker;
     private readonly IEventConsumerImpl<TEvent> _handler;
     private readonly EventConsumerSettings _settings;
-    private readonly Channel<LogRespone<TEvent>> _channel;
+    private readonly Channel<LogResponse<TEvent>> _channel;
     private readonly byte _index;
     private readonly ConcurrentDictionary<byte, LogSegment> _logSegments;
 
@@ -28,7 +28,7 @@ public sealed class EventConsumer<TEvent> : IEventConsumer<TEvent> where TEvent 
         _logSegments = new ConcurrentDictionary<byte, LogSegment>();
 
         var opt = new BoundedChannelOptions(settings.BatchSize) { SingleReader = true, SingleWriter = true, FullMode = BoundedChannelFullMode.Wait };
-        _channel = Channel.CreateBounded<LogRespone<TEvent>>(opt);
+        _channel = Channel.CreateBounded<LogResponse<TEvent>>(opt);
     }
 
     public byte GetIndex() => _index;
@@ -53,6 +53,7 @@ public sealed class EventConsumer<TEvent> : IEventConsumer<TEvent> where TEvent 
         var logSegment = new LogSegment(_index);
         var pullDuration = _settings.PullDuration;
         var batchSize = _settings.BatchSize;
+        var groupName  = _settings.GroupName;
 
         while (true)
         {
@@ -63,6 +64,9 @@ public sealed class EventConsumer<TEvent> : IEventConsumer<TEvent> where TEvent 
 
             foreach (var item in events)
             {
+                item.Metadata["GroupName"] = groupName;
+                item.Metadata["EventTime"] = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                
                 await _handler.Handle(item, tokenSource.Token);
                 // TBD: commit
             }
@@ -74,7 +78,7 @@ public sealed class EventConsumer<TEvent> : IEventConsumer<TEvent> where TEvent 
         return Task.CompletedTask;
     }
 
-    public async Task Broadcast(LogRespone<TEvent> response, CancellationToken cancellationToken = default)
+    public async Task Broadcast(LogResponse<TEvent> response, CancellationToken cancellationToken = default)
     {
         await _channel.Writer.WriteAsync(response, cancellationToken);
     }

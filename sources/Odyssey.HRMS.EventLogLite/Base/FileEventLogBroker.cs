@@ -93,20 +93,21 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
         _consumers.Enqueue(consumer);
     }
 
-    public async Task<IReadOnlyCollection<LogRespone<TEvent>>> PollEvents(LogSegment logSegment, int batchSize, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyCollection<LogResponse<TEvent>>> PollEvents(LogSegment logSegment, int batchSize, CancellationToken cancellationToken = default)
     {
-        var result = new List<LogRespone<TEvent>>(batchSize);
+        var result = new List<LogResponse<TEvent>>(batchSize);
         var segment = _segmentsMap[logSegment.PartitionId];
         
         await foreach (var logMessage in _eventLogger.Poll<TEvent>(segment, batchSize, cancellationToken))
         {
-            var response = new LogRespone<TEvent>
+            var response = new LogResponse<TEvent>
             {
                 Key = logMessage.Key,
                 Payload = logMessage.Payload,
                 Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(logMessage.Timestamp),
                 Offset = logMessage.Offset,
-                PartitionId = logSegment.PartitionId
+                PartitionId = logSegment.PartitionId,
+                Metadata = new Dictionary<string, object>()
             };
             
             result.Add(response);
