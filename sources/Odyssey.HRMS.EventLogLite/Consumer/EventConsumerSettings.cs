@@ -10,5 +10,7 @@ public sealed class EventConsumerSettings(string groupName) : EventLogBaseSettin
 
     public byte ReplicaCount { get; set; } = 1;
 
-    public int Capacity { get; set; } = 1000;
+    public int BatchSize { get; set; } = 100;
+
+    public TimeSpan PullDuration { get; set; } = TimeSpan.FromSeconds(5);
 }

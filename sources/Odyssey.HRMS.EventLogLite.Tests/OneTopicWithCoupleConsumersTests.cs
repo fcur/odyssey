@@ -17,7 +17,7 @@ public sealed class OneTopicWithCoupleConsumersTests
     private const string TopicName = "test";
     private const byte Partitions = 5;
     private const uint FileSizeLimitBytes = 1024 * 1024;
-    private const int ChannelCapacity = 1000;
+    private const int BatchSize = 100;
     private const string Group1Name = "Group1";
     private const string Group2Name = "Group2";
     private const string EventName = "Event1";
@@ -98,11 +98,17 @@ public sealed class OneTopicWithCoupleConsumersTests
         var request2 = new LogRequest<TestEvent> { Key = key2.ToString("D"), Payload = payload2 };
         
         await Start(ct);
+        // await _broker.Start(ct);
+        // await _producer.Start(ct);
+        // var consumers = _consumers.Select(v => v.Start(ct)).ToArray();
+        // await Task.WhenAll(consumers);
         await Publish(ct, request1, request2);
+        PrepareConsumer();
         
         using var scope = new AssertionScope();
         
-        
+        _eventLoggerMock.Verify(v=>v.Write(It.IsAny<LogMessage<TestEvent>>(), It.IsAny<FileLogSegment>(), It.IsAny<CancellationToken>()), Times.Exactly(2));
+
         
         
     }
@@ -112,13 +118,16 @@ public sealed class OneTopicWithCoupleConsumersTests
     {
         var consumerSettings = new EventConsumerSettings(groupName)
         {
-            TopicName = TopicName, Capacity = ChannelCapacity, ReplicaCount = replicaCount, EventName = EventName
+            TopicName = TopicName, BatchSize = BatchSize, ReplicaCount = replicaCount, EventName = EventName,
+            PullDuration = TimeSpan.FromSeconds(10)
         };
 
         for (byte i = 0; i < replicaCount; i++)
         {
             var consumerImplMock = new Mock<IEventConsumerImpl<TestEvent>>();
-            consumerImplMock.Setup(v => v.Handle(It.IsAny<LogRespone<TestEvent>>(), It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+            consumerImplMock.Setup(v => 
+                    v.Handle(It.IsAny<LogRespone<TestEvent>>(), It.IsAny<CancellationToken>()))
+                .Returns(Task.CompletedTask);
 
             var consumer = new EventConsumer<TestEvent>(_broker, consumerImplMock.Object, consumerSettings, i);
             _broker.Join(consumer);
@@ -138,11 +147,33 @@ public sealed class OneTopicWithCoupleConsumersTests
         }
         
         eventLoggerMock.Setup(v=>v.Write<TestEvent>(It.IsAny<LogMessage<TestEvent>>(), It.IsAny<FileLogSegment>(), It.IsAny<CancellationToken>()))
-            .Callback<LogMessage<TestEvent>, FileLogSegment, CancellationToken > ((logMessage, segment, _) => SaveLoggedEvent(logMessage, segment));
+            .Callback<LogMessage<TestEvent>, FileLogSegment, CancellationToken> ((logMessage, segment, _) => SaveLoggedEvent(logMessage, segment));
 
         return eventLoggerMock;
     }
 
+    private void PrepareConsumer()
+    {
+        var segmentItems = _loggedEvents.GroupBy(v=>v.PartitionId)
+            .ToDictionary(v  => v.Key, v => v.ToArray());
+
+        foreach (var item in segmentItems)
+        {
+            var partitionId = item.Key;
+            var testEvents = item.Value.Select(v => new LogMessage<TestEvent>
+            {
+                Payload = v.Payload, Key = v.Key!, Offset = v.Offset, Timestamp = v.Timestamp.ToUnixTimeMilliseconds()
+            }).ToAsyncEnumerable();
+            
+            _eventLoggerMock.Setup(v => v.Poll<TestEvent>(It.Is<FileLogSegment>(s => s.PartitionId == partitionId), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+                .Returns(testEvents)
+                .Callback<FileLogSegment, int, CancellationToken>((segment, batchSize, _) =>
+                {
+                    Console.WriteLine($"Requested segment: {segment}, batchSize: {batchSize}");
+                });
+        }
+    }
+    
     private void SaveLoggedEvent(LogMessage<TestEvent> logMessage, FileLogSegment segment)
     {
         var response = new LogRespone<TestEvent>
@@ -177,7 +208,7 @@ public sealed class OneTopicWithCoupleConsumersTests
         await Task.WhenAll(consumers);
     }
 
-    private async Task Publish( CancellationToken ct, params LogRequest<TestEvent>[] requests)
+    private async Task Publish(CancellationToken ct, params LogRequest<TestEvent>[] requests)
     {
         if (!requests.Any())
         {
@@ -188,6 +219,7 @@ public sealed class OneTopicWithCoupleConsumersTests
         {
             await _producer.Publish(request, ct);
         }
+        
         await Task.Delay(100, ct);
     }
 

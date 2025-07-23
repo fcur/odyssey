@@ -11,7 +11,7 @@ public interface IEventBroker<TEvent>: IEventBroker where TEvent : class
     Task<EventLogResult> LogEvent(LogRequest<TEvent> request, CancellationToken cancellationToken = default);
 
     void Join(IEventConsumer<TEvent> consumer);
-    Task<IReadOnlyCollection<LogRespone<TEvent>>> PollEvents(FileLogSegment logSegment, CancellationToken cancellationToken = default);
+    Task<IReadOnlyCollection<LogRespone<TEvent>>> PollEvents(LogSegment logSegment, int batchSize, CancellationToken cancellationToken = default);
 }
 
 
@@ -21,7 +21,7 @@ public sealed record EventLogTopic(string Value, byte Partitions);
 
 
 
-public abstract class LogSegment(byte partitionId)
+public class LogSegment(byte partitionId)
 {
     public byte PartitionId => partitionId;
 }

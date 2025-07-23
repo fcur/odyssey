@@ -82,17 +82,6 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
 
             var logMessage = LogMessage<TEvent>.Create(request, newOffset);
             await _eventLogger.Write(logMessage, segment, cancellationToken);
-
-            // var response = new LogRespone<TEvent>
-            // {
-            //     Key = logMessage.Key,
-            //     Payload = logMessage.Payload,
-            //     Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(logMessage.Timestamp),
-            //     Offset = logMessage.Offset,
-            //     PartitionId = partitionId
-            // };
-            //
-            // await _mainChannel.Writer.WriteAsync(response, cancellationToken);
             break;
         }
 
@@ -104,16 +93,12 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
         _consumers.Enqueue(consumer);
     }
 
-    public async Task<IReadOnlyCollection<LogRespone<TEvent>>> PollEvents(FileLogSegment logSegment, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyCollection<LogRespone<TEvent>>> PollEvents(LogSegment logSegment, int batchSize, CancellationToken cancellationToken = default)
     {
-        const int batchSize = 100;
-        var pullDuration = TimeSpan.FromSeconds(10);
-
         var result = new List<LogRespone<TEvent>>(batchSize);
-        var cts = new CancellationTokenSource(pullDuration);
-        var tokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, cts.Token);
+        var segment = _segmentsMap[logSegment.PartitionId];
         
-        await foreach (var logMessage in _eventLogger.Poll<TEvent>(logSegment, batchSize, tokenSource.Token))
+        await foreach (var logMessage in _eventLogger.Poll<TEvent>(segment, batchSize, cancellationToken))
         {
             var response = new LogRespone<TEvent>
             {

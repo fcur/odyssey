@@ -25,17 +25,17 @@ public sealed class EventConsumer<TEvent> : IEventConsumer<TEvent> where TEvent 
         _settings = settings;
         _handler = handler;
         _index = index;
-        _logSegments = new ConcurrentDictionary<byte, LogSegment> ();
-        
-        var opt = new BoundedChannelOptions(settings.Capacity) { SingleReader = true, SingleWriter = true, FullMode = BoundedChannelFullMode.Wait };
+        _logSegments = new ConcurrentDictionary<byte, LogSegment>();
+
+        var opt = new BoundedChannelOptions(settings.BatchSize) { SingleReader = true, SingleWriter = true, FullMode = BoundedChannelFullMode.Wait };
         _channel = Channel.CreateBounded<LogRespone<TEvent>>(opt);
     }
-    
+
     public byte GetIndex() => _index;
     public string GetGroupName() => _settings.GroupName;
-    
-    public int GetSegmentsCount()=> _logSegments.Count;
-    
+
+    public int GetSegmentsCount() => _logSegments.Count;
+
     public void AssignSegment(LogSegment segment)
     {
         _logSegments.AddOrUpdate(segment.PartitionId, segment, (key, value) => segment);
@@ -44,17 +44,26 @@ public sealed class EventConsumer<TEvent> : IEventConsumer<TEvent> where TEvent 
     public Task Start(CancellationToken cancellationToken = default)
     {
         _ = Task.Factory.StartNew(async () => await StartConsumeInternal(cancellationToken), TaskCreationOptions.LongRunning).Unwrap();
-        
+
         return Task.CompletedTask;
     }
 
     private async Task StartConsumeInternal(CancellationToken cancellationToken)
     {
-        while (await _channel.Reader.WaitToReadAsync(cancellationToken))
+        var logSegment = new LogSegment(_index);
+        var pullDuration = _settings.PullDuration;
+        var batchSize = _settings.BatchSize;
+
+        while (true)
         {
-            if (_channel.Reader.TryRead(out var item))
+            var cts = new CancellationTokenSource(pullDuration);
+            var tokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, cts.Token);
+
+            var events = await _broker.PollEvents(logSegment, batchSize, tokenSource.Token);
+
+            foreach (var item in events)
             {
-                await _handler.Handle(item, cancellationToken);
+                await _handler.Handle(item, tokenSource.Token);
                 // TBD: commit
             }
         }
@@ -64,9 +73,9 @@ public sealed class EventConsumer<TEvent> : IEventConsumer<TEvent> where TEvent 
     {
         return Task.CompletedTask;
     }
-    
+
     public async Task Broadcast(LogRespone<TEvent> response, CancellationToken cancellationToken = default)
     {
-        await _channel.Writer.WriteAsync(response,  cancellationToken);
+        await _channel.Writer.WriteAsync(response, cancellationToken);
     }
 }
