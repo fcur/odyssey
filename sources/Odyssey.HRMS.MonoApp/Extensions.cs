@@ -8,14 +8,19 @@ public static class Extensions
 {
     public static IServiceCollection RegisterProducer<TEvent>(this IServiceCollection services, IConfigurationRoot configuration) where TEvent : class
     {
+        var brokerConfiguration = new EventBrokerSettings();
+        var brokerConfigKey = $"{EventLogSettings.ConfigurationSectionName}:{EventLogSettings.BrokerSectionName}:{EventLogSettings.OffsetsTopicSection}";
+        configuration.GetRequiredSection(brokerConfigKey).Bind(brokerConfiguration);
+
         var producerConfiguration = new EventProducerSettings();
-        var key = $"{EventLogSettings.ConfigurationSectionName}:{EventLogSettings.ProducerSectionName}:{typeof(TEvent).Name}";
-        configuration.GetRequiredSection(key).Bind(producerConfiguration);
+        var producerConfigKey = $"{EventLogSettings.ConfigurationSectionName}:{EventLogSettings.ProducerSectionName}:{typeof(TEvent).Name}";
+        configuration.GetRequiredSection(producerConfigKey).Bind(producerConfiguration);
 
         var topic = new EventLogTopic(producerConfiguration.TopicName, producerConfiguration.Partitions);
 
         var eventLogger = new JsonFileEventLogger();
-        var broker = new FileEventLogBroker<TEvent>(eventLogger, topic);
+        // TODO: register broker separately 
+        var broker = new FileEventLogBroker<TEvent>(brokerConfiguration, eventLogger, topic);
         var producer = new EventProducer<TEvent>(broker, producerConfiguration);
 
         services.AddSingleton<IEventBroker<TEvent>>(broker);

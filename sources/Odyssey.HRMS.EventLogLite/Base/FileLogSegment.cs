@@ -11,7 +11,9 @@ public interface IEventLogger<in TSegment> where TSegment : LogSegment
 
     Task<LogMessage<TEvent>?> ReadLastMessage<TEvent>(TSegment segment, CancellationToken cancellationToken = default) where TEvent : class;
     
-    IAsyncEnumerable<LogMessage<TEvent>> Poll<TEvent>(FileLogSegment segment, int batchSize, CancellationToken cancellationToken = default) where TEvent : class;
+    IAsyncEnumerable<LogMessage<TEvent>> Poll<TEvent>(PollRequest request, FileLogSegment segment, CancellationToken cancellationToken = default) where TEvent : class;
+
+    Task Commit(LogOffsetRequest request, FileLogSegment segment, CancellationToken cancellationToken = default);
 }
 
 public interface IFileEventLogger : IEventLogger<FileLogSegment>
@@ -20,7 +22,9 @@ public interface IFileEventLogger : IEventLogger<FileLogSegment>
 
     new Task<LogMessage<TEvent>?> ReadLastMessage<TEvent>(FileLogSegment segment, CancellationToken cancellationToken = default) where TEvent : class;
 
-    new IAsyncEnumerable<LogMessage<TEvent>> Poll<TEvent>(FileLogSegment segment, int batchSize, CancellationToken cancellationToken = default) where TEvent : class;
+    new IAsyncEnumerable<LogMessage<TEvent>> Poll<TEvent>(PollRequest request, FileLogSegment segment, CancellationToken cancellationToken = default) where TEvent : class;
+
+    new Task Commit(LogOffsetRequest request, FileLogSegment segment, CancellationToken cancellationToken = default);
 }
 
 public sealed class JsonFileEventLogger : IFileEventLogger
@@ -29,7 +33,7 @@ public sealed class JsonFileEventLogger : IFileEventLogger
     private const byte EventLogDivider = 10;
     private static readonly JsonSerializerOptions SerializerOptions = new() { WriteIndented = false };
     private readonly ConcurrentDictionary<byte, long> _lastPosition = new();
-
+    
     public async Task Write<TEvent>(LogMessage<TEvent> logMessage, FileLogSegment segment, CancellationToken cancellationToken = default)
         where TEvent : class
     {
@@ -76,7 +80,7 @@ public sealed class JsonFileEventLogger : IFileEventLogger
         return message;
     }
 
-    public async IAsyncEnumerable<LogMessage<TEvent>> Poll<TEvent>(FileLogSegment segment, int batchSize,  [EnumeratorCancellation] CancellationToken cancellationToken = default) where TEvent : class
+    public async IAsyncEnumerable<LogMessage<TEvent>> Poll<TEvent>(PollRequest request, FileLogSegment segment, [EnumeratorCancellation] CancellationToken cancellationToken = default) where TEvent : class
     {
         await using var fs = new FileStream(segment.FilePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
         if (fs.Length == 0)
@@ -90,7 +94,7 @@ public sealed class JsonFileEventLogger : IFileEventLogger
         fs.Seek(lastPosition, SeekOrigin.Begin);
 
         using var reader = new StreamReader(fs);
-        while (await reader.ReadLineAsync(cancellationToken) is { } line && counter < batchSize)
+        while (await reader.ReadLineAsync(cancellationToken) is { } line && counter < request.BatchSize)
         {
             var position = fs.Position;
             _lastPosition.AddOrUpdate(segment.PartitionId, position, (key, value) => position);
@@ -103,6 +107,14 @@ public sealed class JsonFileEventLogger : IFileEventLogger
             
             yield return message;
         }
+    }
+
+    public async Task Commit(LogOffsetRequest request, FileLogSegment segment, CancellationToken cancellationToken = default)
+    {
+        await using var fs = new FileStream(segment.FilePath, FileMode.OpenOrCreate, FileAccess.Write);
+        fs.Seek(0, SeekOrigin.End);
+        await fs.WriteAsync(new[] { EventLogDivider }, cancellationToken);
+        await JsonSerializer.SerializeAsync(fs, request, SerializerOptions, cancellationToken);
     }
 }
 
@@ -124,9 +136,9 @@ public class FileLogSegment(byte partitionId, string filePath) : LogSegment(part
         return segmentsMap;
     }
 
-    public static void InitWorkingDirectory(EventLogTopic topic)
+    public static void InitWorkingDirectory(string topicName)
     {
-        var workingDirectory = Path.Combine(Environment.CurrentDirectory, topic.Value);
+        var workingDirectory = Path.Combine(Environment.CurrentDirectory, topicName);
         Directory.CreateDirectory(workingDirectory);
     }
 

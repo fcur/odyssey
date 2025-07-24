@@ -1,4 +1,5 @@
 using Odyssey.HRMS.EventLogLite.Entities;
+using Odyssey.HRMS.EventLogLite.Producer;
 using System.Collections.Concurrent;
 using System.Text;
 
@@ -8,6 +9,7 @@ namespace Odyssey.HRMS.EventLogLite.Base;
 // https://github.com/cocowalla/serilog-sinks-file-gzip
 public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEvent : class
 {
+    private readonly EventBrokerSettings _brokerSettings;
     private readonly IFileEventLogger _eventLogger;
     private readonly EventLogTopic _topic;
     // private readonly Channel<LogRespone<TEvent>> _mainChannel;
@@ -17,12 +19,15 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
     private int _tempPartition = 0;
     private ConcurrentDictionary<byte, ulong> _offsets = null!;
     private Dictionary<byte, FileLogSegment> _segmentsMap = null!;
+    private Dictionary<byte, FileLogSegment> _offsetsMap = null!;
 
-    public FileEventLogBroker(IFileEventLogger eventLogger, EventLogTopic topic)
+    public FileEventLogBroker(EventBrokerSettings brokerSettings, IFileEventLogger eventLogger, EventLogTopic topic)
     {
+        ArgumentNullException.ThrowIfNull(brokerSettings);
         ArgumentNullException.ThrowIfNull(eventLogger);
         ArgumentNullException.ThrowIfNull(topic);
 
+        _brokerSettings = brokerSettings;
         _eventLogger = eventLogger;
         _topic = topic;
         _consumers = [];
@@ -37,6 +42,7 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
         // NOT possible to decrease partitions count for active topic
 
         await InitWorkingDirectory(cancellationToken);
+        InitOffsetTopic();
         await InitBrokerCounters(cancellationToken);
         await AssignConsumers(cancellationToken);
 
@@ -93,12 +99,12 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
         _consumers.Enqueue(consumer);
     }
 
-    public async Task<IReadOnlyCollection<LogResponse<TEvent>>> PollEvents(LogSegment logSegment, int batchSize, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyCollection<LogResponse<TEvent>>> PollEvents(PollRequest request, LogSegment logSegment, CancellationToken cancellationToken = default)
     {
-        var result = new List<LogResponse<TEvent>>(batchSize);
+        var result = new List<LogResponse<TEvent>>(request.BatchSize);
         var segment = _segmentsMap[logSegment.PartitionId];
         
-        await foreach (var logMessage in _eventLogger.Poll<TEvent>(segment, batchSize, cancellationToken))
+        await foreach (var logMessage in _eventLogger.Poll<TEvent>(request, segment, cancellationToken))
         {
             var response = new LogResponse<TEvent>
             {
@@ -107,13 +113,21 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
                 Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(logMessage.Timestamp),
                 Offset = logMessage.Offset,
                 PartitionId = logSegment.PartitionId,
-                Metadata = new Dictionary<string, object>()
+                Metadata = logMessage.Metadata
             };
             
             result.Add(response);
         }
         
         return result.ToArray();
+    }
+
+    public Task Commit(LogOffsetRequest request, CancellationToken cancellationToken = default)
+    {
+        var partitionId = GetPartition(request.Key);
+        var offsetFileSegment = _offsetsMap[partitionId];
+
+        return _eventLogger.Commit(request, offsetFileSegment, cancellationToken);
     }
     
     private byte GetPartition(LogRequest<TEvent> request)
@@ -135,6 +149,12 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
         return GetRoundRobinPartition();
     }
 
+    private byte GetPartition(LogOffsetKey key)
+    {
+        var hash = MurmurHash2.Hash32(Encoding.UTF8.GetBytes(key.ToString()), 63);
+        return Convert.ToByte(hash % _brokerSettings.Partitions);
+    }
+
     private byte GetRoundRobinPartition()
     {
         Interlocked.Exchange(ref _tempPartition, (_tempPartition + 1) % _partitionsCount);
@@ -143,11 +163,20 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
 
     private Task InitWorkingDirectory(CancellationToken cancellationToken)
     {
-        FileLogSegment.InitWorkingDirectory(_topic);
+        FileLogSegment.InitWorkingDirectory(_topic.Value);
+        FileLogSegment.InitWorkingDirectory(_brokerSettings.TopicName);
 
         return Task.CompletedTask;
     }
 
+    private void InitOffsetTopic()
+    {
+        var topic = new EventLogTopic(_brokerSettings.TopicName, _brokerSettings.Partitions);
+        var segmentsMap = FileLogSegment.MapPartitionsWithSegments(topic);
+
+        _offsetsMap = segmentsMap;
+    }
+    
     private async Task InitBrokerCounters(CancellationToken cancellationToken)
     {
         var segmentsMap = FileLogSegment.MapPartitionsWithSegments(_topic);
@@ -209,8 +238,9 @@ public interface IFileLogCleaner : IEventLogLite
 }
 
 // TODO: check log segments in background
-// STAGE1: archive|rename *.del
-// STAGE2: delete
+// STAGE1: compact offsets
+// STAGE2: archive|rename *.del
+// STAGE3: delete
 public sealed class FileLogCleaner : IFileLogCleaner
 {
     public Task Start(CancellationToken cancellationToken = default)

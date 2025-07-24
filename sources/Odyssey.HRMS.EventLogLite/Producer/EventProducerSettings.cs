@@ -8,3 +8,9 @@ public sealed class EventProducerSettings : EventLogBaseSettings
     public uint FileSizeLimitBytes { get; set; } = 1000_000;
     public byte Partitions { get; set; } = 1;
 }
+
+public sealed class EventBrokerSettings : EventLogBaseSettings
+{
+    public uint FileSizeLimitBytes { get; set; } = 1000;
+    public byte Partitions { get; set; } = 50;
+}
