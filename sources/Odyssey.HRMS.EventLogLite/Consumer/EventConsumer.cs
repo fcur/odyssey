@@ -1,6 +1,7 @@
 ﻿using Odyssey.HRMS.EventLogLite.Base;
 using Odyssey.HRMS.EventLogLite.Entities;
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Threading.Channels;
 
 namespace Odyssey.HRMS.EventLogLite.Consumer;
@@ -61,7 +62,8 @@ public sealed class EventConsumer<TEvent> : IEventConsumer<TEvent> where TEvent 
 
     private async Task StartConsumeInternal(CancellationToken cancellationToken)
     {
-        var logSegment = new LogSegment(_index);
+        var sw = new Stopwatch();
+        var assignedSegments = _logSegments.Values.ToArray();
 
         while (true)
         {
@@ -73,18 +75,31 @@ public sealed class EventConsumer<TEvent> : IEventConsumer<TEvent> where TEvent 
                 TopicName = _settings.TopicName,
                 GroupName = _settings.GroupName
             };
-
-            var events = await _broker.PollEvents(pollRequest, logSegment, tokenSource.Token);
-
+            
+            sw.Start();
+            // var events = await _broker.PollEvents(pollRequest, logSegment, tokenSource.Token);
+            var tasks = assignedSegments.Select(v => _broker.PollEvents(pollRequest, v, tokenSource.Token));
+            var results = await Task.WhenAll(tasks);
+            var events = results.SelectMany(v=>v).ToArray();
+            sw.Stop();
+            
             foreach (var item in events)
             {
-                item.Metadata[nameof(EventLogBaseSettings.TopicName)] = _settings.TopicName;
-                item.Metadata[nameof(EventConsumerSettings.GroupName)] = _settings.GroupName;
                 // TODO: to const
+                item.Metadata["TopicName"] = _settings.TopicName;
+                item.Metadata["GroupName"] = _settings.GroupName;
                 item.Metadata["EventTime"] = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
                 await Broadcast(item, tokenSource.Token);
             }
+            
+            var pullingPause = _settings.PullDuration -  sw.Elapsed;
+            if (pullingPause > TimeSpan.Zero)
+            {
+                // ReSharper disable once PossiblyMistakenUseOfCancellationToken
+                await Task.Delay(pullingPause, cancellationToken);
+            }
+            sw.Reset();
         }
         // ReSharper disable once FunctionNeverReturns
     }

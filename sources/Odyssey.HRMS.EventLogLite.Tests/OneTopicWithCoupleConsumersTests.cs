@@ -22,6 +22,7 @@ public sealed class OneTopicWithCoupleConsumersTests
     private const string Group1Name = "Group1";
     private const string Group2Name = "Group2";
     private const string EventName = "Event1";
+    private static readonly TimeSpan PullDuration = TimeSpan.FromSeconds(1);
 
     private readonly Mock<IFileEventLogger> _eventLoggerMock;
     private readonly FileEventLogBroker<TestEvent> _broker;
@@ -86,8 +87,7 @@ public sealed class OneTopicWithCoupleConsumersTests
 
         using var scope = new AssertionScope();
 
-        _eventLoggerMock.Verify(v => v.Write(It.IsAny<LogMessage<TestEvent>>(), It.IsAny<FileLogSegment>(), It.IsAny<CancellationToken>()),
-            Times.Once);
+        _eventLoggerMock.Verify(v => v.Write(It.IsAny<LogMessage<TestEvent>>(), It.IsAny<FileLogSegment>(), It.IsAny<CancellationToken>()), Times.Once);
         loggedMessage.Should().NotBeNull();
         loggedMessage?.Key.Should().Be(key);
         loggedMessage?.Payload.Should().Be(payload);
@@ -106,8 +106,9 @@ public sealed class OneTopicWithCoupleConsumersTests
         await Start(cts.Token);
         await Publish(cts.Token, request1, request2);
 
+        await Task.Delay(3000, CancellationToken.None);
         using var scope = new AssertionScope();
-
+        
         _eventLoggerMock.Verify(v => v.Write(It.IsAny<LogMessage<TestEvent>>(), It.IsAny<FileLogSegment>(), It.IsAny<CancellationToken>()), Times.Exactly(2));
         _eventLoggerMock.Verify(v => v.Poll<TestEvent>(It.IsAny<PollRequest>(), It.IsAny<FileLogSegment>(), It.IsAny<CancellationToken>()), Times.AtLeastOnce);
         _eventLoggerMock.Verify(v => v.Commit(It.IsAny<LogOffsetRequest>(), It.IsAny<FileLogSegment>(), It.IsAny<CancellationToken>()), Times.Exactly(4));
@@ -124,7 +125,7 @@ public sealed class OneTopicWithCoupleConsumersTests
             BatchSize = BatchSize,
             ReplicaCount = replicaCount,
             EventName = EventName,
-            PullDuration = TimeSpan.FromSeconds(15)
+            PullDuration = PullDuration
         };
 
         for (byte i = 0; i < replicaCount; i++)
@@ -157,6 +158,11 @@ public sealed class OneTopicWithCoupleConsumersTests
         eventLoggerMock.Setup(v => v.Poll<TestEvent>(It.IsAny<PollRequest>(), It.IsAny<FileLogSegment>(), It.IsAny<CancellationToken>()))
             .Returns((PollRequest request, FileLogSegment segment, CancellationToken _) =>
             {
+                // _outputHelper.WriteLine($"--------- Polling started  ---------{Environment.NewLine}" 
+                //                         + $"GroupName: {request.GroupName}{Environment.NewLine}"
+                //                         + $"TopicName: {request.TopicName}{Environment.NewLine}"
+                //                         + $"PartitionId: {segment.PartitionId} {Environment.NewLine}");
+                
                 if (_loggedEvents.IsEmpty)
                 {
                     return Array.Empty<LogMessage<TestEvent>>().ToAsyncEnumerable();
@@ -176,11 +182,11 @@ public sealed class OneTopicWithCoupleConsumersTests
                     return Array.Empty<LogMessage<TestEvent>>().ToAsyncEnumerable();
                 }
                 
-                _outputHelper.WriteLine($"--------- Poll results ---------{Environment.NewLine}" 
-                                        + $"PartitionId: {segment.PartitionId} {Environment.NewLine}"
-                                        + $"TopicName: {request.TopicName}{Environment.NewLine}"
-                                        + $"GroupName: {request.GroupName}{Environment.NewLine}"
-                                        + $"Events: {foundEvents.Length}{Environment.NewLine}");
+                // _outputHelper.WriteLine($"--------- Polling results ---------{Environment.NewLine}" 
+                //                         + $"GroupName: {request.GroupName}{Environment.NewLine}"
+                //                         + $"TopicName: {request.TopicName}{Environment.NewLine}"
+                //                         + $"PartitionId: {segment.PartitionId} {Environment.NewLine}"
+                //                         + $"Events: {foundEvents.Length}{Environment.NewLine}");
                 
                 var resultEvents = foundEvents.Select(v => new LogMessage<TestEvent>
                 {
@@ -202,15 +208,12 @@ public sealed class OneTopicWithCoupleConsumersTests
 
     private void HandleCommitedEvent(LogOffsetRequest request, FileLogSegment segment)
     {
-        var unhandledEvents = _unhandledEvents[request.Key.ConsumerGroupName];
-        if (unhandledEvents.IsEmpty)
+        if (!_unhandledEvents.TryGetValue(request.Key.ConsumerGroupName, out var unhandledEvents) 
+            || unhandledEvents.IsEmpty
+            || !unhandledEvents.TryDequeue(out var response))
         {
             return;
         }
-        
-        _ = unhandledEvents.TryDequeue(out var response);
-
-        using var scope = new AssertionScope();
         
         var foundPartitionId = response!.PartitionId;
         var requestedPartitionId = request.Key.PartitionId;
@@ -224,6 +227,7 @@ public sealed class OneTopicWithCoupleConsumersTests
         var foundOffset = response.Offset;
         var requestedOffset = request.Value.NextMsgOffset - 1;
         
+        // using var scope = new AssertionScope();
         // foundPartitionId.Should().Be(requestedPartitionId);
         // foundTopicName.Should().Be(requestedTopicName);
         // foundGroupName.Should().Be(requestedGroupName);
@@ -231,10 +235,10 @@ public sealed class OneTopicWithCoupleConsumersTests
         
         _outputHelper.WriteLine($"--------- Commited event ---------{Environment.NewLine}" 
                                 + $"Key: {response.Key}{Environment.NewLine}"
-                                + $"PartitionId: {foundPartitionId} vs {foundPartitionId}{Environment.NewLine}"
-                                + $"TopicName: {foundTopicName} vs {requestedTopicName}{Environment.NewLine}"
-                                + $"GroupName: {foundGroupName} vs {requestedGroupName}{Environment.NewLine}"
-                                + $"Offset: {foundOffset} vs {requestedOffset}{Environment.NewLine}");
+                                + $"PartitionId [found: {foundPartitionId}, commited: {requestedPartitionId}]{Environment.NewLine}"
+                                + $"GroupName [found: {foundGroupName}, commited: {requestedGroupName}]{Environment.NewLine}"
+                                + $"TopicName [found: {foundTopicName}, commited: {requestedTopicName}]{Environment.NewLine}"
+                                + $"Offset [found: {foundOffset}, commited: {requestedOffset}]{Environment.NewLine}");
     }
 
     private void SaveLoggedEvent(LogMessage<TestEvent> logMessage, FileLogSegment segment)
@@ -251,15 +255,18 @@ public sealed class OneTopicWithCoupleConsumersTests
 
         _loggedEvents.Add(response);
 
-        foreach (var container in _unhandledEvents)
+        foreach (var key in _unhandledEvents.Keys)
         {
-            container.Value.Enqueue(response);
+            _unhandledEvents[key].Enqueue(response);
         }
+
+        var unhandledEvents = _unhandledEvents.Values.SelectMany(v=>v.ToArray()).ToArray();
         
         _outputHelper.WriteLine($"--------- New message ---------{Environment.NewLine}" 
                                 + $"Key: {logMessage.Key}{Environment.NewLine}"
                                 + $"PartitionId: {segment.PartitionId}{Environment.NewLine}"
-                                + $"Offset: {logMessage.Offset}{Environment.NewLine}");
+                                + $"Offset: {logMessage.Offset}{Environment.NewLine}"
+                                + $"Unhandled events: {unhandledEvents.Length}{Environment.NewLine}");
     }
 
     private void HandledEventResponse(LogResponse<TestEvent> responseMessage)
