@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using Odyssey.HRMS.EventLogLite.Entities;
 using Odyssey.HRMS.EventLogLite.Producer;
 using System.Collections.Concurrent;
@@ -9,6 +10,7 @@ namespace Odyssey.HRMS.EventLogLite.Base;
 // https://github.com/cocowalla/serilog-sinks-file-gzip
 public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEvent : class
 {
+    private readonly ILogger<FileEventLogBroker<TEvent>> _logger;
     private readonly EventBrokerSettings _brokerSettings;
     private readonly IFileEventLogger _eventLogger;
     private readonly EventLogTopic _topic;
@@ -21,12 +23,14 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
     private Dictionary<byte, FileLogSegment> _segmentsMap = null!;
     private Dictionary<byte, FileLogSegment> _offsetsMap = null!;
 
-    public FileEventLogBroker(EventBrokerSettings brokerSettings, IFileEventLogger eventLogger, EventLogTopic topic)
+    public FileEventLogBroker(ILogger<FileEventLogBroker<TEvent>> logger, EventBrokerSettings brokerSettings, IFileEventLogger eventLogger, EventLogTopic topic)
     {
+        ArgumentNullException.ThrowIfNull(logger);
         ArgumentNullException.ThrowIfNull(brokerSettings);
         ArgumentNullException.ThrowIfNull(eventLogger);
         ArgumentNullException.ThrowIfNull(topic);
 
+        _logger = logger;
         _brokerSettings = brokerSettings;
         _eventLogger = eventLogger;
         _topic = topic;
@@ -87,6 +91,9 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
             }
 
             var logMessage = LogMessage<TEvent>.Create(request, newOffset);
+
+            _logger.LogDebug("New message with Key: {Key}, PartitionId: {PartitionId}, Offset: {Offset}", logMessage.Key, segment.PartitionId, logMessage.Offset);
+            
             await _eventLogger.Write(logMessage, segment, cancellationToken);
             break;
         }
@@ -124,8 +131,14 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
 
     public Task Commit(LogOffsetRequest request, CancellationToken cancellationToken = default)
     {
-        var partitionId = GetPartition(request.Key);
-        var offsetFileSegment = _offsetsMap[partitionId];
+        var offsetPartitionId = GetPartition(request.Key);
+        var offsetFileSegment = _offsetsMap[offsetPartitionId];
+        
+        var (groupName, topicName, partitionId) = request.Key;
+        _ = request.Metadata.TryGetValue("Key", out var itemKey);
+
+        _logger.LogDebug("Offset committing in progress, Key: {Key}, Topic: {TopicName}, Group: {GroupName}, Partition: {PartitionId}, Offset: {Offset}, RequestId: {RequestId}",
+            itemKey?.ToString(), topicName, groupName, partitionId, request.Value.NextMsgOffset - 1, request.RequestId);
 
         return _eventLogger.Commit(request, offsetFileSegment, cancellationToken);
     }

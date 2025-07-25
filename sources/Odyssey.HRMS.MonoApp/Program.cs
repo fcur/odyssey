@@ -14,6 +14,7 @@ builder.Services.AddOpenApi();
 builder.Services.ConfigureDb(builder.Configuration.GetConnectionString("DefaultConnection"));
 
 builder.Services
+    .AddLogging()
     .RegisterProducer<JourneyChangedEvent>(builder.Configuration)
     .RegisterProducer<JourneyStoryChangedEvent>(builder.Configuration)
     .RegisterProducer<TestEvent>(builder.Configuration)

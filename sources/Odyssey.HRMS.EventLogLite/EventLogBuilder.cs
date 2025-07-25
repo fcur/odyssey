@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Odyssey.HRMS.EventLogLite.Base;
 using Odyssey.HRMS.EventLogLite.Consumer;
 using Odyssey.HRMS.EventLogLite.Producer;
@@ -57,7 +58,9 @@ public class EventLogBuilder
         for (byte i = 0; i < consumerConfiguration.ReplicaCount; i++)
         {
             var handler = _provider.GetRequiredKeyedService<IEventConsumerImpl<TEvent>>(groupName);
-            var consumer = new EventConsumer<TEvent>(broker, handler, consumerConfiguration, i);
+            var logger = _provider.GetRequiredService<ILogger<EventConsumer<TEvent>>>();
+            
+            var consumer = new EventConsumer<TEvent>(logger, broker, handler, consumerConfiguration, i);
             _consumers.Add(consumer);
             broker.Join(consumer);
         }

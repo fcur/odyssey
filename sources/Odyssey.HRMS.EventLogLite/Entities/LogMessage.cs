@@ -32,6 +32,8 @@ public sealed class PollRequest
     public int BatchSize { get; init; }
     public string TopicName { get; init; } = null!;
     public string GroupName { get; init; } = null!;
+    public Guid RequestId { get; init; }
+    public DateTimeOffset OccuredAt { get; init; }
 }
 
 public sealed class LogOffsetRequest
@@ -39,6 +41,8 @@ public sealed class LogOffsetRequest
     public LogOffsetKey Key { get; init; } = null!;
     public LogOffsetValue Value { get; init; } =  null!;
     public Dictionary<string, object> Metadata { get; init; } = new();
+    public Guid RequestId { get; init; }
+    public DateTimeOffset OccuredAt { get; init; }
 }
 
 public sealed record LogOffsetKey(string ConsumerGroupName, string TopicName, byte PartitionId)

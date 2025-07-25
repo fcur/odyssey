@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using Odyssey.HRMS.EventLogLite.Base;
 using Odyssey.HRMS.EventLogLite.Entities;
 using System.Threading.Channels;
@@ -6,17 +7,21 @@ namespace Odyssey.HRMS.EventLogLite.Producer;
 
 public sealed class EventProducer<TEvent> : IEventProducer<TEvent> where TEvent : class
 {
+    private readonly ILogger<EventProducer<TEvent>> _logger;
     private readonly IEventBroker<TEvent> _broker;
     private readonly EventProducerSettings _settings;
     private readonly Channel<LogRequest<TEvent>> _channel;
 
-    public EventProducer(IEventBroker<TEvent> broker, EventProducerSettings settings)
+    public EventProducer(ILogger<EventProducer<TEvent>> logger, IEventBroker<TEvent> broker, EventProducerSettings settings)
     {
+        ArgumentNullException.ThrowIfNull(logger);
         ArgumentNullException.ThrowIfNull(broker);
         ArgumentNullException.ThrowIfNull(settings);
-        // create logger
+        
+        _logger = logger;
         _broker = broker;
         _settings = settings;
+        
         var opt = new BoundedChannelOptions(1) { SingleReader = true, SingleWriter = true, FullMode = BoundedChannelFullMode.Wait, 
             // AllowSynchronousContinuations = true 
         };
