@@ -49,7 +49,9 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
         InitOffsetTopic();
         await InitBrokerCounters(cancellationToken);
         await AssignConsumers(cancellationToken);
-
+        
+        
+        
         //_ = Task.Factory.StartNew(async () => await StartConsumePublishedEventsInternal(cancellationToken), TaskCreationOptions.LongRunning).Unwrap();
     }
 

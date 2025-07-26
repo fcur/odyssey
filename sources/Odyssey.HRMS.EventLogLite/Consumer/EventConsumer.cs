@@ -54,6 +54,8 @@ public sealed class EventConsumer<TEvent> : IEventConsumer<TEvent> where TEvent 
 
     public Task Start(CancellationToken cancellationToken = default)
     {
+        // TODO: assign offsets for each consumer
+        
         _ = Task.Factory.StartNew(async () => await StartConsumeInternal(cancellationToken), TaskCreationOptions.LongRunning).Unwrap();
         _ = Task.Factory.StartNew(async () => await StarHandlingInternal(cancellationToken), TaskCreationOptions.LongRunning).Unwrap();
 
