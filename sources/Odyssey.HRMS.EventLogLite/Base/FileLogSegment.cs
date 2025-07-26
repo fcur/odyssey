@@ -8,23 +8,19 @@ namespace Odyssey.HRMS.EventLogLite.Base;
 public interface IEventLogger<in TSegment> where TSegment : LogSegment
 {
     Task Write<TEvent>(LogMessage<TEvent> logMessage, TSegment segment, CancellationToken cancellationToken = default) where TEvent : class;
-
     Task<LogMessage<TEvent>?> ReadLastMessage<TEvent>(TSegment segment, CancellationToken cancellationToken = default) where TEvent : class;
-    
-    IAsyncEnumerable<LogMessage<TEvent>> Poll<TEvent>(PollRequest request, FileLogSegment segment, CancellationToken cancellationToken = default) where TEvent : class;
-
-    Task Commit(LogOffsetRequest request, FileLogSegment segment, CancellationToken cancellationToken = default);
+    IAsyncEnumerable<LogMessage<TEvent>> Poll<TEvent>(PollRequest request, TSegment segment, CancellationToken cancellationToken = default) where TEvent : class;
+    Task Commit(LogOffsetRequest request, TSegment segment, CancellationToken cancellationToken = default);
+    Task<LogOffsetValue> ReadLatestOffset(LogOffsetKey key, TSegment segment, CancellationToken cancellationToken = default);
 }
 
 public interface IFileEventLogger : IEventLogger<FileLogSegment>
 {
     new Task Write<TEvent>(LogMessage<TEvent> logMessage, FileLogSegment segment, CancellationToken cancellationToken = default) where TEvent : class;
-
     new Task<LogMessage<TEvent>?> ReadLastMessage<TEvent>(FileLogSegment segment, CancellationToken cancellationToken = default) where TEvent : class;
-
     new IAsyncEnumerable<LogMessage<TEvent>> Poll<TEvent>(PollRequest request, FileLogSegment segment, CancellationToken cancellationToken = default) where TEvent : class;
-
     new Task Commit(LogOffsetRequest request, FileLogSegment segment, CancellationToken cancellationToken = default);
+    new Task<LogOffsetValue> ReadLatestOffset(LogOffsetKey key, FileLogSegment segment, CancellationToken cancellationToken = default);
 }
 
 public sealed class JsonFileEventLogger : IFileEventLogger
@@ -116,6 +112,44 @@ public sealed class JsonFileEventLogger : IFileEventLogger
         await fs.WriteAsync(new[] { EventLogDivider }, cancellationToken);
         await JsonSerializer.SerializeAsync(fs, request, SerializerOptions, cancellationToken);
     }
+
+    public async Task<LogOffsetValue> ReadLatestOffset(LogOffsetKey key, FileLogSegment segment, CancellationToken cancellationToken = default)
+    {
+        await using var fs = new FileStream(segment.FilePath, FileMode.OpenOrCreate, FileAccess.Read);
+        if (fs.Length == 0)
+        {
+            return LogOffsetValue.New;
+        }
+
+        fs.Seek(-1, SeekOrigin.End);
+        var readBuffer = new byte[1];
+        var writeBuffer = new Stack<byte>();
+
+        while (fs.Position > 0)
+        {
+            await fs.ReadExactlyAsync(readBuffer, 0, 1, cancellationToken);
+            
+            if (readBuffer[0] == EventLogDivider)
+            {
+                using var ms = new MemoryStream(writeBuffer.ToArray());
+                var logOffset = await JsonSerializer.DeserializeAsync<LogOffsetRequest>(ms, cancellationToken: cancellationToken);
+                
+                if (logOffset!.Key == key)
+                {
+                    return logOffset.Value;
+                }
+                
+                writeBuffer.Clear();
+                continue;
+            }
+
+            writeBuffer.Push(readBuffer[0]);
+            fs.Seek(-2, SeekOrigin.Current);
+        }
+        
+        return LogOffsetValue.New;
+    }
+    
 }
 
 public class FileLogSegment(byte partitionId, string filePath) : LogSegment(partitionId)

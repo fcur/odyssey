@@ -16,6 +16,7 @@ public sealed class EventConsumer<TEvent> : IEventConsumer<TEvent> where TEvent 
     private readonly Channel<LogResponse<TEvent>> _channel;
     private readonly byte _index;
     private readonly ConcurrentDictionary<byte, LogSegment> _logSegments;
+    private ConcurrentDictionary<byte, ulong> _offsets = null!;
 
     public EventConsumer(ILogger<EventConsumer<TEvent>> logger,
         IEventBroker<TEvent> broker,
@@ -35,6 +36,7 @@ public sealed class EventConsumer<TEvent> : IEventConsumer<TEvent> where TEvent 
         _handler = handler;
         _index = index;
         _logSegments = new ConcurrentDictionary<byte, LogSegment>();
+        _offsets = new ConcurrentDictionary<byte, ulong>();
 
         var opt = new BoundedChannelOptions(settings.BatchSize) { SingleReader = true, SingleWriter = true, FullMode = BoundedChannelFullMode.Wait };
         _channel = Channel.CreateBounded<LogResponse<TEvent>>(opt);
