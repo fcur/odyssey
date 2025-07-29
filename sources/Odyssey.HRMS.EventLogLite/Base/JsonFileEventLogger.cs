@@ -9,18 +9,18 @@ public interface IEventLogger<in TSegment> where TSegment : LogSegment
 {
     Task Write<TEvent>(LogMessage<TEvent> logMessage, TSegment segment, CancellationToken cancellationToken = default) where TEvent : class;
     Task<LogMessage<TEvent>?> ReadLastMessage<TEvent>(TSegment segment, CancellationToken cancellationToken = default) where TEvent : class;
-    IAsyncEnumerable<LogMessage<TEvent>> Poll<TEvent>(PollRequest request, TSegment segment, CancellationToken cancellationToken = default) where TEvent : class;
+    IAsyncEnumerable<LogMessage<TEvent>> Poll<TEvent>(PollRequest request, TSegment segment, long offset, CancellationToken cancellationToken = default) where TEvent : class;
     Task Commit(LogOffsetRequest request, TSegment segment, CancellationToken cancellationToken = default);
-    Task<LogOffsetValue> ReadLatestOffset(LogOffsetKey key, TSegment segment, CancellationToken cancellationToken = default);
+    Task<ReadOffsetResult> ReadLatestOffset(LogOffsetKey key, TSegment segment, CancellationToken cancellationToken = default);
 }
 
 public interface IFileEventLogger : IEventLogger<FileLogSegment>
 {
     new Task Write<TEvent>(LogMessage<TEvent> logMessage, FileLogSegment segment, CancellationToken cancellationToken = default) where TEvent : class;
     new Task<LogMessage<TEvent>?> ReadLastMessage<TEvent>(FileLogSegment segment, CancellationToken cancellationToken = default) where TEvent : class;
-    new IAsyncEnumerable<LogMessage<TEvent>> Poll<TEvent>(PollRequest request, FileLogSegment segment, CancellationToken cancellationToken = default) where TEvent : class;
+    new IAsyncEnumerable<LogMessage<TEvent>> Poll<TEvent>(PollRequest request, FileLogSegment segment, long offset, CancellationToken cancellationToken = default) where TEvent : class;
     new Task Commit(LogOffsetRequest request, FileLogSegment segment, CancellationToken cancellationToken = default);
-    new Task<LogOffsetValue> ReadLatestOffset(LogOffsetKey key, FileLogSegment segment, CancellationToken cancellationToken = default);
+    new Task<ReadOffsetResult> ReadLatestOffset(LogOffsetKey key, FileLogSegment segment, CancellationToken cancellationToken = default);
 }
 
 public sealed class JsonFileEventLogger : IFileEventLogger
@@ -76,7 +76,7 @@ public sealed class JsonFileEventLogger : IFileEventLogger
         return message;
     }
 
-    public async IAsyncEnumerable<LogMessage<TEvent>> Poll<TEvent>(PollRequest request, FileLogSegment segment, [EnumeratorCancellation] CancellationToken cancellationToken = default) where TEvent : class
+    public async IAsyncEnumerable<LogMessage<TEvent>> Poll<TEvent>(PollRequest request, FileLogSegment segment, long offset, [EnumeratorCancellation] CancellationToken cancellationToken = default) where TEvent : class
     {
         await using var fs = new FileStream(segment.FilePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
         if (fs.Length == 0)
@@ -84,10 +84,11 @@ public sealed class JsonFileEventLogger : IFileEventLogger
             yield break;
         }
 
-        var lastPosition = _lastPosition.GetValueOrDefault(segment.PartitionId, 0);
+        // var lastPosition = _lastPosition.GetValueOrDefault(segment.PartitionId, 0);
         var counter = 0;
 
-        fs.Seek(lastPosition, SeekOrigin.Begin);
+        // fs.Seek(lastPosition, SeekOrigin.Begin);
+        fs.Seek(offset, SeekOrigin.Begin);
 
         using var reader = new StreamReader(fs);
         while (await reader.ReadLineAsync(cancellationToken) is { } line && counter < request.BatchSize)
@@ -113,12 +114,12 @@ public sealed class JsonFileEventLogger : IFileEventLogger
         await JsonSerializer.SerializeAsync(fs, request, SerializerOptions, cancellationToken);
     }
 
-    public async Task<LogOffsetValue> ReadLatestOffset(LogOffsetKey key, FileLogSegment segment, CancellationToken cancellationToken = default)
+    public async Task<ReadOffsetResult> ReadLatestOffset(LogOffsetKey key, FileLogSegment segment, CancellationToken cancellationToken = default)
     {
         await using var fs = new FileStream(segment.FilePath, FileMode.OpenOrCreate, FileAccess.Read);
         if (fs.Length == 0)
         {
-            return LogOffsetValue.New;
+            return ReadOffsetResult.CreateNew(key);
         }
 
         fs.Seek(-1, SeekOrigin.End);
@@ -136,7 +137,10 @@ public sealed class JsonFileEventLogger : IFileEventLogger
                 
                 if (logOffset!.Key == key)
                 {
-                    return logOffset.Value;
+                    return new ReadOffsetResult
+                    {
+                        Key = key, Value = logOffset.Value, Metadata = logOffset.Metadata, OccuredAt = logOffset.OccuredAt
+                    };
                 }
                 
                 writeBuffer.Clear();
@@ -147,6 +151,6 @@ public sealed class JsonFileEventLogger : IFileEventLogger
             fs.Seek(-2, SeekOrigin.Current);
         }
         
-        return LogOffsetValue.New;
+        return ReadOffsetResult.CreateNew(key);
     }
 }

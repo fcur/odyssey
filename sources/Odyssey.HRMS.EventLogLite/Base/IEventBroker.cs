@@ -10,12 +10,13 @@ public interface IEventBroker<TEvent>: IEventBroker where TEvent : class
 {
     Task<EventLogResult> LogEvent(LogRequest<TEvent> request, CancellationToken cancellationToken = default);
     void Join(IEventConsumer<TEvent> consumer);
-    Task<IReadOnlyCollection<LogResponse<TEvent>>> PollEvents(PollRequest request, LogSegment logSegment, CancellationToken cancellationToken = default);
+    Task<IReadOnlyCollection<LogResponse<TEvent>>> PollEvents(PollRequest request, LogSegment logSegment, long offset, CancellationToken cancellationToken = default);
     Task Commit(LogOffsetRequest request, CancellationToken cancellationToken = default);
+    Task<ReadOffsetResult> ReadLatestOffset(ReadOffsetRequest request, CancellationToken cancellationToken = default);
 }
 
 
-public sealed record EventLogResult(string TopicName, byte PartitionId, ulong Offset);
+public sealed record EventLogResult(string TopicName, byte PartitionId, long Offset);
 
 public sealed record EventLogTopic(string Value, byte Partitions);
 

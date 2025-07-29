@@ -19,7 +19,7 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
 
     private byte _partitionsCount = 0;
     private int _tempPartition = 0;
-    private ConcurrentDictionary<byte, ulong> _offsets = null!;
+    private ConcurrentDictionary<byte, long> _offsets = null!;
     private Dictionary<byte, FileLogSegment> _segmentsMap = null!;
     private Dictionary<byte, FileLogSegment> _offsetsMap = null!;
 
@@ -73,7 +73,7 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
 
     public async Task<EventLogResult> LogEvent(LogRequest<TEvent> request, CancellationToken cancellationToken = default)
     {
-        ulong newOffset = 0;
+        long newOffset = 0;
         
         var partitionId = GetPartition(request);
 
@@ -108,12 +108,12 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
         _consumers.Enqueue(consumer);
     }
 
-    public async Task<IReadOnlyCollection<LogResponse<TEvent>>> PollEvents(PollRequest request, LogSegment logSegment, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyCollection<LogResponse<TEvent>>> PollEvents(PollRequest request, LogSegment logSegment, long offset, CancellationToken cancellationToken = default)
     {
         var result = new List<LogResponse<TEvent>>(request.BatchSize);
         var segment = _segmentsMap[logSegment.PartitionId];
         
-        await foreach (var logMessage in _eventLogger.Poll<TEvent>(request, segment, cancellationToken))
+        await foreach (var logMessage in _eventLogger.Poll<TEvent>(request, segment, offset, cancellationToken))
         {
             var response = new LogResponse<TEvent>
             {
@@ -143,6 +143,19 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
             itemKey?.ToString(), topicName, groupName, partitionId, request.Value.NextMsgOffset - 1, request.RequestId);
 
         return _eventLogger.Commit(request, offsetFileSegment, cancellationToken);
+    }
+
+    public Task<ReadOffsetResult> ReadLatestOffset(ReadOffsetRequest request, CancellationToken cancellationToken = default)
+    {
+        var offsetPartitionId = GetPartition(request.Key);
+        var offsetFileSegment = _offsetsMap[offsetPartitionId];
+        
+        var (groupName, topicName, partitionId) = request.Key;
+
+        _logger.LogDebug("Offset reading in progress, Topic: {TopicName}, Group: {GroupName}, Partition: {PartitionId}, RequestId: {RequestId}",
+            topicName, groupName, partitionId, request.RequestId);
+
+        return _eventLogger.ReadLatestOffset(request.Key, offsetFileSegment, cancellationToken);
     }
     
     private byte GetPartition(LogRequest<TEvent> request)
@@ -199,7 +212,7 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
 
         _segmentsMap = segmentsMap;
         _partitionsCount = Convert.ToByte(segmentsMap.Count);
-        _offsets = new ConcurrentDictionary<byte, ulong>(initialOffsets);
+        _offsets = new ConcurrentDictionary<byte, long>(initialOffsets);
     }
 
     private Task AssignConsumers(CancellationToken cancellationToken)
@@ -231,15 +244,15 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
         }
     }
 
-    private async Task<Dictionary<byte, ulong>> PrepareInitialOffsets(Dictionary<byte, FileLogSegment> partitionsMap, CancellationToken cancellationToken)
+    private async Task<Dictionary<byte, long>> PrepareInitialOffsets(Dictionary<byte, FileLogSegment> partitionsMap, CancellationToken cancellationToken)
     {
-        var result = new Dictionary<byte, ulong>();
+        var result = new Dictionary<byte, long>();
 
         foreach (var item in partitionsMap)
         {
             var segment = item.Value;
             var latestMsg = await _eventLogger.ReadLastMessage<TEvent>(segment, cancellationToken);
-            var offset = latestMsg?.Offset ?? 0UL;
+            var offset = latestMsg?.Offset ?? 0L;
 
             result.Add(item.Key, offset);
         }

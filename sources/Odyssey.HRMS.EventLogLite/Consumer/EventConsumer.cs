@@ -16,7 +16,7 @@ public sealed class EventConsumer<TEvent> : IEventConsumer<TEvent> where TEvent 
     private readonly Channel<LogResponse<TEvent>> _channel;
     private readonly byte _index;
     private readonly ConcurrentDictionary<byte, LogSegment> _logSegments;
-    private ConcurrentDictionary<byte, ulong> _offsets = null!;
+    private ConcurrentDictionary<byte, long> _offsets = null!;
 
     public EventConsumer(ILogger<EventConsumer<TEvent>> logger,
         IEventBroker<TEvent> broker,
@@ -36,7 +36,7 @@ public sealed class EventConsumer<TEvent> : IEventConsumer<TEvent> where TEvent 
         _handler = handler;
         _index = index;
         _logSegments = new ConcurrentDictionary<byte, LogSegment>();
-        _offsets = new ConcurrentDictionary<byte, ulong>();
+        _offsets = new ConcurrentDictionary<byte, long>();
 
         var opt = new BoundedChannelOptions(settings.BatchSize) { SingleReader = true, SingleWriter = true, FullMode = BoundedChannelFullMode.Wait };
         _channel = Channel.CreateBounded<LogResponse<TEvent>>(opt);
@@ -52,14 +52,13 @@ public sealed class EventConsumer<TEvent> : IEventConsumer<TEvent> where TEvent 
         _logSegments.AddOrUpdate(segment.PartitionId, segment, (key, value) => segment);
     }
 
-    public Task Start(CancellationToken cancellationToken = default)
+    public async Task Start(CancellationToken cancellationToken = default)
     {
         // TODO: assign offsets for each consumer
+        await ReadInitialOffsets(cancellationToken);
         
         _ = Task.Factory.StartNew(async () => await StartConsumeInternal(cancellationToken), TaskCreationOptions.LongRunning).Unwrap();
         _ = Task.Factory.StartNew(async () => await StarHandlingInternal(cancellationToken), TaskCreationOptions.LongRunning).Unwrap();
-
-        return Task.CompletedTask;
     }
 
     public Task Stop(CancellationToken cancellationToken = default)
@@ -99,7 +98,7 @@ public sealed class EventConsumer<TEvent> : IEventConsumer<TEvent> where TEvent 
                 _logger.LogDebug("Pulling is being started, RequestId: {RequestId}", requestId);
 
                 sw.Start();
-                var tasks = assignedSegments.Select(v => _broker.PollEvents(pollRequest, v, tokenSource.Token));
+                var tasks = assignedSegments.Select(v => _broker.PollEvents(pollRequest, v, _offsets[v.PartitionId], tokenSource.Token));
                 var results = await Task.WhenAll(tasks);
                 var events = results.SelectMany(v => v).ToArray();
                 sw.Stop();
@@ -161,6 +160,19 @@ public sealed class EventConsumer<TEvent> : IEventConsumer<TEvent> where TEvent 
             
                 _logger.LogDebug("Offset committing finished");
             }
+        }
+    }
+
+    private async Task ReadInitialOffsets(CancellationToken cancellationToken)
+    {
+        var keys = _logSegments.Keys.Select(v=> new LogOffsetKey(_settings.GroupName, _settings.TopicName, v));
+
+        var tasks = keys.Select(v => _broker.ReadLatestOffset(new ReadOffsetRequest { Key = v }, cancellationToken));
+        var results = await Task.WhenAll(tasks);
+
+        foreach (var item in results)
+        {
+            _offsets.AddOrUpdate(item.Key.PartitionId, item.Value.NextMsgOffset, (key, value)=> item.Value.NextMsgOffset);
         }
     }
 }

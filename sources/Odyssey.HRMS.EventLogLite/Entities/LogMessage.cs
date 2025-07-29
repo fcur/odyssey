@@ -10,9 +10,9 @@ public sealed record LogMessage<TEvent> where TEvent : class
     /// <summary>
     /// Unique number inside partition 
     /// </summary>
-    public ulong Offset { get; set; }
+    public long Offset { get; set; }
 
-    public static LogMessage<TEvent> Create(LogRequest<TEvent> request, ulong offset)
+    public static LogMessage<TEvent> Create(LogRequest<TEvent> request, long offset)
     {
         var timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
@@ -53,7 +53,25 @@ public sealed record LogOffsetKey(string ConsumerGroupName, string TopicName, by
     }
 }
 
-public sealed record LogOffsetValue(ulong NextMsgOffset, long CommitTimestamp)
+public sealed record LogOffsetValue(long NextMsgOffset, long CommitTimestamp)
 {
     public static LogOffsetValue New => new LogOffsetValue(0, 0);
+}
+
+
+public sealed class ReadOffsetRequest
+{
+    public LogOffsetKey Key { get; init; } = null!;
+    public Guid RequestId { get; init; }
+    public DateTimeOffset OccuredAt { get; init; }
+}
+
+public sealed class ReadOffsetResult
+{
+    public LogOffsetKey Key { get; init; } = null!;
+    public LogOffsetValue Value { get; init; } =  null!;
+    public Dictionary<string, object> Metadata { get; init; } = new();
+    public DateTimeOffset? OccuredAt { get; init; }
+    
+    public static ReadOffsetResult CreateNew(LogOffsetKey key) => new ReadOffsetResult() { Key = key, Value = LogOffsetValue.New };
 }

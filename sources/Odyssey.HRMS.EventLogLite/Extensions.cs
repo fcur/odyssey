@@ -8,7 +8,7 @@ public static class Extensions
         return state;
     }
 
-    public static ScopeState WithOffset(this ScopeState state, ulong offset) => state.With("Offset", offset);
+    public static ScopeState WithOffset(this ScopeState state, long offset) => state.With("Offset", offset);
     public static ScopeState WithTopic(this ScopeState state, string topic) => state.With("Topic", topic);
     public static ScopeState WithGroup(this ScopeState state, string group) => state.With("Group", group);
     public static ScopeState WithPartition(this ScopeState state, byte partition) => state.With("Partition", partition);
