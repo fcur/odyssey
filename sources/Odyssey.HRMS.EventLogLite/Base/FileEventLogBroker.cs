@@ -19,7 +19,7 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
 
     private byte _partitionsCount = 0;
     private int _tempPartition = 0;
-    private ConcurrentDictionary<byte, long> _offsets = null!;
+    private ConcurrentDictionary<byte, long> _latestOffsets = null!;
     private Dictionary<byte, FileLogSegment> _segmentsMap = null!;
     private Dictionary<byte, FileLogSegment> _offsetsMap = null!;
 
@@ -81,13 +81,13 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
         
         while (true)
         {
-            if (!_offsets.TryGetValue(partitionId, out var offsetResult))
+            if (!_latestOffsets.TryGetValue(partitionId, out var offsetResult))
             {
                 throw new ApplicationException($"No offset found for partition: '{partitionId}'");
             }
 
             newOffset = offsetResult + 1;
-            if (!_offsets.TryUpdate(partitionId, newOffset, offsetResult))
+            if (!_latestOffsets.TryUpdate(partitionId, newOffset, offsetResult))
             {
                 continue;
             }
@@ -145,7 +145,7 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
         return _eventLogger.Commit(request, offsetFileSegment, cancellationToken);
     }
 
-    public Task<ReadOffsetResult> ReadLatestOffset(ReadOffsetRequest request, CancellationToken cancellationToken = default)
+    public Task<ReadOffsetResult> ReadSavedOffset(ReadOffsetRequest request, CancellationToken cancellationToken = default)
     {
         var offsetPartitionId = GetPartition(request.Key);
         var offsetFileSegment = _offsetsMap[offsetPartitionId];
@@ -155,7 +155,7 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
         _logger.LogDebug("Offset reading in progress, Topic: {TopicName}, Group: {GroupName}, Partition: {PartitionId}, RequestId: {RequestId}",
             topicName, groupName, partitionId, request.RequestId);
 
-        return _eventLogger.ReadLatestOffset(request.Key, offsetFileSegment, cancellationToken);
+        return _eventLogger.ReadSavedOffset(request.Key, offsetFileSegment, cancellationToken);
     }
     
     private byte GetPartition(LogRequest<TEvent> request)
@@ -208,11 +208,11 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
     private async Task InitBrokerCounters(CancellationToken cancellationToken)
     {
         var segmentsMap = FileLogSegment.MapPartitionsWithSegments(_topic);
-        var initialOffsets = await PrepareInitialOffsets(segmentsMap, cancellationToken);
+        var latestOffsets = await PrepareLatestOffsets(segmentsMap, cancellationToken);
 
         _segmentsMap = segmentsMap;
         _partitionsCount = Convert.ToByte(segmentsMap.Count);
-        _offsets = new ConcurrentDictionary<byte, long>(initialOffsets);
+        _latestOffsets = new ConcurrentDictionary<byte, long>(latestOffsets);
     }
 
     private Task AssignConsumers(CancellationToken cancellationToken)
@@ -244,7 +244,7 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
         }
     }
 
-    private async Task<Dictionary<byte, long>> PrepareInitialOffsets(Dictionary<byte, FileLogSegment> partitionsMap, CancellationToken cancellationToken)
+    private async Task<Dictionary<byte, long>> PrepareLatestOffsets(Dictionary<byte, FileLogSegment> partitionsMap, CancellationToken cancellationToken)
     {
         var result = new Dictionary<byte, long>();
 

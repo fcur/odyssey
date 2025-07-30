@@ -11,7 +11,7 @@ public interface IEventLogger<in TSegment> where TSegment : LogSegment
     Task<LogMessage<TEvent>?> ReadLastMessage<TEvent>(TSegment segment, CancellationToken cancellationToken = default) where TEvent : class;
     IAsyncEnumerable<LogMessage<TEvent>> Poll<TEvent>(PollRequest request, TSegment segment, long offset, CancellationToken cancellationToken = default) where TEvent : class;
     Task Commit(LogOffsetRequest request, TSegment segment, CancellationToken cancellationToken = default);
-    Task<ReadOffsetResult> ReadLatestOffset(LogOffsetKey key, TSegment segment, CancellationToken cancellationToken = default);
+    Task<ReadOffsetResult> ReadSavedOffset(LogOffsetKey key, TSegment segment, CancellationToken cancellationToken = default);
 }
 
 public interface IFileEventLogger : IEventLogger<FileLogSegment>
@@ -20,7 +20,7 @@ public interface IFileEventLogger : IEventLogger<FileLogSegment>
     new Task<LogMessage<TEvent>?> ReadLastMessage<TEvent>(FileLogSegment segment, CancellationToken cancellationToken = default) where TEvent : class;
     new IAsyncEnumerable<LogMessage<TEvent>> Poll<TEvent>(PollRequest request, FileLogSegment segment, long offset, CancellationToken cancellationToken = default) where TEvent : class;
     new Task Commit(LogOffsetRequest request, FileLogSegment segment, CancellationToken cancellationToken = default);
-    new Task<ReadOffsetResult> ReadLatestOffset(LogOffsetKey key, FileLogSegment segment, CancellationToken cancellationToken = default);
+    new Task<ReadOffsetResult> ReadSavedOffset(LogOffsetKey key, FileLogSegment segment, CancellationToken cancellationToken = default);
 }
 
 public sealed class JsonFileEventLogger : IFileEventLogger
@@ -114,7 +114,7 @@ public sealed class JsonFileEventLogger : IFileEventLogger
         await JsonSerializer.SerializeAsync(fs, request, SerializerOptions, cancellationToken);
     }
 
-    public async Task<ReadOffsetResult> ReadLatestOffset(LogOffsetKey key, FileLogSegment segment, CancellationToken cancellationToken = default)
+    public async Task<ReadOffsetResult> ReadSavedOffset(LogOffsetKey key, FileLogSegment segment, CancellationToken cancellationToken = default)
     {
         await using var fs = new FileStream(segment.FilePath, FileMode.OpenOrCreate, FileAccess.Read);
         if (fs.Length == 0)

@@ -37,7 +37,7 @@ public sealed class OneTopicWithCoupleConsumersTests
     private readonly Lock _unhandledEventsLock = new();
     private readonly ITestOutputHelper _outputHelper;
 
-    private readonly Dictionary<byte, uint> _initialOffsets = new()
+    private readonly Dictionary<byte, uint> _latestOffsets = new()
     {
         { 0, 33 },
         { 1, 44 },
@@ -103,7 +103,7 @@ public sealed class OneTopicWithCoupleConsumersTests
         loggedMessage?.Key.Should().Be(key);
         loggedMessage?.Payload.Should().Be(payload);
         loggedMessage?.Timestamp.Should().BeCloseTo(DateTimeOffset.UtcNow, TimeSpan.FromSeconds(1));
-        loggedMessage?.Offset.Should().Be(_initialOffsets[3] + 1);
+        loggedMessage?.Offset.Should().Be(_latestOffsets[3] + 1);
         loggedMessage?.PartitionId.Should().Be(3);
     }
 
@@ -172,7 +172,7 @@ public sealed class OneTopicWithCoupleConsumersTests
     {
         var eventLoggerMock = new Mock<IFileEventLogger>();
 
-        foreach (var item in _initialOffsets)
+        foreach (var item in _latestOffsets)
         {
             eventLoggerMock.Setup(v =>
                     v.ReadLastMessage<TestEvent>(It.Is<FileLogSegment>(s => s.PartitionId == item.Key), It.IsAny<CancellationToken>()))
