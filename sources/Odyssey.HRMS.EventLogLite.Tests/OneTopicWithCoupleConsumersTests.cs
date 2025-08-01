@@ -45,6 +45,15 @@ public sealed class OneTopicWithCoupleConsumersTests
         { 3, 29 },
         { 4, 39 }
     };
+    
+    private readonly Dictionary<byte, uint> _savedOffsets = new()
+    {
+        { 0, 1 },
+        { 1, 1 },
+        { 2, 1 },
+        { 3, 1 },
+        { 4, 1 }
+    };
 
     public OneTopicWithCoupleConsumersTests(ITestOutputHelper outputHelper)
     {
@@ -183,17 +192,20 @@ public sealed class OneTopicWithCoupleConsumersTests
             .Callback<LogMessage<TestEvent>, FileLogSegment, CancellationToken>((logMessage, segment, _) => SaveLoggedEvent(logMessage, segment));
 
         eventLoggerMock.Setup(v => v.Poll<TestEvent>(It.IsAny<PollRequest>(), It.IsAny<FileLogSegment>(), It.IsAny<long>(),It.IsAny<CancellationToken>()))
-            .Returns((PollRequest request, FileLogSegment segment, CancellationToken _) => PreparePollResults(request, segment));
+            .Returns((PollRequest request, FileLogSegment segment, long offset, CancellationToken _) => PreparePollResults(request, segment, offset));
 
         eventLoggerMock.Setup(v => v.Commit(It.IsAny<LogOffsetRequest>(), It.IsAny<FileLogSegment>(), It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask)
             .Callback<LogOffsetRequest, FileLogSegment, CancellationToken>((request, segment, _) => HandleCommitedEvent(request, segment));
 
+        eventLoggerMock.Setup(v => v.ReadSavedOffset(It.IsAny<LogOffsetKey>(), It.IsAny<FileLogSegment>(), It.IsAny<CancellationToken>()))
+            .Returns((LogOffsetKey key, FileLogSegment segment, CancellationToken _) => PrepareOffsetResults(key, segment));
+        
         return eventLoggerMock;
     }
 
 
-    private IAsyncEnumerable<LogMessage<TestEvent>> PreparePollResults(PollRequest request, FileLogSegment segment)
+    private IAsyncEnumerable<LogMessage<TestEvent>> PreparePollResults(PollRequest request, FileLogSegment segment, long offset)
     {
         if (_loggedEvents.IsEmpty
             || !_unhandledEvents.TryGetValue(request.GroupName, out var unhandledEvents) 
@@ -220,6 +232,11 @@ public sealed class OneTopicWithCoupleConsumersTests
         }).ToAsyncEnumerable();
 
         return resultEvents;
+    }
+
+    private Task<ReadOffsetResult> PrepareOffsetResults(LogOffsetKey key, FileLogSegment segment)
+    {
+        return Task.FromResult(ReadOffsetResult.CreateNew(key));
     }
     
     private void SaveLoggedEvent(LogMessage<TestEvent> logMessage, FileLogSegment segment)
