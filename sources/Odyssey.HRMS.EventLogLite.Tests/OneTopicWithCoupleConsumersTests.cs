@@ -197,7 +197,8 @@ public sealed class OneTopicWithCoupleConsumersTests
             .Callback<LogMessage<TestEvent>, FileLogSegment, CancellationToken>((logMessage, segment, _) => SaveLoggedEvent(logMessage, segment));
 
         eventLoggerMock.Setup(v => v.Poll<TestEvent>(It.IsAny<PollRequest>(), It.IsAny<FileLogSegment>(), It.IsAny<long>(),It.IsAny<CancellationToken>()))
-            .Returns((PollRequest request, FileLogSegment segment, long offset, CancellationToken _) => PreparePollResults(request, segment, offset));
+            .Returns((PollRequest request, FileLogSegment segment, long offset, CancellationToken _) => PreparePollResults(request, segment, offset))
+            .Callback<PollRequest, FileLogSegment, long, CancellationToken>((request, segment, offset, _)=> HandlePollRequest(request, segment, offset));
 
         eventLoggerMock.Setup(v => v.Commit(It.IsAny<LogOffsetRequest>(), It.IsAny<FileLogSegment>(), It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask)
@@ -294,7 +295,11 @@ public sealed class OneTopicWithCoupleConsumersTests
 
         _ = unhandledEvents.TryDequeue(out var response);
     }
-    
+
+    private void HandlePollRequest(PollRequest request, FileLogSegment segment, long offset)
+    {
+        
+    }
     
     private IReadOnlyCollection<LogResponse<TestEvent>> GetLoggedEvents(string key)
     {

@@ -77,6 +77,8 @@ public sealed class EventConsumer<TEvent> : IEventConsumer<TEvent> where TEvent 
         var scope = ScopeState.Create().WithTopic(_settings.TopicName).WithGroup(_settings.GroupName).With("Index",_index);
         var assignedSegments = _logSegments.Values.ToArray();
 
+        var currentOffsets = new ConcurrentDictionary<byte, long>(_savedOffsets);
+        
         using (_logger.BeginScope(scope.State))
         {
             while (true)
@@ -98,7 +100,7 @@ public sealed class EventConsumer<TEvent> : IEventConsumer<TEvent> where TEvent 
                 _logger.LogDebug("Pulling is being started, RequestId: {RequestId}", requestId);
 
                 sw.Start();
-                var tasks = assignedSegments.Select(segment => _broker.PollEvents(pollRequest, segment, _savedOffsets[segment.PartitionId], tokenSource.Token));
+                var tasks = assignedSegments.Select(segment => _broker.PollEvents(pollRequest, segment, currentOffsets[segment.PartitionId], tokenSource.Token));
                 var results = await Task.WhenAll(tasks);
                 var events = results.SelectMany(v => v).ToArray();
                 sw.Stop();
@@ -113,6 +115,8 @@ public sealed class EventConsumer<TEvent> : IEventConsumer<TEvent> where TEvent 
                     item.Metadata["EventTime"] = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
                     await Broadcast(item, tokenSource.Token);
+
+                    currentOffsets.TryUpdate(item.PartitionId, item.Offset + 1, item.Offset);
                 }
 
                 var pullingPause = _settings.PullDuration - sw.Elapsed;
