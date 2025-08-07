@@ -46,13 +46,18 @@ public sealed class OneTopicWithCoupleConsumersTests
         { 4, 39 }
     };
     
-    private readonly Dictionary<byte, uint> _savedOffsets = new()
+    private readonly ConcurrentDictionary<LogOffsetKey, long> _savedOffsets = new()
     {
-        { 0, 1 },
-        { 1, 1 },
-        { 2, 1 },
-        { 3, 1 },
-        { 4, 1 }
+        [new LogOffsetKey(Group1Name, TopicName, 0)] = 1,
+        [new LogOffsetKey(Group1Name, TopicName, 1)] = 1,
+        [new LogOffsetKey(Group1Name, TopicName, 2)] = 1,
+        [new LogOffsetKey(Group1Name, TopicName, 3)] = 1,
+        [new LogOffsetKey(Group1Name, TopicName, 4)] = 1,
+        [new LogOffsetKey(Group2Name, TopicName, 0)] = 1,
+        [new LogOffsetKey(Group2Name, TopicName, 1)] = 1,
+        [new LogOffsetKey(Group2Name, TopicName, 2)] = 1,
+        [new LogOffsetKey(Group2Name, TopicName, 3)] = 1,
+        [new LogOffsetKey(Group2Name, TopicName, 4)] = 1,
     };
 
     public OneTopicWithCoupleConsumersTests(ITestOutputHelper outputHelper)
@@ -236,7 +241,11 @@ public sealed class OneTopicWithCoupleConsumersTests
 
     private Task<ReadOffsetResult> PrepareOffsetResults(LogOffsetKey key, FileLogSegment segment)
     {
-        return Task.FromResult(ReadOffsetResult.CreateNew(key));
+        var result = _savedOffsets.TryGetValue(key, out var nextOffset)
+            ? new ReadOffsetResult{Key = key, Value = new LogOffsetValue(nextOffset, 0)}
+            : ReadOffsetResult.CreateNew(key);
+        
+        return Task.FromResult(result);
     }
     
     private void SaveLoggedEvent(LogMessage<TestEvent> logMessage, FileLogSegment segment)

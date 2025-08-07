@@ -5,31 +5,18 @@ using System.Text.Json;
 
 namespace Odyssey.HRMS.EventLogLite.Base;
 
-public interface IEventLogger<in TSegment> where TSegment : LogSegment
-{
-    Task Write<TEvent>(LogMessage<TEvent> logMessage, TSegment segment, CancellationToken cancellationToken = default) where TEvent : class;
-    Task<LogMessage<TEvent>?> ReadLastMessage<TEvent>(TSegment segment, CancellationToken cancellationToken = default) where TEvent : class;
-    IAsyncEnumerable<LogMessage<TEvent>> Poll<TEvent>(PollRequest request, TSegment segment, long offset, CancellationToken cancellationToken = default) where TEvent : class;
-    Task Commit(LogOffsetRequest request, TSegment segment, CancellationToken cancellationToken = default);
-    Task<ReadOffsetResult> ReadSavedOffset(LogOffsetKey key, TSegment segment, CancellationToken cancellationToken = default);
-}
-
-public interface IFileEventLogger : IEventLogger<FileLogSegment>
-{
-    new Task Write<TEvent>(LogMessage<TEvent> logMessage, FileLogSegment segment, CancellationToken cancellationToken = default) where TEvent : class;
-    new Task<LogMessage<TEvent>?> ReadLastMessage<TEvent>(FileLogSegment segment, CancellationToken cancellationToken = default) where TEvent : class;
-    new IAsyncEnumerable<LogMessage<TEvent>> Poll<TEvent>(PollRequest request, FileLogSegment segment, long offset, CancellationToken cancellationToken = default) where TEvent : class;
-    new Task Commit(LogOffsetRequest request, FileLogSegment segment, CancellationToken cancellationToken = default);
-    new Task<ReadOffsetResult> ReadSavedOffset(LogOffsetKey key, FileLogSegment segment, CancellationToken cancellationToken = default);
-}
-
 public sealed class JsonFileEventLogger : IFileEventLogger
 {
     // log divider symbol, equals to '\n'
     private const byte EventLogDivider = 10;
     private static readonly JsonSerializerOptions SerializerOptions = new() { WriteIndented = false };
     private readonly ConcurrentDictionary<byte, long> _lastPosition = new();
-    
+
+    public Task WriteBatch<TEvent>(IReadOnlyCollection<LogMessage<TEvent>> logMessages, FileLogSegment segment, CancellationToken cancellationToken = default) where TEvent : class
+    {
+        throw new NotImplementedException();
+    }
+
     public async Task Write<TEvent>(LogMessage<TEvent> logMessage, FileLogSegment segment, CancellationToken cancellationToken = default)
         where TEvent : class
     {
