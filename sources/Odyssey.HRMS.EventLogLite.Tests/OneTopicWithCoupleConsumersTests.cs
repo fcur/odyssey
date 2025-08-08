@@ -40,6 +40,7 @@ public sealed class OneTopicWithCoupleConsumersTests
     private readonly ITestOutputHelper _outputHelper;
     private readonly ConcurrentQueue<LogOffsetRequest> _committedOffsets = new();
     private long _pollingCounter = 0;
+    private long _polledEventsCounter = 0;
     
     private readonly Dictionary<byte, uint> _latestOffsets = new()
     {
@@ -135,14 +136,15 @@ public sealed class OneTopicWithCoupleConsumersTests
             new() { Key = key1.ToString("D"), Payload = payload1 },
             new() { Key = key2.ToString("D"), Payload = payload2 }
         };
+        var expectedEventsCounter = _savedOffsets.Values.Select(v => MaxOffset - v).Sum();
 
         await Start(cts.Token);
         await Publish(cts.Token, requests);
-        
+        await cts.CancelAsync();
+        var committedKeys = _committedOffsets.Select(v => v.Metadata["Key"].ToString()).ToArray();
+
         using var scope = new AssertionScope();
 
-        var committedKeys = _committedOffsets.Select(v => v.Metadata["Key"].ToString()).ToArray();
-        
         _eventLoggerMock.Verify(v => v.Write(It.IsAny<LogMessage<TestEvent>>(), It.IsAny<FileLogSegment>(), It.IsAny<CancellationToken>()), Times.Exactly(2));
         _eventLoggerMock.Verify(v => v.Poll<TestEvent>(It.IsAny<PollRequest>(), It.IsAny<FileLogSegment>(), It.IsAny<long>(), It.IsAny<CancellationToken>()), Times.AtLeast(_consumers.Count));
         _eventLoggerMock.Verify(v => v.Commit(It.IsAny<LogOffsetRequest>(), It.IsAny<FileLogSegment>(), It.IsAny<CancellationToken>()), Times.AtLeast(4));
@@ -154,6 +156,8 @@ public sealed class OneTopicWithCoupleConsumersTests
         committedKeys.Length.Should().Be(requests.Length * consumerGroups.Length);
         committedKeys.Should().Contain(requests[0].Key);
         committedKeys.Should().Contain(requests[1].Key);
+
+        _polledEventsCounter.Should().Be(expectedEventsCounter);
     }
 
     [Theory, AutoData]
@@ -266,6 +270,7 @@ public sealed class OneTopicWithCoupleConsumersTests
             }
         }
 
+        Interlocked.Add(ref _polledEventsCounter, result.Count);
         return result.Values.ToAsyncEnumerable();
     }
     
