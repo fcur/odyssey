@@ -38,7 +38,7 @@ public sealed class EventConsumer<TEvent> : IEventConsumer<TEvent> where TEvent 
         _logSegments = new ConcurrentDictionary<byte, LogSegment>();
         _savedOffsets = new ConcurrentDictionary<byte, long>();
 
-        var opt = new BoundedChannelOptions(settings.BatchSize) { SingleReader = true, SingleWriter = true, FullMode = BoundedChannelFullMode.Wait };
+        var opt = new BoundedChannelOptions(5000) { SingleReader = true, SingleWriter = true, FullMode = BoundedChannelFullMode.Wait };
         _channel = Channel.CreateBounded<LogResponse<TEvent>>(opt);
     }
 
@@ -56,7 +56,7 @@ public sealed class EventConsumer<TEvent> : IEventConsumer<TEvent> where TEvent 
     {
         // TODO: assign offsets for each consumer
         await ReadSavedOffsets(cancellationToken);
-        
+
         _ = Task.Factory.StartNew(async () => await StartConsumeInternal(cancellationToken), TaskCreationOptions.LongRunning).Unwrap();
         _ = Task.Factory.StartNew(async () => await StarHandlingInternal(cancellationToken), TaskCreationOptions.LongRunning).Unwrap();
     }
@@ -74,17 +74,18 @@ public sealed class EventConsumer<TEvent> : IEventConsumer<TEvent> where TEvent 
     private async Task StartConsumeInternal(CancellationToken cancellationToken)
     {
         var sw = new Stopwatch();
-        var scope = ScopeState.Create().WithTopic(_settings.TopicName).WithGroup(_settings.GroupName).With("Index",_index);
+        var scope = ScopeState.Create().WithTopic(_settings.TopicName).WithGroup(_settings.GroupName).With("Index", _index);
         var assignedSegments = _logSegments.Values.ToArray();
 
         var currentOffsets = new ConcurrentDictionary<byte, long>(_savedOffsets);
-        
+
         using (_logger.BeginScope(scope.State))
         {
             while (true)
             {
                 var cts = new CancellationTokenSource(_settings.PullDuration);
                 var tokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, cts.Token);
+                var targetToken = tokenSource.Token;
                 var time = DateTimeOffset.UtcNow;
                 var requestId = Guid.CreateVersion7(time);
 
@@ -100,7 +101,7 @@ public sealed class EventConsumer<TEvent> : IEventConsumer<TEvent> where TEvent 
                 _logger.LogDebug("Pulling is being started, RequestId: {RequestId}", requestId);
 
                 sw.Start();
-                var tasks = assignedSegments.Select(segment => _broker.PollEvents(pollRequest, segment, currentOffsets[segment.PartitionId], tokenSource.Token));
+                var tasks = assignedSegments.Select(segment => _broker.PollEvents(pollRequest, segment, currentOffsets[segment.PartitionId], targetToken));
                 var results = await Task.WhenAll(tasks);
                 var events = results.SelectMany(v => v).ToArray();
                 sw.Stop();
@@ -114,17 +115,17 @@ public sealed class EventConsumer<TEvent> : IEventConsumer<TEvent> where TEvent 
                     item.Metadata["GroupName"] = _settings.GroupName;
                     item.Metadata["EventTime"] = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
-                    await Broadcast(item, tokenSource.Token);
+                    await Broadcast(item, targetToken);
 
                     currentOffsets.TryUpdate(item.PartitionId, item.Offset + 1, item.Offset);
                 }
 
                 var pullingPause = _settings.PullDuration - sw.Elapsed;
-
-                if (pullingPause > TimeSpan.Zero)
+                if (events.Length == 0 && pullingPause > TimeSpan.Zero && !targetToken.IsCancellationRequested)
                 {
+                    _logger.LogDebug("Pause pulling for {PullingPause}", pullingPause);
                     // ReSharper disable once PossiblyMistakenUseOfCancellationToken
-                    await Task.Delay(pullingPause, cancellationToken);
+                    await Task.Delay(pullingPause, targetToken);
                 }
 
                 sw.Reset();
@@ -138,19 +139,19 @@ public sealed class EventConsumer<TEvent> : IEventConsumer<TEvent> where TEvent 
         while (await _channel.Reader.WaitToReadAsync(cancellationToken))
         {
             var item = await _channel.Reader.ReadAsync(cancellationToken);
-            
+
             await _handler.Handle(item, cancellationToken);
-            
+
             // TODO: skip commit according to configuration
-            
+
             var time = DateTimeOffset.UtcNow;
             var requestId = Guid.CreateVersion7(time);
-            
+
             var offsetRequest = new LogOffsetRequest
             {
                 Key = new LogOffsetKey(_settings.GroupName, _settings.TopicName, item.PartitionId),
                 Value = new LogOffsetValue(item.Offset + 1, time.ToUnixTimeMilliseconds()),
-                Metadata = new Dictionary<string, object> { { "Key", item.Key ?? "NONE" } },
+                Metadata = new Dictionary<string, object> { { "Key", item.Key ?? string.Empty } },
                 RequestId = requestId,
                 OccuredAt = time
             };
@@ -161,11 +162,12 @@ public sealed class EventConsumer<TEvent> : IEventConsumer<TEvent> where TEvent 
             using (_logger.BeginScope(scope.State))
             {
                 _logger.LogDebug("Offset committing is being started");
-                
+
                 await _broker.Commit(offsetRequest, cancellationToken);
-                
-                _savedOffsets.AddOrUpdate(offsetRequest.Key.PartitionId, offsetRequest.Value.NextMsgOffset, (key, value) => offsetRequest.Value.NextMsgOffset);
-            
+
+                _savedOffsets.AddOrUpdate(offsetRequest.Key.PartitionId, offsetRequest.Value.NextMsgOffset,
+                    (key, value) => offsetRequest.Value.NextMsgOffset);
+
                 _logger.LogDebug("Offset committing finished");
             }
         }
@@ -173,7 +175,7 @@ public sealed class EventConsumer<TEvent> : IEventConsumer<TEvent> where TEvent 
 
     private async Task ReadSavedOffsets(CancellationToken cancellationToken)
     {
-        var keys = _logSegments.Keys.Select(v=> new LogOffsetKey(_settings.GroupName, _settings.TopicName, v));
+        var keys = _logSegments.Keys.Select(v => new LogOffsetKey(_settings.GroupName, _settings.TopicName, v));
 
         var tasks = keys.Select(v => _broker.ReadSavedOffset(new ReadOffsetRequest { Key = v }, cancellationToken));
         var results = await Task.WhenAll(tasks);
