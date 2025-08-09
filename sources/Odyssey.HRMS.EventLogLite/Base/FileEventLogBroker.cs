@@ -50,8 +50,6 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
         await InitBrokerCounters(cancellationToken);
         await AssignConsumers(cancellationToken);
         
-        
-        
         //_ = Task.Factory.StartNew(async () => await StartConsumePublishedEventsInternal(cancellationToken), TaskCreationOptions.LongRunning).Unwrap();
     }
 
@@ -217,7 +215,7 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
 
     private Task AssignConsumers(CancellationToken cancellationToken)
     {
-        var groupedConsumers = _consumers.GroupBy(v => v.GetGroupName()).ToArray();
+        var groupedConsumers = _consumers.GroupBy(v => v.GetConsumerAssigmentState().GroupName).ToArray();
         if (groupedConsumers.Length == 0)
         {
             return Task.CompletedTask;

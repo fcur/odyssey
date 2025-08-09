@@ -17,6 +17,7 @@ public sealed class EventConsumer<TEvent> : IEventConsumer<TEvent> where TEvent 
     private readonly byte _index;
     private readonly ConcurrentDictionary<byte, LogSegment> _logSegments;
     private ConcurrentDictionary<byte, long> _savedOffsets = null!;
+    private int _logSegmentsCount = 0;
 
     public EventConsumer(ILogger<EventConsumer<TEvent>> logger,
         IEventBroker<TEvent> broker,
@@ -41,15 +42,13 @@ public sealed class EventConsumer<TEvent> : IEventConsumer<TEvent> where TEvent 
         var opt = new BoundedChannelOptions(5000) { SingleReader = true, SingleWriter = true, FullMode = BoundedChannelFullMode.Wait };
         _channel = Channel.CreateBounded<LogResponse<TEvent>>(opt);
     }
-
-    public byte GetIndex() => _index;
-    public string GetGroupName() => _settings.GroupName;
-
-    public int GetSegmentsCount() => _logSegments.Count;
+    
+    public ConsumerAssigmentState GetConsumerAssigmentState() => new(_index, _settings.GroupName, _logSegmentsCount);
 
     public void AssignSegment(LogSegment segment)
     {
         _logSegments.AddOrUpdate(segment.PartitionId, segment, (key, value) => segment);
+        _logSegmentsCount = _logSegments.Count;
     }
 
     public async Task Start(CancellationToken cancellationToken = default)
@@ -186,3 +185,5 @@ public sealed class EventConsumer<TEvent> : IEventConsumer<TEvent> where TEvent 
         }
     }
 }
+
+public readonly record struct ConsumerAssigmentState(byte Index, string GroupName, int SegmentsCount);

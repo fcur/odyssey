@@ -1,15 +1,12 @@
-﻿using AutoFixture;
-using AutoFixture.Xunit2;
+﻿using AutoFixture.Xunit2;
 using FluentAssertions;
 using FluentAssertions.Execution;
 using Microsoft.Extensions.Logging;
-using Moq;
 using Odyssey.HRMS.EventLogLite.Base;
 using Odyssey.HRMS.EventLogLite.Consumer;
 using Odyssey.HRMS.EventLogLite.Entities;
 using Odyssey.HRMS.EventLogLite.Producer;
 using Odyssey.HRMS.EventLogLite.Tests.Logging;
-using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 using Xunit.Abstractions;
 
@@ -37,421 +34,216 @@ public sealed class OneTopicWithCoupleConsumersTests
     private static readonly LogOffsetKey G2P2Key = new(Group2Name, TopicName, 2);
     private static readonly LogOffsetKey G2P3Key = new(Group2Name, TopicName, 3);
     private static readonly LogOffsetKey G2P4Key = new(Group2Name, TopicName, 4);
-    
-    private readonly ILoggerFactory  _loggerFactory;
-    private readonly Mock<IFileEventLogger> _eventLoggerMock;
-    private readonly FileEventLogBroker<TestEvent> _broker;
-    private readonly EventProducer<TestEvent> _producer;
-    private readonly List<EventConsumer<TestEvent>> _consumers = [];
-    private readonly ConcurrentBag<LogResponse<TestEvent>> _loggedEvents = new();
-    private readonly ConcurrentBag<LogResponse<TestEvent>> _handledEvents = new();
-    private readonly ConcurrentDictionary<string, ConcurrentQueue<LogResponse<TestEvent>>> _unhandledEvents = new();
-    private readonly Lock _unhandledEventsLock = new();
-    private readonly ITestOutputHelper _outputHelper;
-    private readonly ConcurrentQueue<LogOffsetRequest> _committedOffsets = new();
-    private long _pollingCounter = 0;
-    private long _polledEventsCounter = 0;
-    
-    private readonly Dictionary<byte, long> _latestOffsets = new()
-    {
-        { 0, 33 }, { 1, 44 }, { 2, 24 }, { 3, 29 }, { 4, 39 }
-    };
-    
-    private readonly Dictionary<LogOffsetKey, long> _savedOffsets = new()
-    {
-        [G1P0Key] = 1, [G1P1Key] = 1, [G1P2Key] = 1, [G1P3Key] = 1, [G1P4Key] = 1,
-        [G2P0Key] = 1, [G2P1Key] = 1, [G2P2Key] = 1, [G2P3Key] = 1, [G2P4Key] = 1,
-    };
+
+    private readonly ILoggerFactory _loggerFactory;
+    private readonly TestHarnessSettings  _harnessSettings;
     
     public OneTopicWithCoupleConsumersTests(ITestOutputHelper outputHelper)
     {
-        _outputHelper = outputHelper;
-        _loggerFactory = LoggerFactory.Create(builder => { builder
-            .AddProvider(new XunitLoggerProvider(outputHelper))
-            .SetMinimumLevel(LogLevel.Trace); });
-        _eventLoggerMock = PrepareEventLogger();
-        
-        var brokerLogger = _loggerFactory.CreateLogger<FileEventLogBroker<TestEvent>>();
-        var producerLogger = _loggerFactory.CreateLogger<EventProducer<TestEvent>>();
-        
+        _loggerFactory = LoggerFactory.Create(builder =>
+        {
+            builder.AddProvider(new XunitLoggerProvider(outputHelper)).SetMinimumLevel(LogLevel.Trace);
+        });
+
         var topic = new EventLogTopic(TopicName, Partitions);
-        var brokerSettings = new EventBrokerSettings() { TopicName = "__consumer_offsets", Partitions = 5 };
-        _broker = new FileEventLogBroker<TestEvent>(brokerLogger, brokerSettings, _eventLoggerMock.Object, topic);
-        
+        var brokerSettings = new EventBrokerSettings { TopicName = "__consumer_offsets", Partitions = 5 };
         var producerSettings = new EventProducerSettings { FileSizeLimitBytes = FileSizeLimitBytes, TopicName = TopicName, Partitions = Partitions };
-        _producer = new EventProducer<TestEvent>(producerLogger, _broker, producerSettings);
+        var consumerGroup1Settings = new EventConsumerSettings(Group1Name)
+        {
+            TopicName = TopicName,
+            EventName = EventName,
+            ReplicaCount = 5,
+            BatchSize = BatchSize,
+            PullDuration = PullDuration
+        };
+        var consumerGroup2Settings = new EventConsumerSettings(Group2Name)
+        {
+            TopicName = TopicName,
+            EventName = EventName,
+            ReplicaCount = 1,
+            BatchSize = BatchSize,
+            PullDuration = PullDuration
+        };
 
-        PrepareTopicConsumers(Group1Name, 5);
-        PrepareTopicConsumers(Group2Name, 1);
+        var latestOffsets  = new Dictionary<byte, long>
+        {
+            { 0, 33 },
+            { 1, 44 },
+            { 2, 24 },
+            { 3, 29 },
+            { 4, 39 }
+        };
+        
+        var savedOffsets = new Dictionary<LogOffsetKey, long>
+        {
+            [G1P0Key] = 1,
+            [G1P1Key] = 1,
+            [G1P2Key] = 1,
+            [G1P3Key] = 1,
+            [G1P4Key] = 1,
+            [G2P0Key] = 1,
+            [G2P1Key] = 1,
+            [G2P2Key] = 1,
+            [G2P3Key] = 1,
+            [G2P4Key] = 1,
+        };
+        
+        _harnessSettings = new TestHarnessSettings
+        {
+            Topic = topic,
+            BrokerSettings = brokerSettings,
+            ProducerSettings = producerSettings,
+            ConsumerSettings = [consumerGroup1Settings, consumerGroup2Settings],
+            LatestOffsets = latestOffsets,
+            SavedOffsets = savedOffsets,
+            MaxOffset = MaxOffset
+        };
     }
-
+    
     [Fact]
     public async Task Should_Assign_Consumers()
     {
-        await _broker.Start();
+        var cts = new CancellationTokenSource();
+        var testHarness = new TestHarness<TestEvent>(_harnessSettings, _loggerFactory);
+        await testHarness.Start(cts.Token);
+        await cts.CancelAsync();
+        
+        var assigmentStates = testHarness.GetAssigmentStates();
 
         using var scope = new AssertionScope();
-        _consumers.Count.Should().Be(6);
+        assigmentStates.Length.Should().Be(6);
 
-        EnsureConsumerAssigment(_consumers[0], 0, Group1Name, 1);
-        EnsureConsumerAssigment(_consumers[1], 1, Group1Name, 1);
-        EnsureConsumerAssigment(_consumers[2], 2, Group1Name, 1);
-        EnsureConsumerAssigment(_consumers[3], 3, Group1Name, 1);
-        EnsureConsumerAssigment(_consumers[4], 4, Group1Name, 1);
-        EnsureConsumerAssigment(_consumers[5], 0, Group2Name, 5);
+        assigmentStates[0].Should().Be(new ConsumerAssigmentState(0, Group1Name, 1));
+        assigmentStates[1].Should().Be(new ConsumerAssigmentState(1, Group1Name, 1));
+        assigmentStates[2].Should().Be(new ConsumerAssigmentState(2, Group1Name, 1));
+        assigmentStates[3].Should().Be(new ConsumerAssigmentState(3, Group1Name, 1));
+        assigmentStates[4].Should().Be(new ConsumerAssigmentState(4, Group1Name, 1));
+        assigmentStates[5].Should().Be(new ConsumerAssigmentState(0, Group2Name, 5));
     }
 
     [Theory, AutoData]
     public async Task Should_PublishTo_Partition3(TestEvent payload)
     {
         var key = "0342b673-b710-4a52-a60d-5993ae42d2ad";
-        var ct = CancellationToken.None;
         var request = new LogRequest<TestEvent> { Key = key, Payload = payload };
-
-        await Start(ct);
-        await Publish(ct, request);
-
-        var loggedMessage = GetLoggedEvents(key).FirstOrDefault();
-
+       
+        var cts = new CancellationTokenSource();
+        var testHarness = new TestHarness<TestEvent>(_harnessSettings, _loggerFactory);
+        
+        await testHarness.Start(cts.Token);
+        await testHarness.Publish([request], cts.Token);
+        await cts.CancelAsync();
+        
+        var loggedMessagesCount = testHarness.LoggedEventsCount;
+        var loggedMessage = testHarness.GetLoggerEvent(v => v.Key == key);
+        
         using var scope = new AssertionScope();
-
-        _eventLoggerMock.Verify(v => v.Write(It.IsAny<LogMessage<TestEvent>>(), It.IsAny<FileLogSegment>(), It.IsAny<CancellationToken>()), Times.Once);
+        loggedMessagesCount.Should().Be(1);
         loggedMessage.Should().NotBeNull();
-        loggedMessage?.Key.Should().Be(key);
-        loggedMessage?.Payload.Should().Be(payload);
-        loggedMessage?.Timestamp.Should().BeCloseTo(DateTimeOffset.UtcNow, TimeSpan.FromSeconds(1));
-        loggedMessage?.Offset.Should().Be(_latestOffsets[3] + 1);
-        loggedMessage?.PartitionId.Should().Be(3);
+        loggedMessage!.Key.Should().Be(key);
+        loggedMessage.Payload.Should().Be(payload);
+        loggedMessage.Timestamp.Should().BeCloseTo(DateTimeOffset.UtcNow, TimeSpan.FromSeconds(1));
+        loggedMessage.Offset.Should().Be(_harnessSettings.LatestOffsets[3] + 1);
+        loggedMessage.PartitionId.Should().Be(3);
     }
-
+    
     [Theory, AutoData]
     public async Task Should_StartConsume_FromBeginning(TestEvent payload1, Guid key1, TestEvent payload2, Guid key2)
     {
-        var cts = new CancellationTokenSource();
-        var consumerGroups = _consumers.Select(v=>v.GetGroupName()).Distinct().ToArray();
-        var requests = new LogRequest<TestEvent>[]
+        var latestOffsets = _harnessSettings.LatestOffsets;
+        var savedOffsets = new Dictionary<LogOffsetKey, long>
         {
-            new() { Key = key1.ToString("D"), Payload = payload1 },
-            new() { Key = key2.ToString("D"), Payload = payload2 }
+            [G1P0Key] = 1, [G1P1Key] = 1, [G1P2Key] = 1, [G1P3Key] = 1, [G1P4Key] = 1, 
+            [G2P0Key] = 1, [G2P1Key] = 1, [G2P2Key] = 1, [G2P3Key] = 1, [G2P4Key] = 1,
         };
         
-        await Start(cts.Token);
-        await Publish(cts.Token, requests);
+        var cts = new CancellationTokenSource();
+        var requests = new LogRequest<TestEvent>[]
+        {
+            new() { Key = key1.ToString("D"), Payload = payload1 }, 
+            new() { Key = key2.ToString("D"), Payload = payload2 }
+        };
+        var expectedEventsCounter = savedOffsets.Values.Select(v => MaxOffset - v).Sum();
+        var settings = _harnessSettings with { LatestOffsets = latestOffsets, SavedOffsets = savedOffsets };
+        var testHarness = new TestHarness<TestEvent>(settings, _loggerFactory);
+        
+        await testHarness.Start(cts.Token);
+        await testHarness.Publish(requests, cts.Token);
         await cts.CancelAsync();
-        var committedKeys = _committedOffsets.Select(v => v.Metadata["Key"].ToString()).ToArray();
-        var expectedEventsCounter = _savedOffsets.Values.Select(v => MaxOffset - v).Sum();
+
+        var loggerEvents = testHarness.GetLoggerEvents();
+        var polledEvents = testHarness.PolledEventsCount;
 
         using var scope = new AssertionScope();
 
-        _eventLoggerMock.Verify(v => v.Write(It.IsAny<LogMessage<TestEvent>>(), It.IsAny<FileLogSegment>(), It.IsAny<CancellationToken>()), Times.Exactly(2));
-        _eventLoggerMock.Verify(v => v.Poll<TestEvent>(It.IsAny<PollRequest>(), It.IsAny<FileLogSegment>(), It.IsAny<long>(), It.IsAny<CancellationToken>()), Times.AtLeast(_consumers.Count));
-        _eventLoggerMock.Verify(v => v.Commit(It.IsAny<LogOffsetRequest>(), It.IsAny<FileLogSegment>(), It.IsAny<CancellationToken>()), Times.AtLeast(4));
-
-        _loggedEvents.Should().Contain(v => v.Key == requests[0].Key);
-        _loggedEvents.Should().Contain(v => v.Key == requests[1].Key);
-        // _committedOffsets.Count.Should().BeGreaterOrEqualTo(4);
-
-        // committedKeys.Length.Should().Be(requests.Length * consumerGroups.Length);
-        // committedKeys.Should().Contain(requests[0].Key);
-        // committedKeys.Should().Contain(requests[1].Key);
-
-        _polledEventsCounter.Should().Be(expectedEventsCounter);
+        loggerEvents.Should().Contain(v => v.Key == requests[0].Key);
+        loggerEvents.Should().Contain(v => v.Key == requests[1].Key);
+        polledEvents.Should().Be(expectedEventsCounter);
     }
-
+    
     [Theory, AutoData]
     public async Task Should_StartConsume_FromKnownOffsets(TestEvent payload1, Guid key1, TestEvent payload2, Guid key2)
     {
-        var cts = new CancellationTokenSource();
+        var latestOffsets = _harnessSettings.LatestOffsets;
         var random = new Random();
-        var consumerGroups = _consumers.Select(v=>v.GetGroupName()).Distinct().ToArray();
+        var savedOffsets = new Dictionary<LogOffsetKey, long>
+        {
+            [G1P0Key] = NextRandomOffset(random, latestOffsets[0]), 
+            [G1P1Key] = NextRandomOffset(random, latestOffsets[1]), 
+            [G1P2Key] = NextRandomOffset(random, latestOffsets[2]), 
+            [G1P3Key] = NextRandomOffset(random, latestOffsets[3]), 
+            [G1P4Key] = NextRandomOffset(random, latestOffsets[4]), 
+            [G2P0Key] = NextRandomOffset(random, latestOffsets[0]), 
+            [G2P1Key] = NextRandomOffset(random, latestOffsets[1]),
+            [G2P2Key] = NextRandomOffset(random, latestOffsets[2]),
+            [G2P3Key] = NextRandomOffset(random, latestOffsets[3]), 
+            [G2P4Key] = NextRandomOffset(random, latestOffsets[4])
+        };
+        
+        var cts = new CancellationTokenSource();
         var requests = new LogRequest<TestEvent>[]
         {
-            new() { Key = key1.ToString("D"), Payload = payload1 },
+            new() { Key = key1.ToString("D"), Payload = payload1 }, 
             new() { Key = key2.ToString("D"), Payload = payload2 }
         };
-        _savedOffsets[G1P0Key] = random.NextInt64(1, _latestOffsets[0]);
-        _savedOffsets[G1P1Key] = random.NextInt64(1, _latestOffsets[1]);
-        _savedOffsets[G1P2Key] = random.NextInt64(1, _latestOffsets[2]);
-        _savedOffsets[G1P3Key] = random.NextInt64(1, _latestOffsets[3]);
-        _savedOffsets[G1P4Key] = random.NextInt64(1, _latestOffsets[4]);
-        _savedOffsets[G2P0Key] = random.NextInt64(1, _latestOffsets[0]);
-        _savedOffsets[G2P1Key] = random.NextInt64(1, _latestOffsets[1]);
-        _savedOffsets[G2P2Key] = random.NextInt64(1, _latestOffsets[2]);
-        _savedOffsets[G2P3Key] = random.NextInt64(1, _latestOffsets[3]);
-        _savedOffsets[G2P4Key] = random.NextInt64(1, _latestOffsets[4]);
-
-        await Start(cts.Token);
-        await Publish(cts.Token, requests);
+        var expectedEventsCounter = savedOffsets.Values.Select(v => MaxOffset - v).Sum();
+        var settings = _harnessSettings with { LatestOffsets = latestOffsets, SavedOffsets = savedOffsets };
+        var testHarness = new TestHarness<TestEvent>(settings, _loggerFactory);
+        
+        await testHarness.Start(cts.Token);
+        await testHarness.Publish(requests, cts.Token);
         await cts.CancelAsync();
-        // var committedKeys = _committedOffsets.Select(v => v.Metadata["Key"].ToString()).ToArray();
-        var expectedEventsCounter = _savedOffsets.Values.Select(v => MaxOffset - v).Sum();
-
+        
+        var loggerEvents = testHarness.GetLoggerEvents();
+        var polledEvents = testHarness.PolledEventsCount;
 
         using var scope = new AssertionScope();
-
-        _eventLoggerMock.Verify(v => v.Write(It.IsAny<LogMessage<TestEvent>>(), It.IsAny<FileLogSegment>(), It.IsAny<CancellationToken>()), Times.Exactly(2));
-        _eventLoggerMock.Verify(v => v.Poll<TestEvent>(It.IsAny<PollRequest>(), It.IsAny<FileLogSegment>(), It.IsAny<long>(), It.IsAny<CancellationToken>()), Times.AtLeast(_consumers.Count));
-        _eventLoggerMock.Verify(v => v.Commit(It.IsAny<LogOffsetRequest>(), It.IsAny<FileLogSegment>(), It.IsAny<CancellationToken>()), Times.AtLeast(4));
-
-        _loggedEvents.Should().Contain(v => v.Key == requests[0].Key);
-        _loggedEvents.Should().Contain(v => v.Key == requests[1].Key);
-        // _committedOffsets.Count.Should().BeGreaterOrEqualTo(4);
-
-        // committedKeys.Length.Should().Be(requests.Length * consumerGroups.Length);
-        // committedKeys.Should().Contain(requests[0].Key);
-        // committedKeys.Should().Contain(requests[1].Key);
-
-        _polledEventsCounter.Should().Be(expectedEventsCounter);
-    }
-
-    private void PrepareTopicConsumers(string groupName, byte replicaCount)
-    {
-        _unhandledEvents.AddOrUpdate(groupName, new ConcurrentQueue<LogResponse<TestEvent>>(),
-            (s, stack) => new ConcurrentQueue<LogResponse<TestEvent>>());
-
-        var consumerSettings = new EventConsumerSettings(groupName)
-        {
-            TopicName = TopicName,
-            BatchSize = BatchSize,
-            ReplicaCount = replicaCount,
-            EventName = EventName,
-            PullDuration = PullDuration
-        };
-
-        for (byte i = 0; i < replicaCount; i++)
-        {
-            var consumerImplMock = new Mock<IEventConsumerImpl<TestEvent>>();
-            consumerImplMock.Setup(v => v.Handle(It.IsAny<LogResponse<TestEvent>>(), It.IsAny<CancellationToken>()))
-                .Callback<LogResponse<TestEvent>, CancellationToken>((logResponse, _) => HandledEventResponse(logResponse))
-                .Returns(Task.CompletedTask);
-                
-            var logger = _loggerFactory.CreateLogger<EventConsumer<TestEvent>>();
-            
-            var consumer = new EventConsumer<TestEvent>(logger, _broker, consumerImplMock.Object, consumerSettings, i);
-            _broker.Join(consumer);
-            _consumers.Add(consumer);
-        }
-    }
-
-    private Mock<IFileEventLogger> PrepareEventLogger()
-    {
-        var eventLoggerMock = new Mock<IFileEventLogger>();
-
-        foreach (var item in _latestOffsets)
-        {
-            eventLoggerMock.Setup(v =>
-                    v.ReadLastMessage<TestEvent>(It.Is<FileLogSegment>(s => s.PartitionId == item.Key), It.IsAny<CancellationToken>()))
-                .ReturnsAsync(new LogMessage<TestEvent>() { Key = Guid.NewGuid().ToString("D"), Offset = item.Value });
-        }
-
-        eventLoggerMock.Setup(v => v.Write<TestEvent>(It.IsAny<LogMessage<TestEvent>>(), It.IsAny<FileLogSegment>(), It.IsAny<CancellationToken>()))
-            .Callback<LogMessage<TestEvent>, FileLogSegment, CancellationToken>((logMessage, segment, _) => SaveLoggedEvent(logMessage, segment));
-
-        eventLoggerMock.Setup(v => v.Poll<TestEvent>(It.IsAny<PollRequest>(), It.IsAny<FileLogSegment>(), It.IsAny<long>(),It.IsAny<CancellationToken>()))
-            .Returns((PollRequest request, FileLogSegment segment, long offset, CancellationToken _) => PreparePollResults(request, segment, offset))
-            .Callback<PollRequest, FileLogSegment, long, CancellationToken>((request, segment, offset, _)=> HandlePollRequest(request, segment, offset));
-
-        eventLoggerMock.Setup(v => v.Commit(It.IsAny<LogOffsetRequest>(), It.IsAny<FileLogSegment>(), It.IsAny<CancellationToken>()))
-            .Returns(Task.CompletedTask)
-            .Callback<LogOffsetRequest, FileLogSegment, CancellationToken>((request, segment, _) => HandleCommitedEvent(request, segment));
-
-        eventLoggerMock.Setup(v => v.ReadSavedOffset(It.IsAny<LogOffsetKey>(), It.IsAny<FileLogSegment>(), It.IsAny<CancellationToken>()))
-            .Returns((LogOffsetKey key, FileLogSegment segment, CancellationToken _) => PrepareOffsetResults(key, segment));
         
-        return eventLoggerMock;
+        loggerEvents.Should().Contain(v => v.Key == requests[0].Key);
+        loggerEvents.Should().Contain(v => v.Key == requests[1].Key);
+        polledEvents.Should().Be(expectedEventsCounter);
+        return;
+
+        long NextRandomOffset(Random util, long maxOffset)
+        {
+            const long minOffset = 1;
+            return util.NextInt64(minOffset, maxOffset);
+        }
     }
     
-    private IAsyncEnumerable<LogMessage<TestEvent>> PreparePollResults(PollRequest request, FileLogSegment segment, long offset)
-    {
-        if (offset > MaxOffset)
-        {
-            return Array.Empty<LogMessage<TestEvent>>().ToAsyncEnumerable();
-        }
-
-        var batchSize = request.BatchSize + offset > MaxOffset ? MaxOffset - offset : request.BatchSize;
-        
-        var fixture = new Fixture();
-        
-        var dumbMsg = fixture.Create<TestEvent>() with { Skipped = true };
-        var timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-
-        var result = Enumerable.Range(0, (int)batchSize).Select(v => new LogMessage<TestEvent>
-        {
-            Key = string.Empty, Payload = dumbMsg, Metadata = new Dictionary<string, object>(), Offset = offset + v, Timestamp = timestamp
-        }).ToDictionary(v=>v.Offset, v=>v);
-        
-        var minOffset = offset;
-        var maxOffset = offset + batchSize;
-
-        if (_unhandledEvents.TryGetValue(request.GroupName, out var unhandledEvents)
-            && !unhandledEvents.IsEmpty)
-        {
-            var foundEvents = unhandledEvents.Where(v => v.PartitionId == segment.PartitionId
-                                                         && v.Offset >= minOffset
-                                                         && v.Offset <= maxOffset).ToArray();
-
-            foreach (var item in foundEvents)
-            {
-                result[item.Offset] = new LogMessage<TestEvent>
-                {
-                    Payload = item.Payload,
-                    Key = item.Key!,
-                    Offset = item.Offset,
-                    Timestamp = item.Timestamp.ToUnixTimeMilliseconds(),
-                    Metadata = item.Metadata
-                };
-            }
-        }
-
-        Interlocked.Add(ref _polledEventsCounter, result.Count);
-        return result.Values.ToAsyncEnumerable();
-    }
-    
-    private IAsyncEnumerable<LogMessage<TestEvent>> PreparePollResultsV1(PollRequest request, FileLogSegment segment, long offset)
-    {
-        if (_loggedEvents.IsEmpty
-            || !_unhandledEvents.TryGetValue(request.GroupName, out var unhandledEvents) 
-            || unhandledEvents.IsEmpty)
-        {
-            return Array.Empty<LogMessage<TestEvent>>().ToAsyncEnumerable();
-        }
-        
-        var loggedEvents = unhandledEvents.GroupBy(v => v.PartitionId)
-            .ToDictionary(v => v.Key, v => v.ToArray());
-
-        if (!loggedEvents.TryGetValue(segment.PartitionId, out var foundEvents))
-        {
-            return Array.Empty<LogMessage<TestEvent>>().ToAsyncEnumerable();
-        }
-
-        var resultEvents = foundEvents.Select(v => new LogMessage<TestEvent>
-        {
-            Payload = v.Payload,
-            Key = v.Key!,
-            Offset = v.Offset,
-            Timestamp = v.Timestamp.ToUnixTimeMilliseconds(),
-            Metadata = v.Metadata
-        }).ToAsyncEnumerable();
-
-        return resultEvents;
-    }
-
-    private Task<ReadOffsetResult> PrepareOffsetResults(LogOffsetKey key, FileLogSegment segment)
-    {
-        var result = _savedOffsets.TryGetValue(key, out var nextOffset)
-            ? new ReadOffsetResult{Key = key, Value = new LogOffsetValue(nextOffset, 0)}
-            : ReadOffsetResult.CreateNew(key);
-        
-        return Task.FromResult(result);
-    }
-    
-    private void SaveLoggedEvent(LogMessage<TestEvent> logMessage, FileLogSegment segment)
-    {
-        if (logMessage.Key == string.Empty)
-        {
-            return;
-        }
-        
-        var response = new LogResponse<TestEvent>
-        {
-            Key = logMessage.Key,
-            Payload = logMessage.Payload,
-            Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(logMessage.Timestamp),
-            Offset = logMessage.Offset,
-            PartitionId = segment.PartitionId,
-            Metadata = new Dictionary<string, object>()
-        };
-
-        _loggedEvents.Add(response);
-        
-        foreach (var key in _unhandledEvents.Keys)
-        {
-            _unhandledEvents[key].Enqueue(response);
-        }
-    }
-
-    private void HandledEventResponse(LogResponse<TestEvent> responseMessage)
-    {
-        _handledEvents.Add(responseMessage);
-
-        // var groupName = responseMessage.Metadata["GroupName"].ToString();
-        // return;
-
-        // var unhandledEventsContainer = _unhandledEvents[groupName!];
-        //
-        // _ = unhandledEventsContainer.TryDequeue(out var msg);
-        // if (responseMessage.Offset != msg!.Offset)
-        // {
-        //     throw new Exception($"Offset {responseMessage.Offset} does not match offset {msg.Offset}");
-        // }
-    }
-
-    private void HandleCommitedEvent(LogOffsetRequest request, FileLogSegment segment)
-    {
-        var msgKey = request.Metadata["Key"].ToString();
-        if (msgKey == string.Empty)
-        {
-            return;
-        }
-        
-        
-        _committedOffsets.Enqueue(request);
-        
-        if (!_unhandledEvents.TryGetValue(request.Key.ConsumerGroupName, out var unhandledEvents)
-            || unhandledEvents.IsEmpty)
-        {
-            return;
-        }
-
-        _ = unhandledEvents.TryDequeue(out var response);
-    }
-
-    private void HandlePollRequest(PollRequest request, FileLogSegment segment, long offset)
-    {
-        Interlocked.Increment(ref _pollingCounter);
-    }
-    
-    private IReadOnlyCollection<LogResponse<TestEvent>> GetLoggedEvents(string key)
-    {
-        return _loggedEvents.Where(v => v.Key == key).ToArray();
-    }
-
-    private void EnsureConsumerAssigment(EventConsumer<TestEvent> consumer, byte index, string groupName, int segmentsCount)
-    {
-        consumer.GetIndex().Should().Be(index);
-        consumer.GetGroupName().Should().Be(groupName);
-        consumer.GetSegmentsCount().Should().Be(segmentsCount);
-    }
-
-    private async Task Start(CancellationToken ct)
-    {
-        await _broker.Start(ct);
-        await _producer.Start(ct);
-
-        var consumers = _consumers.Select(v => v.Start(ct)).ToArray();
-        await Task.WhenAll(consumers);
-    }
-
-    private async Task Publish(CancellationToken ct, params LogRequest<TestEvent>[] requests)
-    {
-        if (!requests.Any())
-        {
-            return;
-        }
-
-        foreach (var request in requests)
-        {
-            await _producer.Publish(request, ct);
-        }
-
-        await Task.Delay(100, ct);
-    }
-
     public sealed record TestEvent
     {
-        public Guid Id { get; set; }
-        public DateTimeOffset OccurredAt { get; set; }
-        public required string Message { get; set; }
-        public bool Skipped { get; set; }
+        public Guid Id { get; init; }
+        public DateTimeOffset OccurredAt { get; init; }
+        public string Message { get; init; }
+        public bool Skipped { get; init; }
+        
+        public TestEvent()
+        {
+            Id = Guid.Empty;
+            OccurredAt = DateTimeOffset.MinValue;
+            Skipped = true;
+            Message = string.Empty;
+        }
     }
 }
