@@ -230,20 +230,4 @@ public sealed class OneTopicWithCoupleConsumersTests
             return util.NextInt64(minOffset, maxOffset);
         }
     }
-    
-    public sealed record TestEvent
-    {
-        public Guid Id { get; init; }
-        public DateTimeOffset OccurredAt { get; init; }
-        public string Message { get; init; }
-        public bool Skipped { get; init; }
-        
-        public TestEvent()
-        {
-            Id = Guid.Empty;
-            OccurredAt = DateTimeOffset.MinValue;
-            Skipped = true;
-            Message = string.Empty;
-        }
-    }
 }
