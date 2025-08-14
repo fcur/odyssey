@@ -45,6 +45,9 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
         // TODO: add rebalance
         // NOT possible to decrease partitions count for active topic
 
+        // TODO: add index file for each segment as MMF
+        // start consuming from the position of the nearest found offset 
+        
         await InitWorkingDirectory(cancellationToken);
         InitOffsetTopic();
         await InitBrokerCounters(cancellationToken);

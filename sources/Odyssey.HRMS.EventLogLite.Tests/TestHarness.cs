@@ -133,6 +133,7 @@ public sealed class TestHarness<TEvent> where TEvent : class, new()
         }
 
         eventLoggerMock.Setup(v => v.Write<TEvent>(It.IsAny<LogMessage<TEvent>>(), It.IsAny<FileLogSegment>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((LogMessage<TEvent> msg, FileLogSegment segment,CancellationToken _) => new PositionPair(0,0))
             .Callback<LogMessage<TEvent>, FileLogSegment, CancellationToken>((logMessage, segment, _) => SaveLoggedEvent(logMessage, segment));
 
         eventLoggerMock.Setup(v =>

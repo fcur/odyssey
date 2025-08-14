@@ -25,6 +25,21 @@ public sealed record LogMessage<TEvent> where TEvent : class
             Metadata = request.Metadata
         };
     }
+    
+    public static LogMessage<TEvent> Create(string key, TEvent payload,  long offset)
+    {
+        var timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+
+        return new LogMessage<TEvent>
+        {
+            Key = key,
+            Payload = payload,
+            Timestamp = timestamp,
+            Offset = offset,
+            Metadata = new Dictionary<string, object>()
+        };
+    }
+    
 }
 
 public sealed class PollRequest

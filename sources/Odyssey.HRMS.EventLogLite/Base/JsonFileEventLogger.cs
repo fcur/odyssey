@@ -5,6 +5,8 @@ using System.Text.Json;
 
 namespace Odyssey.HRMS.EventLogLite.Base;
 
+public record struct PositionPair(long Start, long Next);
+
 public sealed class JsonFileEventLogger : IFileEventLogger
 {
     // log divider symbol, equals to '\n'
@@ -16,15 +18,20 @@ public sealed class JsonFileEventLogger : IFileEventLogger
     {
         throw new NotImplementedException();
     }
-
-    public async Task Write<TEvent>(LogMessage<TEvent> logMessage, FileLogSegment segment, CancellationToken cancellationToken = default)
+    
+    public async Task<PositionPair> Write<TEvent>(LogMessage<TEvent> logMessage, FileLogSegment segment, CancellationToken cancellationToken = default)
         where TEvent : class
     {
         await using var fs = new FileStream(segment.FilePath, FileMode.OpenOrCreate, FileAccess.Write);
         fs.Seek(0, SeekOrigin.End);
 
         await fs.WriteAsync(new[] { EventLogDivider }, cancellationToken);
+        var startPosition = fs.Position + 1;
         await JsonSerializer.SerializeAsync(fs, logMessage, SerializerOptions, cancellationToken);
+
+        return new PositionPair(startPosition, fs.Position + 2);
+        // + 1 as divider
+        // + 1 as target
     }
 
     public async Task<LogMessage<TEvent>?> ReadLastMessage<TEvent>(FileLogSegment segment, CancellationToken cancellationToken = default)
@@ -63,7 +70,7 @@ public sealed class JsonFileEventLogger : IFileEventLogger
         return message;
     }
 
-    public async IAsyncEnumerable<LogMessage<TEvent>> Poll<TEvent>(PollRequest request, FileLogSegment segment, long offset, [EnumeratorCancellation] CancellationToken cancellationToken = default) where TEvent : class
+    public async IAsyncEnumerable<LogMessage<TEvent>> Poll<TEvent>(PollRequest request, FileLogSegment segment, long startPosition, [EnumeratorCancellation] CancellationToken cancellationToken = default) where TEvent : class
     {
         await using var fs = new FileStream(segment.FilePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
         if (fs.Length == 0)
@@ -75,7 +82,7 @@ public sealed class JsonFileEventLogger : IFileEventLogger
         var counter = 0;
 
         // fs.Seek(lastPosition, SeekOrigin.Begin);
-        fs.Seek(offset, SeekOrigin.Begin);
+        fs.Seek(startPosition - 1, SeekOrigin.Begin);
 
         using var reader = new StreamReader(fs);
         while (await reader.ReadLineAsync(cancellationToken) is { } line && counter < request.BatchSize)
