@@ -114,6 +114,8 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
         var result = new List<LogResponse<TEvent>>(request.BatchSize);
         var segment = _segmentsMap[logSegment.PartitionId];
         
+        // TODO: Convert offset to position
+        
         await foreach (var logMessage in _eventLogger.Poll<TEvent>(request, segment, offset, cancellationToken))
         {
             var response = new LogResponse<TEvent>
