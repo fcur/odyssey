@@ -143,7 +143,7 @@ public sealed class TestHarness<TEvent> where TEvent : class, new()
                 HandlePollRequest(request, segment, offset));
 
         eventLoggerMock.Setup(v => v.Commit(It.IsAny<LogOffsetRequest>(), It.IsAny<FileLogSegment>(), It.IsAny<CancellationToken>()))
-            .Returns(Task.CompletedTask)
+            .ReturnsAsync((LogOffsetRequest request, FileLogSegment segment,CancellationToken _) => new PositionPair(0,0))
             .Callback<LogOffsetRequest, FileLogSegment, CancellationToken>((request, segment, _) => HandleCommitedEvent(request, segment));
 
         eventLoggerMock.Setup(v => v.ReadSavedOffset(It.IsAny<LogOffsetKey>(), It.IsAny<FileLogSegment>(), It.IsAny<CancellationToken>()))

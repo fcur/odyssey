@@ -38,9 +38,7 @@ public sealed class FileSegmentFixture : IAsyncLifetime
             await fs.WriteAsync(new byte[] { 10 }, cancellationToken);
         }
 
-        return fs.Position + 2;
-        // + 1 as divider
-        // + 1 as target
+        return fs.Position;
     }
 
     public long GetLinesCount(string filePath)

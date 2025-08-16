@@ -25,11 +25,11 @@ public sealed class JsonFileEventLogger : IFileEventLogger
         await using var fs = new FileStream(segment.FilePath, FileMode.OpenOrCreate, FileAccess.Write);
         fs.Seek(0, SeekOrigin.End);
 
-        await fs.WriteAsync(new[] { EventLogDivider }, cancellationToken);
-        var startPosition = fs.Position + 1;
+        var startPosition = fs.Position;
         await JsonSerializer.SerializeAsync(fs, logMessage, SerializerOptions, cancellationToken);
+        await fs.WriteAsync(new[] { EventLogDivider }, cancellationToken);
 
-        return new PositionPair(startPosition, fs.Position + 2);
+        return new PositionPair(startPosition, fs.Position);
         // + 1 as divider
         // + 1 as target
     }
@@ -100,12 +100,15 @@ public sealed class JsonFileEventLogger : IFileEventLogger
         }
     }
 
-    public async Task Commit(LogOffsetRequest request, FileLogSegment segment, CancellationToken cancellationToken = default)
+    public async Task<PositionPair> Commit(LogOffsetRequest request, FileLogSegment segment, CancellationToken cancellationToken = default)
     {
         await using var fs = new FileStream(segment.FilePath, FileMode.OpenOrCreate, FileAccess.Write);
         fs.Seek(0, SeekOrigin.End);
+        var startPosition = fs.Position + 1;
         await fs.WriteAsync(new[] { EventLogDivider }, cancellationToken);
         await JsonSerializer.SerializeAsync(fs, request, SerializerOptions, cancellationToken);
+        
+        return new PositionPair(startPosition, fs.Position + 2);
     }
 
     public async Task<ReadOffsetResult> ReadSavedOffset(LogOffsetKey key, FileLogSegment segment, CancellationToken cancellationToken = default)

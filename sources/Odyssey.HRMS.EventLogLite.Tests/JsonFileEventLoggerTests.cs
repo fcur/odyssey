@@ -32,7 +32,7 @@ public sealed class JsonFileEventLoggerTests : IAsyncLifetime, IClassFixture<Fil
         _ = await _logger.Write(logMessage, logSegment, cts.Token);
         var linesCount = _fixture.GetLinesCount(logSegment.FilePath);
         
-        linesCount.Should().Be(2, "the first line must be empty");
+        linesCount.Should().Be(2);
     }
 
     [Theory, AutoData]
@@ -41,7 +41,7 @@ public sealed class JsonFileEventLoggerTests : IAsyncLifetime, IClassFixture<Fil
         const byte partition = 125;
         var now = DateTimeOffset.UtcNow;
         var cts = new CancellationTokenSource();
-        var liensCount = randomNumber % 123;
+        var liensCount = randomNumber % 23;
         var request = new LogRequest<TestEvent> { Key = key, Payload = payload };
         var logMessage = LogMessage<TestEvent>.Create(request, liensCount + 1);
         var logSegment = new FileLogSegment(partition, _fixture.GetFilePath(partition));
@@ -101,7 +101,35 @@ public sealed class JsonFileEventLoggerTests : IAsyncLifetime, IClassFixture<Fil
         messages.Should().Contain(v => v.Key == key2);
     }
 
+    [Theory, AutoData]
+    public async Task TestCommit(LogOffsetKey key, LogOffsetValue value, int randomNumber)
+    {
+        const byte partition = 126;
+        var now = DateTimeOffset.UtcNow;
+        var cts = new CancellationTokenSource();
+        var linesCount = randomNumber % 93;
 
+        var logSegment = new FileLogSegment(partition, _fixture.GetFilePath(partition));
+
+        var request = new LogOffsetRequest
+        {
+            Key = key,
+            OccuredAt = now,
+            Metadata = new Dictionary<string, object>(),
+            RequestId = Guid.CreateVersion7(now),
+            Value = value
+        };
+        
+        var position1 = await _fixture.WriteManyLines(linesCount, logSegment.FilePath, cts.Token);
+        var position2 = await _logger.Commit(request, logSegment, cts.Token);
+
+    }
+    
+    
+    
+    
+    
+    
     public Task InitializeAsync()
     {
         return Task.CompletedTask;

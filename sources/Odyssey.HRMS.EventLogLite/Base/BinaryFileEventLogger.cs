@@ -56,7 +56,7 @@ public sealed class BinaryFileEventLogger: IFileEventLogger
         throw new NotImplementedException();
     }
 
-    public Task Commit(LogOffsetRequest request, FileLogSegment segment, CancellationToken cancellationToken = default)
+    public Task<PositionPair> Commit(LogOffsetRequest request, FileLogSegment segment, CancellationToken cancellationToken = default)
     {
         throw new NotImplementedException();
     }
