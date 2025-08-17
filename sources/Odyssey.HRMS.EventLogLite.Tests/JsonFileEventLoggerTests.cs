@@ -110,7 +110,7 @@ public sealed class JsonFileEventLoggerTests : IAsyncLifetime, IClassFixture<Fil
         const byte partition = 126;
         var now = DateTimeOffset.UtcNow;
         var cts = new CancellationTokenSource();
-        var linesCount = randomNumber % 93;
+        var linesCount = randomNumber % 34;
 
         var logSegment = new FileLogSegment(partition, _fixture.GetFilePath(partition));
 
@@ -134,13 +134,20 @@ public sealed class JsonFileEventLoggerTests : IAsyncLifetime, IClassFixture<Fil
         
         var position1 = await _fixture.WriteManyLines(linesCount, logSegment.FilePath, cts.Token);
         var position2 = await _logger.Commit(request1, logSegment, cts.Token);
+        var linesCount1 = _fixture.GetLinesCount(logSegment.FilePath);
         var size1 = _fixture.GetBytesCount(request1);
         var position3 = await _logger.Commit(request2, logSegment, cts.Token);
         var size2 = _fixture.GetBytesCount(request2);
+        var linesCount2 = _fixture.GetLinesCount(logSegment.FilePath);
 
         using var scope = new AssertionScope();
         position1.Should().Be(position2.Start);
         position2.Next.Should().Be(position1 + size1 + 1);
+        position3.Start.Should().Be(position2.Next);
+        position3.Next.Should().Be(position1 + size1 + 1 + size2 + 1);
+        
+        linesCount1.Should().Be(linesCount + 2);
+        linesCount2.Should().Be(linesCount + 3);
     }
     
     
