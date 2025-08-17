@@ -14,24 +14,26 @@ public sealed class JsonFileEventLogger : IFileEventLogger
     private static readonly JsonSerializerOptions SerializerOptions = new() { WriteIndented = false };
     private readonly ConcurrentDictionary<byte, long> _lastPosition = new();
 
-    public Task WriteBatch<TEvent>(IReadOnlyCollection<LogMessage<TEvent>> logMessages, FileLogSegment segment, CancellationToken cancellationToken = default) where TEvent : class
+    public Task WriteBatch<TEvent>(IReadOnlyCollection<LogMessage<TEvent>> logMessages, FileLogSegment segment,
+        CancellationToken cancellationToken = default) where TEvent : class
     {
         throw new NotImplementedException();
     }
-    
-    public async Task<PositionPair> Write<TEvent>(LogMessage<TEvent> logMessage, FileLogSegment segment, CancellationToken cancellationToken = default)
+
+    public Task<PositionPair> Write<TEvent>(LogMessage<TEvent> logMessage, FileLogSegment segment,
+        CancellationToken cancellationToken = default)
         where TEvent : class
     {
-        await using var fs = new FileStream(segment.FilePath, FileMode.OpenOrCreate, FileAccess.Write);
-        fs.Seek(0, SeekOrigin.End);
-
-        var startPosition = fs.Position;
-        await JsonSerializer.SerializeAsync(fs, logMessage, SerializerOptions, cancellationToken);
-        await fs.WriteAsync(new[] { EventLogDivider }, cancellationToken);
-
-        return new PositionPair(startPosition, fs.Position);
-        // + 1 as divider
-        // + 1 as target
+        return WriteInternal(logMessage, segment, cancellationToken);
+        
+        // await using var fs = new FileStream(segment.FilePath, FileMode.OpenOrCreate, FileAccess.Write);
+        // fs.Seek(0, SeekOrigin.End);
+        //
+        // var startPosition = fs.Position;
+        // await JsonSerializer.SerializeAsync(fs, logMessage, SerializerOptions, cancellationToken);
+        // await fs.WriteAsync(new[] { EventLogDivider }, cancellationToken);
+        //
+        // return new PositionPair(startPosition, fs.Position);
     }
 
     public async Task<LogMessage<TEvent>?> ReadLastMessage<TEvent>(FileLogSegment segment, CancellationToken cancellationToken = default)
@@ -50,12 +52,13 @@ public sealed class JsonFileEventLogger : IFileEventLogger
         while (fs.Position > 0)
         {
             await fs.ReadExactlyAsync(readBuffer, 0, 1, cancellationToken);
-            if (readBuffer[0] == EventLogDivider)
+            if (readBuffer[0] == EventLogDivider && writeBuffer.Count > 0)
             {
                 break;
             }
 
             writeBuffer.Push(readBuffer[0]);
+
             fs.Seek(-2, SeekOrigin.Current);
         }
 
@@ -70,7 +73,8 @@ public sealed class JsonFileEventLogger : IFileEventLogger
         return message;
     }
 
-    public async IAsyncEnumerable<LogMessage<TEvent>> Poll<TEvent>(PollRequest request, FileLogSegment segment, long startPosition, [EnumeratorCancellation] CancellationToken cancellationToken = default) where TEvent : class
+    public async IAsyncEnumerable<LogMessage<TEvent>> Poll<TEvent>(PollRequest request, FileLogSegment segment, long startPosition,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default) where TEvent : class
     {
         await using var fs = new FileStream(segment.FilePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
         if (fs.Length == 0)
@@ -89,28 +93,31 @@ public sealed class JsonFileEventLogger : IFileEventLogger
         {
             var position = fs.Position;
             _lastPosition.AddOrUpdate(segment.PartitionId, position, (key, value) => position);
-            
-            var message =  JsonSerializer.Deserialize<LogMessage<TEvent>>(line);
-            
+
+            var message = JsonSerializer.Deserialize<LogMessage<TEvent>>(line);
+
             ArgumentNullException.ThrowIfNull(message);
-            
+
             counter++;
-            
+
             yield return message;
         }
     }
 
-    public async Task<PositionPair> Commit(LogOffsetRequest request, FileLogSegment segment, CancellationToken cancellationToken = default)
+    public Task<PositionPair> Commit(LogOffsetRequest request, FileLogSegment segment, CancellationToken cancellationToken = default)
     {
-        await using var fs = new FileStream(segment.FilePath, FileMode.OpenOrCreate, FileAccess.Write);
-        fs.Seek(0, SeekOrigin.End);
-        var startPosition = fs.Position + 1;
-        await fs.WriteAsync(new[] { EventLogDivider }, cancellationToken);
-        await JsonSerializer.SerializeAsync(fs, request, SerializerOptions, cancellationToken);
+        return WriteInternal(request, segment, cancellationToken);
         
-        return new PositionPair(startPosition, fs.Position + 2);
+        // await using var fs = new FileStream(segment.FilePath, FileMode.OpenOrCreate, FileAccess.Write);
+        // fs.Seek(0, SeekOrigin.End);
+        //
+        // var startPosition = fs.Position;
+        // await JsonSerializer.SerializeAsync(fs, request, SerializerOptions, cancellationToken);
+        // await fs.WriteAsync(new[] { EventLogDivider }, cancellationToken);
+        //
+        // return new PositionPair(startPosition, fs.Position);
     }
-
+    
     public async Task<ReadOffsetResult> ReadSavedOffset(LogOffsetKey key, FileLogSegment segment, CancellationToken cancellationToken = default)
     {
         await using var fs = new FileStream(segment.FilePath, FileMode.OpenOrCreate, FileAccess.Read);
@@ -126,12 +133,12 @@ public sealed class JsonFileEventLogger : IFileEventLogger
         while (fs.Position > 0)
         {
             await fs.ReadExactlyAsync(readBuffer, 0, 1, cancellationToken);
-            
+
             if (readBuffer[0] == EventLogDivider)
             {
                 using var ms = new MemoryStream(writeBuffer.ToArray());
                 var logOffset = await JsonSerializer.DeserializeAsync<LogOffsetRequest>(ms, cancellationToken: cancellationToken);
-                
+
                 if (logOffset!.Key == key)
                 {
                     return new ReadOffsetResult
@@ -139,7 +146,7 @@ public sealed class JsonFileEventLogger : IFileEventLogger
                         Key = key, Value = logOffset.Value, Metadata = logOffset.Metadata, OccuredAt = logOffset.OccuredAt
                     };
                 }
-                
+
                 writeBuffer.Clear();
                 continue;
             }
@@ -147,7 +154,19 @@ public sealed class JsonFileEventLogger : IFileEventLogger
             writeBuffer.Push(readBuffer[0]);
             fs.Seek(-2, SeekOrigin.Current);
         }
-        
+
         return ReadOffsetResult.CreateNew(key);
+    }
+    
+    private async Task<PositionPair> WriteInternal<TPayload>(TPayload payload, FileLogSegment segment, CancellationToken cancellationToken) where TPayload : class
+    {
+        await using var fs = new FileStream(segment.FilePath, FileMode.OpenOrCreate, FileAccess.Write);
+        fs.Seek(0, SeekOrigin.End);
+
+        var startPosition = fs.Position;
+        await JsonSerializer.SerializeAsync(fs, payload, SerializerOptions, cancellationToken);
+        await fs.WriteAsync(new[] { EventLogDivider }, cancellationToken);
+
+        return new PositionPair(startPosition, fs.Position);
     }
 }

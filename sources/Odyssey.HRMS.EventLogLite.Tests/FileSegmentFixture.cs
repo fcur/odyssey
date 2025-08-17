@@ -1,5 +1,8 @@
+using Odyssey.HRMS.EventLogLite.Entities;
 using System.Diagnostics.CodeAnalysis;
 using System.IO.MemoryMappedFiles;
+using System.Text;
+using System.Text.Json;
 
 namespace Odyssey.HRMS.EventLogLite.Tests;
 
@@ -8,6 +11,7 @@ namespace Odyssey.HRMS.EventLogLite.Tests;
 public sealed class FileSegmentFixture : IAsyncLifetime
 {
     private const string DirectoryPath = "TestEvent";
+    private static readonly JsonSerializerOptions SerializerOptions = new() { WriteIndented = false };
 
     public string WorkingDirectory => Path.Combine(Environment.CurrentDirectory, DirectoryPath);
     public string GetFilePath(byte partition) => Path.Combine(Environment.CurrentDirectory, DirectoryPath, $"test-event.{partition}.log");
@@ -61,5 +65,13 @@ public sealed class FileSegmentFixture : IAsyncLifetime
         }
 
         return count;
+    }
+
+    public long GetBytesCount<TPayload>(TPayload payload)  where TPayload : class
+    {
+        var jsonString = JsonSerializer.Serialize(payload);
+        var sizeInBytes = Encoding.UTF8.GetByteCount(jsonString);
+        
+        return sizeInBytes;
     }
 }

@@ -29,9 +29,12 @@ public sealed class JsonFileEventLoggerTests : IAsyncLifetime, IClassFixture<Fil
         var logMessage = LogMessage<TestEvent>.Create(request, 1);
         var logSegment = new FileLogSegment(partition, _fixture.GetFilePath(partition));
 
-        _ = await _logger.Write(logMessage, logSegment, cts.Token);
+        var position = await _logger.Write(logMessage, logSegment, cts.Token);
+        var size = _fixture.GetBytesCount(logMessage);
         var linesCount = _fixture.GetLinesCount(logSegment.FilePath);
-        
+
+        position.Start.Should().Be(0);
+        position.Next.Should().Be(size + 1);
         linesCount.Should().Be(2);
     }
 
@@ -48,8 +51,8 @@ public sealed class JsonFileEventLoggerTests : IAsyncLifetime, IClassFixture<Fil
 
         var position1 = await _fixture.WriteManyLines(liensCount, logSegment.FilePath, cts.Token);
         var position2 = await _logger.Write(logMessage, logSegment, cts.Token);
-
         var latestMsg = await _logger.ReadLastMessage<TestEvent>(logSegment, cts.Token);
+        var size = _fixture.GetBytesCount(logMessage);
         var linesCount = _fixture.GetLinesCount(logSegment.FilePath);
 
         using var scope = new AssertionScope();
@@ -60,8 +63,8 @@ public sealed class JsonFileEventLoggerTests : IAsyncLifetime, IClassFixture<Fil
         latestMsg.Metadata.Should().NotBeNull();
         latestMsg.Timestamp.Should().BeCloseTo(now.ToUnixTimeMilliseconds(), (ulong)TimeSpan.FromSeconds(1).TotalMilliseconds);  
         linesCount.Should().Be(latestMsg.Offset + 1);
-
-        position1.Should().BeLessThan(position2.Next);
+        position1.Should().Be(position2.Start);
+        position2.Next.Should().Be(position1 + size + 1);
     }
 
     [Theory, AutoData]
@@ -102,7 +105,7 @@ public sealed class JsonFileEventLoggerTests : IAsyncLifetime, IClassFixture<Fil
     }
 
     [Theory, AutoData]
-    public async Task TestCommit(LogOffsetKey key, LogOffsetValue value, int randomNumber)
+    public async Task TestCommit(LogOffsetKey key1, LogOffsetValue value1, LogOffsetKey key2, LogOffsetValue value2, int randomNumber)
     {
         const byte partition = 126;
         var now = DateTimeOffset.UtcNow;
@@ -111,18 +114,33 @@ public sealed class JsonFileEventLoggerTests : IAsyncLifetime, IClassFixture<Fil
 
         var logSegment = new FileLogSegment(partition, _fixture.GetFilePath(partition));
 
-        var request = new LogOffsetRequest
+        var request1 = new LogOffsetRequest
         {
-            Key = key,
+            Key = key1,
             OccuredAt = now,
             Metadata = new Dictionary<string, object>(),
             RequestId = Guid.CreateVersion7(now),
-            Value = value
+            Value = value1
+        };
+        
+        var request2 = new LogOffsetRequest
+        {
+            Key = key2,
+            OccuredAt = now,
+            Metadata = new Dictionary<string, object>(),
+            RequestId = Guid.CreateVersion7(now),
+            Value = value2
         };
         
         var position1 = await _fixture.WriteManyLines(linesCount, logSegment.FilePath, cts.Token);
-        var position2 = await _logger.Commit(request, logSegment, cts.Token);
+        var position2 = await _logger.Commit(request1, logSegment, cts.Token);
+        var size1 = _fixture.GetBytesCount(request1);
+        var position3 = await _logger.Commit(request2, logSegment, cts.Token);
+        var size2 = _fixture.GetBytesCount(request2);
 
+        using var scope = new AssertionScope();
+        position1.Should().Be(position2.Start);
+        position2.Next.Should().Be(position1 + size1 + 1);
     }
     
     
