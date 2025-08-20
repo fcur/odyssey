@@ -37,7 +37,7 @@ public sealed class FileSegmentFixture : IAsyncLifetime
     public async Task<long> WriteManyLines(int linesCount, string filePath, CancellationToken cancellationToken)
     {
         await using var fs = new FileStream(filePath, FileMode.OpenOrCreate, FileAccess.Write);
-        for (var i = 0; i < linesCount; i++)
+        for (var i = 1; i < linesCount; i++)
         {
             await fs.WriteAsync(new byte[] { 10 }, cancellationToken);
         }

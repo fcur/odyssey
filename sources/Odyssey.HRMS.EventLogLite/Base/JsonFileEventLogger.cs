@@ -86,7 +86,8 @@ public sealed class JsonFileEventLogger : IFileEventLogger
         var counter = 0;
 
         // fs.Seek(lastPosition, SeekOrigin.Begin);
-        fs.Seek(startPosition - 1, SeekOrigin.Begin);
+        // fs.Seek(startPosition - 1, SeekOrigin.Begin);
+        fs.Seek(startPosition, SeekOrigin.Begin);
 
         using var reader = new StreamReader(fs);
         while (await reader.ReadLineAsync(cancellationToken) is { } line && counter < request.BatchSize)

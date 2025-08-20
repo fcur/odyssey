@@ -21,6 +21,22 @@ public sealed class JsonFileEventLoggerTests : IAsyncLifetime, IClassFixture<Fil
     }
 
     [Theory, AutoData]
+    public async Task TestWriteManyLines(int randomNumber)
+    {
+        const byte partition = 121;
+        var linesCount = randomNumber % 21;
+        var cts = new CancellationTokenSource();
+        var logSegment = new FileLogSegment(partition, _fixture.GetFilePath(partition));
+        
+        var position = await _fixture.WriteManyLines(linesCount, logSegment.FilePath, cts.Token);
+        var linesCountResult = _fixture.GetLinesCount(logSegment.FilePath);
+        
+        using var scope = new AssertionScope();
+        position.Should().Be(linesCount - 1);
+        linesCountResult.Should().Be(linesCount);
+    }
+    
+    [Theory, AutoData]
     public async Task TestWriteOffset(string key, TestEvent payload)
     {
         const byte partition = 124;
@@ -44,16 +60,17 @@ public sealed class JsonFileEventLoggerTests : IAsyncLifetime, IClassFixture<Fil
         const byte partition = 125;
         var now = DateTimeOffset.UtcNow;
         var cts = new CancellationTokenSource();
-        var liensCount = randomNumber % 23;
+        var linesCount = randomNumber % 23;
         var request = new LogRequest<TestEvent> { Key = key, Payload = payload };
-        var logMessage = LogMessage<TestEvent>.Create(request, liensCount + 1);
+        var logMessage = LogMessage<TestEvent>.Create(request, linesCount + 1);
         var logSegment = new FileLogSegment(partition, _fixture.GetFilePath(partition));
-
-        var position1 = await _fixture.WriteManyLines(liensCount, logSegment.FilePath, cts.Token);
+        
+        // additional line for new message
+        var position1 = await _fixture.WriteManyLines(linesCount + 1, logSegment.FilePath, cts.Token);
         var position2 = await _logger.Write(logMessage, logSegment, cts.Token);
         var latestMsg = await _logger.ReadLastMessage<TestEvent>(logSegment, cts.Token);
         var size = _fixture.GetBytesCount(logMessage);
-        var linesCount = _fixture.GetLinesCount(logSegment.FilePath);
+        var linesCountResult = _fixture.GetLinesCount(logSegment.FilePath);
 
         using var scope = new AssertionScope();
         
@@ -62,7 +79,7 @@ public sealed class JsonFileEventLoggerTests : IAsyncLifetime, IClassFixture<Fil
         latestMsg.Key.Should().Be(key);
         latestMsg.Metadata.Should().NotBeNull();
         latestMsg.Timestamp.Should().BeCloseTo(now.ToUnixTimeMilliseconds(), (ulong)TimeSpan.FromSeconds(1).TotalMilliseconds);  
-        linesCount.Should().Be(latestMsg.Offset + 1);
+        linesCountResult.Should().Be(latestMsg.Offset + 1);
         position1.Should().Be(position2.Start);
         position2.Next.Should().Be(position1 + size + 1);
     }
@@ -80,7 +97,7 @@ public sealed class JsonFileEventLoggerTests : IAsyncLifetime, IClassFixture<Fil
         var logMessage1 = LogMessage<TestEvent>.Create(key1, payload1, ++newOffset);
         var logMessage2 = LogMessage<TestEvent>.Create(key2, payload2, ++newOffset);
 
-        var position1 = await _fixture.WriteManyLines(linesCount, logSegment.FilePath, cts.Token);
+        var position1 = await _fixture.WriteManyLines(linesCount + 1, logSegment.FilePath, cts.Token);
         var position2Pair = await _logger.Write(logMessage1, logSegment, cts.Token);
         var position3Pair = await _logger.Write(logMessage2, logSegment, cts.Token);
 
@@ -107,7 +124,7 @@ public sealed class JsonFileEventLoggerTests : IAsyncLifetime, IClassFixture<Fil
     [Theory, AutoData]
     public async Task TestCommit(LogOffsetKey key1, LogOffsetValue value1, LogOffsetKey key2, LogOffsetValue value2, int randomNumber)
     {
-        const byte partition = 126;
+        const byte partition = 127;
         var now = DateTimeOffset.UtcNow;
         var cts = new CancellationTokenSource();
         var linesCount = randomNumber % 34;
@@ -132,7 +149,7 @@ public sealed class JsonFileEventLoggerTests : IAsyncLifetime, IClassFixture<Fil
             Value = value2
         };
         
-        var position1 = await _fixture.WriteManyLines(linesCount, logSegment.FilePath, cts.Token);
+        var position1 = await _fixture.WriteManyLines(linesCount + 1, logSegment.FilePath, cts.Token);
         var position2 = await _logger.Commit(request1, logSegment, cts.Token);
         var linesCount1 = _fixture.GetLinesCount(logSegment.FilePath);
         var size1 = _fixture.GetBytesCount(request1);
@@ -149,11 +166,6 @@ public sealed class JsonFileEventLoggerTests : IAsyncLifetime, IClassFixture<Fil
         linesCount1.Should().Be(linesCount + 2);
         linesCount2.Should().Be(linesCount + 3);
     }
-    
-    
-    
-    
-    
     
     public Task InitializeAsync()
     {
