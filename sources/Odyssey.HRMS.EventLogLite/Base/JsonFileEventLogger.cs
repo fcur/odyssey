@@ -86,7 +86,6 @@ public sealed class JsonFileEventLogger : IFileEventLogger
         var counter = 0;
 
         // fs.Seek(lastPosition, SeekOrigin.Begin);
-        // fs.Seek(startPosition - 1, SeekOrigin.Begin);
         fs.Seek(startPosition, SeekOrigin.Begin);
 
         using var reader = new StreamReader(fs);
@@ -135,7 +134,8 @@ public sealed class JsonFileEventLogger : IFileEventLogger
             if (string.IsNullOrWhiteSpace(line))
             {
                 continue;
-            }
+            }ee
+            ffssww333eeerrrerertteedzzzffaaazzzdwdd
 
             var logOffset = JsonSerializer.Deserialize<LogOffsetMessage>(line);
 
