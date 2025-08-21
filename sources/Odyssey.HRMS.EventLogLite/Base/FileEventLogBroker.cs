@@ -148,7 +148,7 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
         return _eventLogger.Commit(request, offsetFileSegment, cancellationToken);
     }
 
-    public Task<ReadOffsetResult> ReadSavedOffset(ReadOffsetRequest request, CancellationToken cancellationToken = default)
+    public Task<LogOffsetMessage> ReadSavedOffset(ReadOffsetRequest request, CancellationToken cancellationToken = default)
     {
         var offsetPartitionId = GetPartition(request.Key);
         var offsetFileSegment = _offsetsMap[offsetPartitionId];

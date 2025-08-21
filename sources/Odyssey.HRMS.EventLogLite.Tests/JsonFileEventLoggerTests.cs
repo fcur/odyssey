@@ -98,9 +98,13 @@ public sealed class JsonFileEventLoggerTests : IAsyncLifetime, IClassFixture<Fil
         var logMessage2 = LogMessage<TestEvent>.Create(key2, payload2, ++newOffset);
 
         var position1 = await _fixture.WriteManyLines(linesCount + 1, logSegment.FilePath, cts.Token);
-        var position2Pair = await _logger.Write(logMessage1, logSegment, cts.Token);
-        var position3Pair = await _logger.Write(logMessage2, logSegment, cts.Token);
-
+        var position2 = await _logger.Write(logMessage1, logSegment, cts.Token);
+        var linesCount1 = _fixture.GetLinesCount(logSegment.FilePath);
+        var size1 = _fixture.GetBytesCount(logMessage1);
+        var position3 = await _logger.Write(logMessage2, logSegment, cts.Token);
+        var size2 = _fixture.GetBytesCount(logMessage2);
+        var linesCount2 = _fixture.GetLinesCount(logSegment.FilePath);
+        
         var pollRequest = new PollRequest
         {
             BatchSize = 100,
@@ -114,8 +118,13 @@ public sealed class JsonFileEventLoggerTests : IAsyncLifetime, IClassFixture<Fil
 
         using var scope = new AssertionScope();
         
-        position1.Should().Be(position2Pair.Start);
-        position3Pair.Start.Should().Be(position2Pair.Next);
+        position1.Should().Be(position2.Start);
+        position2.Next.Should().Be(position1 + size1 + 1);
+        position3.Start.Should().Be(position2.Next);
+        position3.Next.Should().Be(position1 + size1 + 1 + size2 + 1);
+        linesCount1.Should().Be(linesCount + 2);
+        linesCount2.Should().Be(linesCount + 3);
+        
         messages.Length.Should().Be(2);
         messages.Should().Contain(v=>v.Key == key1);
         messages.Should().Contain(v => v.Key == key2);
@@ -152,19 +161,54 @@ public sealed class JsonFileEventLoggerTests : IAsyncLifetime, IClassFixture<Fil
         var position1 = await _fixture.WriteManyLines(linesCount + 1, logSegment.FilePath, cts.Token);
         var position2 = await _logger.Commit(request1, logSegment, cts.Token);
         var linesCount1 = _fixture.GetLinesCount(logSegment.FilePath);
-        var size1 = _fixture.GetBytesCount(request1);
         var position3 = await _logger.Commit(request2, logSegment, cts.Token);
-        var size2 = _fixture.GetBytesCount(request2);
         var linesCount2 = _fixture.GetLinesCount(logSegment.FilePath);
 
         using var scope = new AssertionScope();
         position1.Should().Be(position2.Start);
-        position2.Next.Should().Be(position1 + size1 + 1);
         position3.Start.Should().Be(position2.Next);
-        position3.Next.Should().Be(position1 + size1 + 1 + size2 + 1);
         
         linesCount1.Should().Be(linesCount + 2);
         linesCount2.Should().Be(linesCount + 3);
+    }
+
+    [Theory, AutoData]
+    public async Task TestReadOffset(LogOffsetKey key1, LogOffsetValue value1, LogOffsetKey key2, LogOffsetValue value2, int randomNumber)
+    {
+        const byte partition = 128;
+        var now = DateTimeOffset.UtcNow;
+        var cts = new CancellationTokenSource();
+        var linesCount = randomNumber % 34;
+
+        var logSegment = new FileLogSegment(partition, _fixture.GetFilePath(partition));
+
+        var request1 = new LogOffsetRequest
+        {
+            Key = key1,
+            OccuredAt = now,
+            Metadata = new Dictionary<string, object>(),
+            RequestId = Guid.CreateVersion7(now),
+            Value = value1
+        };
+        
+        var request2 = new LogOffsetRequest
+        {
+            Key = key2,
+            OccuredAt = now,
+            Metadata = new Dictionary<string, object>(),
+            RequestId = Guid.CreateVersion7(now),
+            Value = value2
+        };
+        
+        _ = await _fixture.WriteManyLines(linesCount + 1, logSegment.FilePath, cts.Token);
+        _ = await _logger.Commit(request1, logSegment, cts.Token);
+        _ = await _logger.Commit(request2, logSegment, cts.Token);
+
+        var offsetMessage = await _logger.ReadSavedOffset(key1, logSegment, cts.Token);
+        
+        using var scope = new AssertionScope();
+        offsetMessage.Should().NotBeNull();
+        offsetMessage.Key.Should().Be(key1);
     }
     
     public Task InitializeAsync()

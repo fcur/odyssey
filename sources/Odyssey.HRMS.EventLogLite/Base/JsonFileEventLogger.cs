@@ -25,7 +25,7 @@ public sealed class JsonFileEventLogger : IFileEventLogger
         where TEvent : class
     {
         return WriteInternal(logMessage, segment, cancellationToken);
-        
+
         // await using var fs = new FileStream(segment.FilePath, FileMode.OpenOrCreate, FileAccess.Write);
         // fs.Seek(0, SeekOrigin.End);
         //
@@ -107,8 +107,10 @@ public sealed class JsonFileEventLogger : IFileEventLogger
 
     public Task<PositionPair> Commit(LogOffsetRequest request, FileLogSegment segment, CancellationToken cancellationToken = default)
     {
-        return WriteInternal(request, segment, cancellationToken);
+        var message = new LogOffsetMessage { Key = request.Key, Value = request.Value, Metadata = request.Metadata, OccuredAt = request.OccuredAt };
         
+        return WriteInternal(message, segment, cancellationToken);
+
         // await using var fs = new FileStream(segment.FilePath, FileMode.OpenOrCreate, FileAccess.Write);
         // fs.Seek(0, SeekOrigin.End);
         //
@@ -118,48 +120,64 @@ public sealed class JsonFileEventLogger : IFileEventLogger
         //
         // return new PositionPair(startPosition, fs.Position);
     }
-    
-    public async Task<ReadOffsetResult> ReadSavedOffset(LogOffsetKey key, FileLogSegment segment, CancellationToken cancellationToken = default)
+
+    public async Task<LogOffsetMessage> ReadSavedOffset(LogOffsetKey key, FileLogSegment segment, CancellationToken cancellationToken = default)
     {
         await using var fs = new FileStream(segment.FilePath, FileMode.OpenOrCreate, FileAccess.Read);
         if (fs.Length == 0)
         {
-            return ReadOffsetResult.CreateNew(key);
+            return LogOffsetMessage.CreateNew(key);
         }
 
-        fs.Seek(-1, SeekOrigin.End);
-        var readBuffer = new byte[1];
-        var writeBuffer = new Stack<byte>();
-
-        while (fs.Position > 0)
+        using var reader = new StreamReader(fs);
+        while (await reader.ReadLineAsync(cancellationToken) is { } line)
         {
-            await fs.ReadExactlyAsync(readBuffer, 0, 1, cancellationToken);
-
-            if (readBuffer[0] == EventLogDivider)
+            if (string.IsNullOrWhiteSpace(line))
             {
-                using var ms = new MemoryStream(writeBuffer.ToArray());
-                var logOffset = await JsonSerializer.DeserializeAsync<LogOffsetRequest>(ms, cancellationToken: cancellationToken);
-
-                if (logOffset!.Key == key)
-                {
-                    return new ReadOffsetResult
-                    {
-                        Key = key, Value = logOffset.Value, Metadata = logOffset.Metadata, OccuredAt = logOffset.OccuredAt
-                    };
-                }
-
-                writeBuffer.Clear();
                 continue;
             }
 
-            writeBuffer.Push(readBuffer[0]);
-            fs.Seek(-2, SeekOrigin.Current);
+            var logOffset = JsonSerializer.Deserialize<LogOffsetMessage>(line);
+
+            ArgumentNullException.ThrowIfNull(logOffset);
+
+            return logOffset;
         }
 
-        return ReadOffsetResult.CreateNew(key);
+        // fs.Seek(-1, SeekOrigin.End);
+        // var readBuffer = new byte[1];
+        // var writeBuffer = new Stack<byte>();
+        //
+        // while (fs.Position > 0)
+        // {
+        //     await fs.ReadExactlyAsync(readBuffer, 0, 1, cancellationToken);
+        //
+        //     if (readBuffer[0] == EventLogDivider)
+        //     {
+        //         using var ms = new MemoryStream(writeBuffer.ToArray());
+        //         var logOffset = await JsonSerializer.DeserializeAsync<LogOffsetRequest>(ms, cancellationToken: cancellationToken);
+        //
+        //         if (logOffset!.Key == key)
+        //         {
+        //             return new ReadOffsetResult
+        //             {
+        //                 Key = key, Value = logOffset.Value, Metadata = logOffset.Metadata, OccuredAt = logOffset.OccuredAt
+        //             };
+        //         }
+        //
+        //         writeBuffer.Clear();
+        //         continue;
+        //     }
+        //
+        //     writeBuffer.Push(readBuffer[0]);
+        //     fs.Seek(-2, SeekOrigin.Current);
+        // }
+
+        return LogOffsetMessage.CreateNew(key);
     }
-    
-    private async Task<PositionPair> WriteInternal<TPayload>(TPayload payload, FileLogSegment segment, CancellationToken cancellationToken) where TPayload : class
+
+    private async Task<PositionPair> WriteInternal<TPayload>(TPayload payload, FileLogSegment segment, CancellationToken cancellationToken)
+        where TPayload : class
     {
         await using var fs = new FileStream(segment.FilePath, FileMode.OpenOrCreate, FileAccess.Write);
         fs.Seek(0, SeekOrigin.End);

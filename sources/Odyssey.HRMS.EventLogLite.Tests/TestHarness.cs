@@ -218,11 +218,11 @@ public sealed class TestHarness<TEvent> where TEvent : class, new()
         return result.Values.ToAsyncEnumerable();
     }
 
-    private Task<ReadOffsetResult> PrepareOffsetResults(LogOffsetKey key, FileLogSegment segment)
+    private Task<LogOffsetMessage> PrepareOffsetResults(LogOffsetKey key, FileLogSegment segment)
     {
         var result = _settings.SavedOffsets.TryGetValue(key, out var nextOffset)
-            ? new ReadOffsetResult { Key = key, Value = new LogOffsetValue(nextOffset, 0) }
-            : ReadOffsetResult.CreateNew(key);
+            ? new LogOffsetMessage { Key = key, Value = new LogOffsetValue(nextOffset, 0) }
+            : LogOffsetMessage.CreateNew(key);
 
         return Task.FromResult(result);
     }

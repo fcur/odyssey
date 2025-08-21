@@ -81,12 +81,12 @@ public sealed class ReadOffsetRequest
     public DateTimeOffset OccuredAt { get; init; }
 }
 
-public sealed class ReadOffsetResult
+public sealed class LogOffsetMessage
 {
     public LogOffsetKey Key { get; init; } = null!;
     public LogOffsetValue Value { get; init; } =  null!;
     public Dictionary<string, object> Metadata { get; init; } = new();
     public DateTimeOffset? OccuredAt { get; init; }
     
-    public static ReadOffsetResult CreateNew(LogOffsetKey key) => new ReadOffsetResult() { Key = key, Value = LogOffsetValue.New };
+    public static LogOffsetMessage CreateNew(LogOffsetKey key) => new LogOffsetMessage() { Key = key, Value = LogOffsetValue.New };
 }

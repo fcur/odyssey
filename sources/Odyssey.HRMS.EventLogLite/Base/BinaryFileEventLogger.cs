@@ -61,7 +61,7 @@ public sealed class BinaryFileEventLogger: IFileEventLogger
         throw new NotImplementedException();
     }
 
-    public Task<ReadOffsetResult> ReadSavedOffset(LogOffsetKey key, FileLogSegment segment, CancellationToken cancellationToken = default)
+    public Task<LogOffsetMessage> ReadSavedOffset(LogOffsetKey key, FileLogSegment segment, CancellationToken cancellationToken = default)
     {
         throw new NotImplementedException();
     }

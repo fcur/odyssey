@@ -12,7 +12,7 @@ public interface IEventBroker<TEvent>: IEventBroker where TEvent : class
     void Join(IEventConsumer<TEvent> consumer);
     Task<IReadOnlyCollection<LogResponse<TEvent>>> PollEvents(PollRequest request, LogSegment logSegment, long offset, CancellationToken cancellationToken = default);
     Task Commit(LogOffsetRequest request, CancellationToken cancellationToken = default);
-    Task<ReadOffsetResult> ReadSavedOffset(ReadOffsetRequest request, CancellationToken cancellationToken = default);
+    Task<LogOffsetMessage> ReadSavedOffset(ReadOffsetRequest request, CancellationToken cancellationToken = default);
 }
 
 
