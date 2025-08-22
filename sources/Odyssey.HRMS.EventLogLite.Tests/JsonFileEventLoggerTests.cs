@@ -211,6 +211,35 @@ public sealed class JsonFileEventLoggerTests : IAsyncLifetime, IClassFixture<Fil
         offsetMessage.Key.Should().Be(key1);
     }
     
+    [Theory, AutoData]
+    public async Task TestWriteBatch(string key1, TestEvent payload1, string key2, TestEvent payload2, int randomNumber)
+    {
+        const byte partition = 129;
+        var now = DateTimeOffset.UtcNow;
+        var cts = new CancellationTokenSource();
+        var linesCount = randomNumber % 22;
+        var newOffset = linesCount;
+        var logSegment = new FileLogSegment(partition, _fixture.GetFilePath(partition));
+
+        var logMessage1 = LogMessage<TestEvent>.Create(key1, payload1, ++newOffset);
+        var logMessage2 = LogMessage<TestEvent>.Create(key2, payload2, ++newOffset);
+
+        var position1 = await _fixture.WriteManyLines(linesCount + 1, logSegment.FilePath, cts.Token);
+        var linesCount1 = _fixture.GetLinesCount(logSegment.FilePath);
+        var position2 = await _logger.WriteBatch([logMessage1, logMessage2], logSegment, cts.Token);
+        var size1 = _fixture.GetBytesCount(logMessage1);
+        var size2 = _fixture.GetBytesCount(logMessage2);
+        var linesCount2 = _fixture.GetLinesCount(logSegment.FilePath);
+        
+        
+        using var scope = new AssertionScope();
+        
+        position1.Should().Be(position2.Start);
+        position2.Next.Should().Be(position1 + size1 + 1 + size2 + 1);
+        linesCount1.Should().Be(linesCount + 1);
+        linesCount2.Should().Be(linesCount + 3);
+    }
+    
     public Task InitializeAsync()
     {
         return Task.CompletedTask;

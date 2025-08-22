@@ -13,7 +13,7 @@ public sealed class BinaryFileEventLogger: IFileEventLogger
     // ├─ [Value Length]
     // ├─ [Value]
 
-    public Task WriteBatch<TEvent>(IReadOnlyCollection<LogMessage<TEvent>> logMessages, FileLogSegment segment, CancellationToken cancellationToken = default) where TEvent : class
+    public Task<PositionPair>  WriteBatch<TEvent>(IReadOnlyCollection<LogMessage<TEvent>> logMessages, FileLogSegment segment, CancellationToken cancellationToken = default) where TEvent : class
     {
         // offset of the first record in the batch
         long batchOffset = 0;

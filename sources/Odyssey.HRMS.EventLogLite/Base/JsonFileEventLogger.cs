@@ -14,10 +14,21 @@ public sealed class JsonFileEventLogger : IFileEventLogger
     private static readonly JsonSerializerOptions SerializerOptions = new() { WriteIndented = false };
     private readonly ConcurrentDictionary<byte, long> _lastPosition = new();
 
-    public Task WriteBatch<TEvent>(IReadOnlyCollection<LogMessage<TEvent>> logMessages, FileLogSegment segment,
+    public async Task<PositionPair> WriteBatch<TEvent>(IReadOnlyCollection<LogMessage<TEvent>> logMessages, FileLogSegment segment,
         CancellationToken cancellationToken = default) where TEvent : class
     {
-        throw new NotImplementedException();
+        await using var fs = new FileStream(segment.FilePath, FileMode.OpenOrCreate, FileAccess.Write);
+        fs.Seek(0, SeekOrigin.End);
+
+        var startPosition = fs.Position;
+
+        foreach (var payload in logMessages)
+        {
+            await JsonSerializer.SerializeAsync(fs, payload, SerializerOptions, cancellationToken);
+            await fs.WriteAsync(new[] { EventLogDivider }, cancellationToken);
+        }
+
+        return new PositionPair(startPosition, fs.Position);
     }
 
     public Task<PositionPair> Write<TEvent>(LogMessage<TEvent> logMessage, FileLogSegment segment, CancellationToken cancellationToken = default)
