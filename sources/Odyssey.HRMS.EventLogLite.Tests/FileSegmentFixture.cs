@@ -1,4 +1,3 @@
-using Odyssey.HRMS.EventLogLite.Entities;
 using System.Diagnostics.CodeAnalysis;
 using System.IO.MemoryMappedFiles;
 using System.Text;

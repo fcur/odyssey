@@ -48,7 +48,7 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
         // TODO: add index file for each segment as MMF
         // start consuming from the position of the nearest found offset 
         
-        await InitWorkingDirectory(cancellationToken);
+        InitWorkingDirectory();
         InitOffsetTopic();
         await InitBrokerCounters(cancellationToken);
         await AssignConsumers(cancellationToken);
@@ -192,12 +192,10 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
         return Convert.ToByte(_tempPartition);
     }
 
-    private Task InitWorkingDirectory(CancellationToken cancellationToken)
+    private void InitWorkingDirectory()
     {
         FileLogSegment.InitWorkingDirectory(_topic.Value);
         FileLogSegment.InitWorkingDirectory(_brokerSettings.TopicName);
-
-        return Task.CompletedTask;
     }
 
     private void InitOffsetTopic()
