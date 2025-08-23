@@ -71,6 +71,7 @@ public sealed record LogOffsetKey(string ConsumerGroupName, string TopicName, by
 public sealed record LogOffsetValue(long NextMsgOffset, long CommitTimestamp)
 {
     public static LogOffsetValue New => new LogOffsetValue(0, 0);
+    public long Offset => NextMsgOffset - 1;
 }
 
 

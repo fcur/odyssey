@@ -134,7 +134,7 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
         return result.ToArray();
     }
 
-    public Task Commit(LogOffsetRequest request, CancellationToken cancellationToken = default)
+    public async Task Commit(LogOffsetRequest request, CancellationToken cancellationToken = default)
     {
         var offsetPartitionId = GetPartition(request.Key);
         var offsetFileSegment = _offsetsMap[offsetPartitionId];
@@ -143,9 +143,12 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
         _ = request.Metadata.TryGetValue("Key", out var itemKey);
 
         _logger.LogDebug("Offset committing in progress, Key: {Key}, Topic: {TopicName}, Group: {GroupName}, Partition: {PartitionId}, Offset: {Offset}, RequestId: {RequestId}",
-            itemKey?.ToString(), topicName, groupName, partitionId, request.Value.NextMsgOffset - 1, request.RequestId);
+            itemKey?.ToString(), topicName, groupName, partitionId, request.Value.Offset, request.RequestId);
 
-        return _eventLogger.Commit(request, offsetFileSegment, cancellationToken);
+        var position = await _eventLogger.Commit(request, offsetFileSegment, cancellationToken);
+
+        // TODO: save index file
+        (long offset,long position) index =  (request.Value.Offset, position.Start);
     }
 
     public Task<LogOffsetMessage> ReadSavedOffset(ReadOffsetRequest request, CancellationToken cancellationToken = default)
