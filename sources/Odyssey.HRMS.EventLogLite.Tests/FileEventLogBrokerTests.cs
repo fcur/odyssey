@@ -1,4 +1,5 @@
 using AutoFixture.Xunit2;
+using Odyssey.HRMS.EventLogLite.Base;
 using Odyssey.HRMS.EventLogLite.Entities;
 using System.Diagnostics.CodeAnalysis;
 
@@ -16,12 +17,28 @@ public sealed class FileEventLogBrokerTests : IAsyncLifetime, IClassFixture<File
     }
 
     [Theory, AutoData]
+    public void TestWorkingDirectory(string name1, string name2, string name3)
+    {
+        var topic = new EventLogTopic("TestEvent1", 6);
+
+        _fixture.InitFolders(topic, name1,"1", "3", name2, "5", name3);
+
+        var partitionFolders = FileLogSegment.InitWorkingDirectory(topic);
+        var allFolders = _fixture.GetFolders(topic);
+
+        
+
+    }
+    
+    
+    [Theory, AutoData]
     public async Task TestLogEvent(string key, TestEvent payload)
     {
         var cts = new CancellationTokenSource();
         var request = new LogRequest<TestEvent> { Key = key, Payload = payload };
 
         var broker = _fixture.GetBroker();
+        await broker.Start(cts.Token);
 
         var logResult = await broker.LogEvent(request, cts.Token);
     }

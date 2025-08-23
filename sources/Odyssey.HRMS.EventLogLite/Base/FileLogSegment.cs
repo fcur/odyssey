@@ -1,9 +1,42 @@
+using System.Net.Http.Headers;
+
 namespace Odyssey.HRMS.EventLogLite.Base;
 
-public class FileLogSegment(byte partitionId, string filePath) : LogSegment(partitionId)
+public sealed class FileLogSegmentRoot(byte partitionId, string path) : IEquatable<FileLogSegmentRoot>
+{
+    public string Path { get; } = path;
+
+    public byte PartitionId { get; } = partitionId;
+
+    public bool Equals(FileLogSegmentRoot? other)
+    {
+        if (other is null)
+        {
+            return false;
+        }
+        
+        return PartitionId == other.PartitionId;
+    }
+
+    public override bool Equals(object? obj)
+    {
+        return ReferenceEquals(this, obj) || obj is FileLogSegmentRoot other && Equals(other);
+    }
+
+    public override int GetHashCode()
+    {
+        return HashCode.Combine(Path, PartitionId);
+    }
+}
+
+public sealed class FileLogSegment(byte partitionId, string filePath) : LogSegment(partitionId)
 {
     public string FilePath => filePath;
+
+    public const string EventLoggingRootKey = "EventLoggingRoot";
     private const string EventLogFileExtension = ".log";
+    private const string EventIndexFileExtension = ".index";
+    private const string EventTimeFileExtension = ".tindex";
 
     public static Dictionary<byte, FileLogSegment> MapPartitionsWithSegments(EventLogTopic topic)
     {
@@ -18,10 +51,54 @@ public class FileLogSegment(byte partitionId, string filePath) : LogSegment(part
         return segmentsMap;
     }
 
-    public static void InitWorkingDirectory(string topicName)
+    public static IReadOnlyCollection<string> InitWorkingDirectory(string topicName, byte partitions)
     {
         var workingDirectory = Path.Combine(Environment.CurrentDirectory, topicName);
-        Directory.CreateDirectory(workingDirectory);
+        if (!Directory.Exists(workingDirectory))
+        {
+            Directory.CreateDirectory(workingDirectory);
+        }
+
+        var existingFolders = Directory.GetDirectories(workingDirectory).Select(v => new DirectoryInfo(v)).ToArray();
+        var wantedFolders = Enumerable.Range(0, partitions).Select(v => new FileLogSegmentRoot((byte)v, Path.Combine(workingDirectory, v.ToString())))
+            .ToArray();
+
+        if (!existingFolders.Any())
+        {
+            Array.ForEach(wantedFolders, item => Directory.CreateDirectory(item.Path));
+            return wantedFolders.Select(v => v.Path).ToArray();
+        }
+        
+        var validFolders = existingFolders
+            .Select(v => byte.TryParse(v.Name, out var partitionIdResult) ? new FileLogSegmentRoot(partitionIdResult, v.FullName) : null)
+            .Where(v => v is not null).ToArray();
+
+        var missingFolders = wantedFolders.Except(validFolders).ToArray();
+        if (missingFolders.Length == 0)
+        {
+            return validFolders.Select(v => v!.Path).ToArray();
+        }
+        
+        Array.ForEach(missingFolders, item => Directory.CreateDirectory(item!.Path));
+        
+        return validFolders.Concat(missingFolders).OrderBy(v=>v!.PartitionId).Select(v=>v!.Path).ToArray();
+    }
+
+    public static IReadOnlyCollection<string> InitWorkingDirectory(EventLogTopic topic)
+    {
+        return InitWorkingDirectory(topic.Value, topic.Partitions);
+    }
+
+
+    public static void CleanupWorkingDirectory(string topicName)
+    {
+        var workingDirectory = Path.Combine(Environment.CurrentDirectory, topicName);
+        if (!Directory.Exists(workingDirectory))
+        {
+            return;
+        }
+
+        Directory.Delete(workingDirectory, true);
     }
 
     private static string[] GetOrCreateLogSegments(string workingDirectory, byte partitionsCount)
