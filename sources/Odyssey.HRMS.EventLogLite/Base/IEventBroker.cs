@@ -18,7 +18,7 @@ public interface IEventBroker<TEvent>: IEventBroker where TEvent : class
 
 public sealed record EventLogResult(string TopicName, byte PartitionId, long Offset);
 
-public sealed record EventLogTopic(string Value, byte Partitions);
+public sealed record EventLogTopic(string Name, byte Partitions);
 
 
 

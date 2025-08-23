@@ -14,6 +14,7 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
     private readonly EventBrokerSettings _brokerSettings;
     private readonly IFileEventLogger _eventLogger;
     private readonly EventLogTopic _topic;
+    private readonly EventLogTopic _offsetsTopic;
     // private readonly Channel<LogRespone<TEvent>> _mainChannel;
     private readonly ConcurrentQueue<IEventConsumer<TEvent>> _consumers;
 
@@ -34,6 +35,8 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
         _brokerSettings = brokerSettings;
         _eventLogger = eventLogger;
         _topic = topic;
+
+        _offsetsTopic = new EventLogTopic(_brokerSettings.TopicName, _brokerSettings.Partitions);
         _consumers = [];
 
         // var opt = new BoundedChannelOptions(1000) { SingleReader = false, SingleWriter = true, FullMode = BoundedChannelFullMode.Wait };
@@ -48,7 +51,12 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
         // TODO: add index file for each segment as MMF
         // start consuming from the position of the nearest found offset 
         
-        InitWorkingDirectory();
+        EnsureWorkingDirectory();
+        
+        
+        Scan();
+        
+        
         InitOffsetTopic();
         await InitBrokerCounters(cancellationToken);
         await AssignConsumers(cancellationToken);
@@ -101,7 +109,7 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
             break;
         }
 
-        return new EventLogResult(_topic.Value, partitionId, newOffset);
+        return new EventLogResult(_topic.Name, partitionId, newOffset);
     }
 
     public void Join(IEventConsumer<TEvent> consumer)
@@ -195,16 +203,18 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
         return Convert.ToByte(_tempPartition);
     }
 
-    private void InitWorkingDirectory()
+    private void EnsureWorkingDirectory()
     {
-        FileLogSegment.InitWorkingDirectory(_topic.Value);
-        FileLogSegment.InitWorkingDirectory(_brokerSettings.TopicName);
+        FileLogSegment.InitWorkingDirectory(_topic);
+        FileLogSegment.InitWorkingDirectory(_offsetsTopic);
+        
+        
+        
     }
 
     private void InitOffsetTopic()
     {
-        var topic = new EventLogTopic(_brokerSettings.TopicName, _brokerSettings.Partitions);
-        var segmentsMap = FileLogSegment.MapPartitionsWithSegments(topic);
+        var segmentsMap = FileLogSegment.MapPartitionsWithSegments(_offsetsTopic);
 
         _offsetsMap = segmentsMap;
     }
@@ -262,6 +272,17 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
         }
 
         return result;
+    }
+
+    private void Scan()
+    {
+        ScanTopic(_offsetsTopic);
+        ScanTopic(_topic);
+    }
+    
+    private void ScanTopic(EventLogTopic  topic)
+    {
+        
     }
 }
 
