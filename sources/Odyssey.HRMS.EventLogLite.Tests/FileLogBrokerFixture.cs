@@ -20,7 +20,7 @@ public sealed class FileLogBrokerFixture : IAsyncLifetime
 
     static FileLogBrokerFixture()
     {
-        Environment.SetEnvironmentVariable(FileLogSegment.EventLoggingRootKey, BaseDirectoryRoot, EnvironmentVariableTarget.Process);
+        FileLogSegment.SetEventLoggingRoot(BaseDirectoryRoot);
     }
     
     public FileLogBrokerFixture()
@@ -38,9 +38,7 @@ public sealed class FileLogBrokerFixture : IAsyncLifetime
 
     public void InitFolders(EventLogTopic topic, params string[] folders)
     {
-        var baseDirectory = Environment.GetEnvironmentVariable(FileLogSegment.EventLoggingRootKey, EnvironmentVariableTarget.Process) ??
-                            Environment.CurrentDirectory;
-        
+        var baseDirectory = FileLogSegment.GetEventLoggingRoot();
         var workingDirectory = Path.GetFullPath(Path.Combine(baseDirectory, topic.Name));
         
         foreach (var item in folders)
@@ -52,8 +50,7 @@ public sealed class FileLogBrokerFixture : IAsyncLifetime
 
     public IReadOnlyCollection<string> GetFolders(EventLogTopic topic)
     {
-        var baseDirectory = Environment.GetEnvironmentVariable(FileLogSegment.EventLoggingRootKey, EnvironmentVariableTarget.Process) ??
-                            Environment.CurrentDirectory;
+        var baseDirectory = FileLogSegment.GetEventLoggingRoot();
         var workingDirectory = Path.GetFullPath(Path.Combine(baseDirectory, topic.Name));
 
         return Directory.GetDirectories(workingDirectory);

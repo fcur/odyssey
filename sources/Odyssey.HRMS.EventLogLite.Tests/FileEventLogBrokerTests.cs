@@ -1,5 +1,6 @@
 using AutoFixture.Xunit2;
 using FluentAssertions;
+using FluentAssertions.Execution;
 using Odyssey.HRMS.EventLogLite.Base;
 using Odyssey.HRMS.EventLogLite.Entities;
 using System.Diagnostics.CodeAnalysis;
@@ -27,9 +28,11 @@ public sealed class FileEventLogBrokerTests : IAsyncLifetime, IClassFixture<File
         var allFolders = _fixture.GetFolders(topic);
         
         FileLogSegment.CleanupWorkingDirectory(topic.Name);
-        
-        partitionFolders.Count.Should().Be(topic.Partitions);
 
+        using var scope = new AssertionScope();
+        
+        allFolders.Count.Should().Be(9);
+        partitionFolders.Count.Should().Be(topic.Partitions);
         partitionFolders.SingleOrDefault(v => v.EndsWith("0")).Should().NotBeNull();
         partitionFolders.SingleOrDefault(v => v.EndsWith("1")).Should().NotBeNull();
         partitionFolders.SingleOrDefault(v => v.EndsWith("2")).Should().NotBeNull();

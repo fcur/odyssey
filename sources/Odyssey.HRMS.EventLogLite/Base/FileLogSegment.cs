@@ -1,39 +1,11 @@
-using System.Net.Http.Headers;
-
 namespace Odyssey.HRMS.EventLogLite.Base;
 
-public sealed class FileLogSegmentRoot(byte partitionId, string path) : IEquatable<FileLogSegmentRoot>
-{
-    public string Path { get; } = path;
-
-    public byte PartitionId { get; } = partitionId;
-
-    public bool Equals(FileLogSegmentRoot? other)
-    {
-        if (other is null)
-        {
-            return false;
-        }
-
-        return PartitionId == other.PartitionId;
-    }
-
-    public override bool Equals(object? obj)
-    {
-        return ReferenceEquals(this, obj) || obj is FileLogSegmentRoot other && Equals(other);
-    }
-
-    public override int GetHashCode()
-    {
-        return HashCode.Combine(Path, PartitionId);
-    }
-}
 
 public sealed class FileLogSegment(byte partitionId, string filePath) : LogSegment(partitionId)
 {
+    public const string EventLoggingRootKey = "EventLoggingRoot";
     public string FilePath => filePath;
 
-    public const string EventLoggingRootKey = "EventLoggingRoot";
     private const string EventLogFileExtension = ".log";
     private const string EventIndexFileExtension = ".index";
     private const string EventTimeFileExtension = ".tindex";
@@ -50,11 +22,28 @@ public sealed class FileLogSegment(byte partitionId, string filePath) : LogSegme
 
         return segmentsMap;
     }
+    
+    public static string SetEventLoggingRoot(string path)
+    {
+        var fullPath = Path.GetFullPath(path);
+        Environment.SetEnvironmentVariable(EventLoggingRootKey, fullPath, EnvironmentVariableTarget.Process);
+        
+        return fullPath;
+    }
 
-    public static IReadOnlyCollection<string> InitWorkingDirectory(string topicName, byte partitions)
+    public static string GetEventLoggingRoot()
     {
         var baseDirectory = Environment.GetEnvironmentVariable(EventLoggingRootKey, EnvironmentVariableTarget.Process) ??
                             Environment.CurrentDirectory;
+
+        return baseDirectory;
+    }
+    
+    
+    public static IReadOnlyCollection<string> InitWorkingDirectory(string topicName, byte partitions)
+    {
+        
+        var baseDirectory = GetEventLoggingRoot();
 
         var workingDirectory = Path.GetFullPath(Path.Combine(baseDirectory, topicName));
         if (!Directory.Exists(workingDirectory))
@@ -95,8 +84,7 @@ public sealed class FileLogSegment(byte partitionId, string filePath) : LogSegme
 
     public static void CleanupWorkingDirectory(string topicName)
     {
-        var baseDirectory = Environment.GetEnvironmentVariable(EventLoggingRootKey, EnvironmentVariableTarget.Process) ??
-                         Environment.CurrentDirectory;
+        var baseDirectory = GetEventLoggingRoot();
 
         var workingDirectory = Path.GetFullPath(Path.Combine(baseDirectory, topicName));
         if (!Directory.Exists(workingDirectory))
