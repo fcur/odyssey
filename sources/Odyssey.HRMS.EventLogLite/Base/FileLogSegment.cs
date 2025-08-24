@@ -1,15 +1,38 @@
 namespace Odyssey.HRMS.EventLogLite.Base;
 
+public sealed record EventFileType(byte Type)
+{
+    private const string EventLogFileExtension = ".log";
+    private const string EventIndexFileExtension = ".index";
+    private const string EventTimeFileExtension = ".tindex";
+    
+    public static readonly EventFileType LogFile = new EventFileType(0);
+    public static readonly EventFileType IndexFile = new EventFileType(1);
+    public static readonly EventFileType TimeIndexFile = new EventFileType(2);
 
-public sealed class FileLogSegment(byte partitionId, string filePath) : LogSegment(partitionId)
+    public string GetExtension()
+    {
+        return Type switch
+        {
+            0 => EventLogFileExtension,
+            1 => EventIndexFileExtension,
+            2 => EventTimeFileExtension,
+            _ => throw new ArgumentOutOfRangeException()
+        };
+    }
+}
+
+
+public sealed class FileLogSegment(byte partitionId, long initialOffset, string root) : LogSegment(partitionId)
 {
     public const string EventLoggingRootKey = "EventLoggingRoot";
-    public string FilePath => filePath;
+    public string Root => $"{root}/{partitionId}";
 
     private const string EventLogFileExtension = ".log";
     private const string EventIndexFileExtension = ".index";
     private const string EventTimeFileExtension = ".tindex";
 
+    [Obsolete]
     public static Dictionary<byte, FileLogSegment> MapPartitionsWithSegments(EventLogTopic topic)
     {
         var workingDirectory = Path.Combine(Environment.CurrentDirectory, topic.Name);
@@ -18,7 +41,7 @@ public sealed class FileLogSegment(byte partitionId, string filePath) : LogSegme
         var logSegments = GetOrCreateLogSegments(workingDirectory, partitionsCount);
 
         var segmentsMap = Enumerable.Range(0, logSegments.Length).Zip(logSegments, (k, v) => new { key = (byte)k, val = v })
-            .ToDictionary(v => v.key, v => new FileLogSegment(v.key, v.val));
+            .ToDictionary(v => v.key, v => new FileLogSegment(v.key, 0, v.val));
 
         return segmentsMap;
     }
@@ -81,7 +104,6 @@ public sealed class FileLogSegment(byte partitionId, string filePath) : LogSegme
         return InitWorkingDirectory(topic.Name, topic.Partitions);
     }
 
-
     public static void CleanupWorkingDirectory(string topicName)
     {
         var baseDirectory = GetEventLoggingRoot();
@@ -114,6 +136,14 @@ public sealed class FileLogSegment(byte partitionId, string filePath) : LogSegme
 
     private static string[] GetLogSegments(string workingDirectory) => Directory.GetFiles(workingDirectory, $"*{EventLogFileExtension}");
 
-    private static string PreparePath(string workingDirectory, int fileIndex) =>
-        Path.Combine(workingDirectory, $"{fileIndex}{EventLogFileExtension}");
+    private static string PreparePath(string partitionRoot, int fileIndex) =>
+        Path.Combine(partitionRoot, $"{fileIndex}{EventLogFileExtension}");
+    
+    
+    public static string PreparePath(string partitionRoot, long initialOffset, EventFileType  eventType)
+    {
+        var extension = eventType.GetExtension();
+        
+        return Path.Combine(partitionRoot, $"{initialOffset:0000000000000000000}{extension}");
+    }
 }

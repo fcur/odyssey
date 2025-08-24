@@ -40,7 +40,6 @@ public sealed class FileEventLogBrokerTests : IAsyncLifetime, IClassFixture<File
         partitionFolders.SingleOrDefault(v => v.EndsWith("4")).Should().NotBeNull();
     }
     
-    
     [Theory, AutoData]
     public async Task TestLogEvent(string key, TestEvent payload)
     {

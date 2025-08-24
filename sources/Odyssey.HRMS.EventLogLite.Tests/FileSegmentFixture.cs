@@ -1,3 +1,4 @@
+using Odyssey.HRMS.EventLogLite.Base;
 using System.Diagnostics.CodeAnalysis;
 using System.IO.MemoryMappedFiles;
 using System.Text;
@@ -9,13 +10,19 @@ namespace Odyssey.HRMS.EventLogLite.Tests;
 // ReSharper disable once ClassNeverInstantiated.Global
 public sealed class FileSegmentFixture : IAsyncLifetime
 {
+    private const string BaseDirectoryRoot = "../../../../../JsonFileEventLoggerTests";
     private const string DirectoryPath = "TestEvent";
     private static readonly JsonSerializerOptions SerializerOptions = new() { WriteIndented = false };
 
+    static FileSegmentFixture()
+    {
+        FileLogSegment.SetEventLoggingRoot(BaseDirectoryRoot);
+    }
+    
     public string WorkingDirectory => Path.Combine(Environment.CurrentDirectory, DirectoryPath);
     public string GetFilePath(byte partition) => Path.Combine(Environment.CurrentDirectory, DirectoryPath, $"test-event.{partition}.log");
     public string GetOffsetsPath(byte partition) => Path.Combine(Environment.CurrentDirectory, DirectoryPath, $"__consumer_offsets.{partition}.log");
-
+    
     public Task InitializeAsync()
     {
         Directory.CreateDirectory(WorkingDirectory);

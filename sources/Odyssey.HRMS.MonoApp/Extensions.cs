@@ -6,6 +6,8 @@ namespace Odyssey.HRMS.MonoApp;
 
 public static class Extensions
 {
+    private const string OffsetLoggerKey = "offsetLogger";
+    
     public static IServiceCollection RegisterProducer<TEvent>(this IServiceCollection services, IConfigurationRoot configuration) where TEvent : class
     {
         var serviceProvider = services.BuildServiceProvider();
@@ -17,13 +19,20 @@ public static class Extensions
         var producerConfigKey = $"{EventLogSettings.ConfigurationSectionName}:{EventLogSettings.ProducerSectionName}:{typeof(TEvent).Name}";
         configuration.GetRequiredSection(producerConfigKey).Bind(producerConfiguration);
 
+        var offsetLogger = serviceProvider.GetKeyedService<IFileEventLogger>(OffsetLoggerKey);
+        if (offsetLogger == null)
+        {
+            offsetLogger = new JsonFileEventLogger();
+            services.AddKeyedSingleton<IFileEventLogger>(OffsetLoggerKey);
+        }
+        
         var topic = new EventLogTopic(producerConfiguration.TopicName, producerConfiguration.Partitions);
-
         
         // TODO: register broker separately 
         var eventLogger = new JsonFileEventLogger();
+        
         var brokerLogger = serviceProvider.GetRequiredService<ILogger<FileEventLogBroker<TEvent>>>();
-        var broker = new FileEventLogBroker<TEvent>(brokerLogger, brokerConfiguration, eventLogger, topic);
+        var broker = new FileEventLogBroker<TEvent>(brokerLogger, brokerConfiguration, eventLogger, offsetLogger!, topic);
         
         var producerLogger = serviceProvider.GetRequiredService<ILogger<EventProducer<TEvent>>>();
         var producer = new EventProducer<TEvent>(producerLogger, broker, producerConfiguration);

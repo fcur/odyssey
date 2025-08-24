@@ -1,5 +1,6 @@
 using Odyssey.HRMS.EventLogLite.Entities;
 using System.Collections.Concurrent;
+using System.IO.MemoryMappedFiles;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 
@@ -17,7 +18,7 @@ public sealed class JsonFileEventLogger : IFileEventLogger
     public async Task<PositionPair> WriteBatch<TEvent>(IReadOnlyCollection<LogMessage<TEvent>> logMessages, FileLogSegment segment,
         CancellationToken cancellationToken = default) where TEvent : class
     {
-        await using var fs = new FileStream(segment.FilePath, FileMode.OpenOrCreate, FileAccess.Write);
+        await using var fs = new FileStream(segment.Root, FileMode.OpenOrCreate, FileAccess.Write);
         fs.Seek(0, SeekOrigin.End);
 
         var startPosition = fs.Position;
@@ -31,16 +32,21 @@ public sealed class JsonFileEventLogger : IFileEventLogger
         return new PositionPair(startPosition, fs.Position);
     }
 
-    public Task<PositionPair> Write<TEvent>(LogMessage<TEvent> logMessage, FileLogSegment segment, CancellationToken cancellationToken = default)
+    public async Task<PositionPair> Write<TEvent>(LogMessage<TEvent> logMessage, FileLogSegment segment,
+        CancellationToken cancellationToken = default)
         where TEvent : class
     {
-        return WriteInternal(logMessage, segment, cancellationToken);
+        var position = await WriteInternal(logMessage, segment, cancellationToken);
+
+        WriteIndexInternal((logMessage.Offset, position.Start), EventFileType.IndexFile, segment, cancellationToken);
+        WriteIndexInternal((logMessage.Timestamp, position.Start), EventFileType.TimeIndexFile, segment, cancellationToken);
+        return position;
     }
 
     public async Task<LogMessage<TEvent>?> ReadLastMessage<TEvent>(FileLogSegment segment, CancellationToken cancellationToken = default)
         where TEvent : class
     {
-        await using var fs = new FileStream(segment.FilePath, FileMode.OpenOrCreate, FileAccess.Read);
+        await using var fs = new FileStream(segment.Root, FileMode.OpenOrCreate, FileAccess.Read);
         if (fs.Length == 0)
         {
             return null;
@@ -77,7 +83,7 @@ public sealed class JsonFileEventLogger : IFileEventLogger
     public async IAsyncEnumerable<LogMessage<TEvent>> Poll<TEvent>(PollRequest request, FileLogSegment segment, long startPosition,
         [EnumeratorCancellation] CancellationToken cancellationToken = default) where TEvent : class
     {
-        await using var fs = new FileStream(segment.FilePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+        await using var fs = new FileStream(segment.Root, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
         if (fs.Length == 0)
         {
             yield break;
@@ -108,13 +114,13 @@ public sealed class JsonFileEventLogger : IFileEventLogger
     public Task<PositionPair> Commit(LogOffsetRequest request, FileLogSegment segment, CancellationToken cancellationToken = default)
     {
         var message = new LogOffsetMessage { Key = request.Key, Value = request.Value, Metadata = request.Metadata, OccuredAt = request.OccuredAt };
-        
+
         return WriteInternal(message, segment, cancellationToken);
     }
 
     public async Task<LogOffsetMessage> ReadSavedOffset(LogOffsetKey key, FileLogSegment segment, CancellationToken cancellationToken = default)
     {
-        await using var fs = new FileStream(segment.FilePath, FileMode.OpenOrCreate, FileAccess.Read);
+        await using var fs = new FileStream(segment.Root, FileMode.OpenOrCreate, FileAccess.Read);
         if (fs.Length == 0)
         {
             return LogOffsetMessage.CreateNew(key);
@@ -141,7 +147,7 @@ public sealed class JsonFileEventLogger : IFileEventLogger
     private async Task<PositionPair> WriteInternal<TPayload>(TPayload payload, FileLogSegment segment, CancellationToken cancellationToken)
         where TPayload : class
     {
-        await using var fs = new FileStream(segment.FilePath, FileMode.OpenOrCreate, FileAccess.Write);
+        await using var fs = new FileStream(segment.Root, FileMode.OpenOrCreate, FileAccess.Write);
         fs.Seek(0, SeekOrigin.End);
 
         var startPosition = fs.Position;
@@ -149,5 +155,18 @@ public sealed class JsonFileEventLogger : IFileEventLogger
         await fs.WriteAsync(new[] { EventLogDivider }, cancellationToken);
 
         return new PositionPair(startPosition, fs.Position);
+    }
+
+    private void WriteIndexInternal((long mark, long position) payload, EventFileType fileType, FileLogSegment segment,
+        CancellationToken cancellationToken)
+    {
+        var path = FileLogSegment.PreparePath(segment.Root, 0, fileType);
+
+        var newOffset = new FileInfo(path).Length;
+
+        using var mmf = MemoryMappedFile.CreateFromFile(path, FileMode.OpenOrCreate, mapName: null, capacity: newOffset + 16);
+        using var accessor = mmf.CreateViewAccessor(newOffset, 16);
+        accessor.Write(0, payload.mark);
+        accessor.Write(8, payload.position);
     }
 }

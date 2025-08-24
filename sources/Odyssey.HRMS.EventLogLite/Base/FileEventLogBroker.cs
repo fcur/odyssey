@@ -13,6 +13,7 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
     private readonly ILogger<FileEventLogBroker<TEvent>> _logger;
     private readonly EventBrokerSettings _brokerSettings;
     private readonly IFileEventLogger _eventLogger;
+    private readonly IFileEventLogger _offsetLogger;
     private readonly EventLogTopic _topic;
     private readonly EventLogTopic _offsetsTopic;
     // private readonly Channel<LogRespone<TEvent>> _mainChannel;
@@ -24,16 +25,18 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
     private Dictionary<byte, FileLogSegment> _segmentsMap = null!;
     private Dictionary<byte, FileLogSegment> _offsetsMap = null!;
 
-    public FileEventLogBroker(ILogger<FileEventLogBroker<TEvent>> logger, EventBrokerSettings brokerSettings, IFileEventLogger eventLogger, EventLogTopic topic)
+    public FileEventLogBroker(ILogger<FileEventLogBroker<TEvent>> logger, EventBrokerSettings brokerSettings, IFileEventLogger eventLogger, IFileEventLogger offsetLogger, EventLogTopic topic)
     {
         ArgumentNullException.ThrowIfNull(logger);
         ArgumentNullException.ThrowIfNull(brokerSettings);
         ArgumentNullException.ThrowIfNull(eventLogger);
+        ArgumentNullException.ThrowIfNull(offsetLogger);
         ArgumentNullException.ThrowIfNull(topic);
 
         _logger = logger;
         _brokerSettings = brokerSettings;
         _eventLogger = eventLogger;
+        _offsetLogger = offsetLogger;
         _topic = topic;
 
         _offsetsTopic = new EventLogTopic(_brokerSettings.TopicName, _brokerSettings.Partitions);
@@ -154,9 +157,6 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
             itemKey?.ToString(), topicName, groupName, partitionId, request.Value.Offset, request.RequestId);
 
         var position = await _eventLogger.Commit(request, offsetFileSegment, cancellationToken);
-
-        // TODO: save index file
-        (long offset,long position) index =  (request.Value.Offset, position.Start);
     }
 
     public Task<LogOffsetMessage> ReadSavedOffset(ReadOffsetRequest request, CancellationToken cancellationToken = default)
@@ -207,9 +207,6 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
     {
         FileLogSegment.InitWorkingDirectory(_topic);
         FileLogSegment.InitWorkingDirectory(_offsetsTopic);
-        
-        
-        
     }
 
     private void InitOffsetTopic()

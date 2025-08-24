@@ -10,12 +10,10 @@ namespace Odyssey.HRMS.EventLogLite.Tests;
 // ReSharper disable once ClassNeverInstantiated.Global
 public sealed class FileLogBrokerFixture : IAsyncLifetime
 {
-    public const string BaseDirectoryRoot = "../../../../../FileEventLogBrokerTests";
-    
+    private const string BaseDirectoryRoot = "../../../../../FileEventLogBrokerTests";
     private const string TopicName = "test_event";
     private const byte Partitions = 5;
     private const string OffsetsTopic = "__consumer_offsets";
-
     private readonly FileEventLogBroker<TestEvent> _broker;
 
     static FileLogBrokerFixture()
@@ -30,11 +28,10 @@ public sealed class FileLogBrokerFixture : IAsyncLifetime
         var topic = new EventLogTopic(TopicName, Partitions);
         var eventLoggerMock = new Mock<IFileEventLogger>();
 
-        _broker = new FileEventLogBroker<TestEvent>(brokerLoggerMock.Object, brokerSettings, eventLoggerMock.Object, topic);
+        _broker = new FileEventLogBroker<TestEvent>(brokerLoggerMock.Object, brokerSettings, eventLoggerMock.Object, eventLoggerMock.Object, topic);
     }
 
     public FileEventLogBroker<TestEvent> GetBroker() => _broker;
-
 
     public void InitFolders(EventLogTopic topic, params string[] folders)
     {

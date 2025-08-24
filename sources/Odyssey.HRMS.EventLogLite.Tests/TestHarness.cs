@@ -24,6 +24,8 @@ public sealed record TestHarnessSettings
 [ExcludeFromCodeCoverage]
 public sealed class TestHarness<TEvent> where TEvent : class, new()
 {
+    private const string BaseDirectoryRoot = "../../../../../OneTopicWithCoupleConsumersTests";
+
     private readonly FileEventLogBroker<TEvent> _broker;
     private readonly EventProducer<TEvent> _producer;
     private readonly IReadOnlyCollection<EventConsumer<TEvent>> _consumers;
@@ -43,6 +45,11 @@ public sealed class TestHarness<TEvent> where TEvent : class, new()
     
     public ConsumerAssigmentState[] GetAssigmentStates() => _consumers.Select(v => v.GetConsumerAssigmentState()).ToArray();
     
+    static TestHarness()
+    {
+        FileLogSegment.SetEventLoggingRoot(BaseDirectoryRoot);
+    }
+    
     public TestHarness(TestHarnessSettings settings, ILoggerFactory loggerFactory)
     {
         _settings = settings;
@@ -53,7 +60,7 @@ public sealed class TestHarness<TEvent> where TEvent : class, new()
         
         var eventLoggerMock = PrepareEventLogger(settings.LatestOffsets);
 
-        _broker = new FileEventLogBroker<TEvent>(brokerLogger, settings.BrokerSettings, eventLoggerMock.Object, settings.Topic);
+        _broker = new FileEventLogBroker<TEvent>(brokerLogger, settings.BrokerSettings, eventLoggerMock.Object, eventLoggerMock.Object, settings.Topic);
         _producer = new EventProducer<TEvent>(producerLogger, _broker, settings.ProducerSettings);
         _consumers = PrepareTopicConsumers(logger, settings.ConsumerSettings);
     }
