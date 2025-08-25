@@ -135,7 +135,7 @@ public sealed class TestHarness<TEvent> where TEvent : class, new()
         foreach (var item in latestOffsets)
         {
             eventLoggerMock.Setup(v =>
-                    v.ReadLastMessage<TEvent>(It.Is<FileLogSegment>(s => s.PartitionId == item.Key), It.IsAny<CancellationToken>()))
+                    v.ReadLastMessage<TEvent>(It.Is<FileLogSegment>(s => s.Partition == item.Key), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(new LogMessage<TEvent>() { Key = Guid.NewGuid().ToString("D"), Offset = item.Value });
         }
 
@@ -204,7 +204,7 @@ public sealed class TestHarness<TEvent> where TEvent : class, new()
         if (_unhandledEvents.TryGetValue(request.GroupName, out var unhandledEvents)
             && !unhandledEvents.IsEmpty)
         {
-            var foundEvents = unhandledEvents.Where(v => v.PartitionId == segment.PartitionId
+            var foundEvents = unhandledEvents.Where(v => v.PartitionId == segment.Partition
                                                          && v.Offset >= minOffset
                                                          && v.Offset <= maxOffset).ToArray();
 
@@ -247,7 +247,7 @@ public sealed class TestHarness<TEvent> where TEvent : class, new()
             Payload = logMessage.Payload,
             Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(logMessage.Timestamp),
             Offset = logMessage.Offset,
-            PartitionId = segment.PartitionId,
+            PartitionId = segment.Partition,
             Metadata = new Dictionary<string, object>()
         };
 

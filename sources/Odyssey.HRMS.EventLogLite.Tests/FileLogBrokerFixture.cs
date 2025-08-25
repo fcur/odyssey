@@ -55,8 +55,8 @@ public sealed class FileLogBrokerFixture : IAsyncLifetime
     
     public Task InitializeAsync()
     {
-        FileLogSegment.InitWorkingDirectory(TopicName, Partitions);
-        FileLogSegment.InitWorkingDirectory(OffsetsTopic, Partitions);
+        InitWorkingDirectory(TopicName, Partitions);
+        InitWorkingDirectory(OffsetsTopic, Partitions);
 
         // await _broker.Start(CancellationToken.None);
         return Task.CompletedTask;
@@ -66,9 +66,63 @@ public sealed class FileLogBrokerFixture : IAsyncLifetime
     {
         // await _broker.Stop(CancellationToken.None);
 
-        FileLogSegment.CleanupWorkingDirectory(TopicName);
-        FileLogSegment.CleanupWorkingDirectory(OffsetsTopic);
+        CleanupWorkingDirectory(TopicName);
+        CleanupWorkingDirectory(OffsetsTopic);
 
         return Task.CompletedTask;
+    }
+
+    public IReadOnlyCollection<string> InitWorkingDirectory(EventLogTopic topic)
+    {
+        return InitWorkingDirectory(topic.Name, topic.Partitions);
+    }
+    
+    public IReadOnlyCollection<string> InitWorkingDirectory(string topicName, byte partitions)
+    {
+        
+        var baseDirectory = FileLogSegment.GetEventLoggingRoot();
+
+        var workingDirectory = Path.GetFullPath(Path.Combine(baseDirectory, topicName));
+        if (!Directory.Exists(workingDirectory))
+        {
+            Directory.CreateDirectory(workingDirectory);
+        }
+
+        var existingFolders = Directory.GetDirectories(workingDirectory).Select(v => new DirectoryInfo(v)).ToArray();
+        var wantedFolders = Enumerable.Range(0, partitions).Select(v => new FileLogSegmentRoot((byte)v, Path.Combine(workingDirectory, v.ToString())))
+            .ToArray();
+
+        if (!existingFolders.Any())
+        {
+            Array.ForEach(wantedFolders, item => Directory.CreateDirectory(item.Path));
+            return wantedFolders.Select(v => v.Path).ToArray();
+        }
+
+        var validFolders = existingFolders
+            .Select(v => byte.TryParse(v.Name, out var partitionIdResult) ? new FileLogSegmentRoot(partitionIdResult, v.FullName) : null)
+            .Where(v => v is not null).ToArray();
+
+        var missingFolders = wantedFolders.Except(validFolders).ToArray();
+        if (missingFolders.Length == 0)
+        {
+            return validFolders.Select(v => v!.Path).ToArray();
+        }
+
+        Array.ForEach(missingFolders, item => Directory.CreateDirectory(item!.Path));
+
+        return validFolders.Concat(missingFolders).OrderBy(v => v!.PartitionId).Select(v => v!.Path).ToArray();
+    }
+    
+    public void CleanupWorkingDirectory(string topicName)
+    {
+        var baseDirectory = FileLogSegment.GetEventLoggingRoot();
+
+        var workingDirectory = Path.GetFullPath(Path.Combine(baseDirectory, topicName));
+        if (!Directory.Exists(workingDirectory))
+        {
+            return;
+        }
+
+        Directory.Delete(workingDirectory, true);
     }
 }

@@ -39,6 +39,7 @@ public sealed class JsonFileEventLogger : IFileEventLogger
         var position = await WriteInternal(logMessage, segment, cancellationToken);
 
         WriteIndexInternal((logMessage.Offset, position.Start), EventFileType.IndexFile, segment, cancellationToken);
+        
         WriteIndexInternal((logMessage.Timestamp, position.Start), EventFileType.TimeIndexFile, segment, cancellationToken);
         return position;
     }
@@ -99,7 +100,7 @@ public sealed class JsonFileEventLogger : IFileEventLogger
         while (await reader.ReadLineAsync(cancellationToken) is { } line && counter < request.BatchSize)
         {
             var position = fs.Position;
-            _lastPosition.AddOrUpdate(segment.PartitionId, position, (key, value) => position);
+            _lastPosition.AddOrUpdate(segment.Partition, position, (key, value) => position);
 
             var message = JsonSerializer.Deserialize<LogMessage<TEvent>>(line);
 
@@ -147,7 +148,9 @@ public sealed class JsonFileEventLogger : IFileEventLogger
     private async Task<PositionPair> WriteInternal<TPayload>(TPayload payload, FileLogSegment segment, CancellationToken cancellationToken)
         where TPayload : class
     {
-        await using var fs = new FileStream(segment.Root, FileMode.OpenOrCreate, FileAccess.Write);
+        var path = segment.GetLogFilePath();
+        
+        await using var fs = new FileStream(path, FileMode.OpenOrCreate, FileAccess.Write);
         fs.Seek(0, SeekOrigin.End);
 
         var startPosition = fs.Position;
@@ -160,7 +163,7 @@ public sealed class JsonFileEventLogger : IFileEventLogger
     private void WriteIndexInternal((long mark, long position) payload, EventFileType fileType, FileLogSegment segment,
         CancellationToken cancellationToken)
     {
-        var path = FileLogSegment.PreparePath(segment.Root, 0, fileType);
+        var path = segment.GetPath(fileType);
 
         var newOffset = new FileInfo(path).Length;
 

@@ -24,10 +24,10 @@ public sealed class JsonFileEventLoggerTests : IAsyncLifetime, IClassFixture<Fil
     public async Task TestWriteManyLines(int randomNumber)
     {
         const byte partition = 121;
-        const long initialOffset = 0;
         var linesCount = randomNumber % 21;
         var cts = new CancellationTokenSource();
-        var logSegment = new FileLogSegment(partition, initialOffset, _fixture.GetFilePath(partition));
+        
+        var logSegment = FileLogSegment.New(partition, _fixture.GetFilePath(partition));
         
         var position = await _fixture.WriteManyLines(linesCount, logSegment.Root, cts.Token);
         var linesCountResult = _fixture.GetLinesCount(logSegment.Root);
@@ -41,11 +41,10 @@ public sealed class JsonFileEventLoggerTests : IAsyncLifetime, IClassFixture<Fil
     public async Task TestWriteOffset(string key, TestEvent payload)
     {
         const byte partition = 124;
-        const long initialOffset = 0;
         var cts = new CancellationTokenSource();
         var request = new LogRequest<TestEvent> { Key = key, Payload = payload };
         var logMessage = LogMessage<TestEvent>.Create(request, 1);
-        var logSegment = new FileLogSegment(partition, initialOffset, _fixture.GetFilePath(partition));
+        var logSegment = FileLogSegment.New(partition, _fixture.GetFilePath(partition));
 
         var position = await _logger.Write(logMessage, logSegment, cts.Token);
         var size = _fixture.GetBytesCount(logMessage);
@@ -60,13 +59,12 @@ public sealed class JsonFileEventLoggerTests : IAsyncLifetime, IClassFixture<Fil
     public async Task TestLastMessage(string key, TestEvent payload, int randomNumber)
     {
         const byte partition = 125;
-        const long initialOffset = 0;
         var now = DateTimeOffset.UtcNow;
         var cts = new CancellationTokenSource();
         var linesCount = randomNumber % 23;
         var request = new LogRequest<TestEvent> { Key = key, Payload = payload };
         var logMessage = LogMessage<TestEvent>.Create(request, linesCount + 1);
-        var logSegment = new FileLogSegment(partition, initialOffset, _fixture.GetFilePath(partition));
+        var logSegment = FileLogSegment.New(partition, _fixture.GetFilePath(partition));
         
         // additional line for new message
         var position1 = await _fixture.WriteManyLines(linesCount + 1, logSegment.Root, cts.Token);
@@ -91,12 +89,11 @@ public sealed class JsonFileEventLoggerTests : IAsyncLifetime, IClassFixture<Fil
     public async Task TestPoll(string key1, TestEvent payload1, string key2, TestEvent payload2, int randomNumber)
     {
         const byte partition = 126;
-        const long initialOffset = 0;
         var now = DateTimeOffset.UtcNow;
         var cts = new CancellationTokenSource();
         var linesCount = randomNumber % 123;
         var newOffset = linesCount;
-        var logSegment = new FileLogSegment(partition, initialOffset, _fixture.GetFilePath(partition));
+        var logSegment = FileLogSegment.New(partition, _fixture.GetFilePath(partition));
 
         var logMessage1 = LogMessage<TestEvent>.Create(key1, payload1, ++newOffset);
         var logMessage2 = LogMessage<TestEvent>.Create(key2, payload2, ++newOffset);
@@ -138,12 +135,11 @@ public sealed class JsonFileEventLoggerTests : IAsyncLifetime, IClassFixture<Fil
     public async Task TestCommit(LogOffsetKey key1, LogOffsetValue value1, LogOffsetKey key2, LogOffsetValue value2, int randomNumber)
     {
         const byte partition = 127;
-        const long initialOffset = 0;
         var now = DateTimeOffset.UtcNow;
         var cts = new CancellationTokenSource();
         var linesCount = randomNumber % 34;
 
-        var logSegment = new FileLogSegment(partition, initialOffset, _fixture.GetFilePath(partition));
+        var logSegment = FileLogSegment.New(partition, _fixture.GetFilePath(partition));
 
         var request1 = new LogOffsetRequest
         {
@@ -181,12 +177,11 @@ public sealed class JsonFileEventLoggerTests : IAsyncLifetime, IClassFixture<Fil
     public async Task TestReadOffset(LogOffsetKey key1, LogOffsetValue value1, LogOffsetKey key2, LogOffsetValue value2, int randomNumber)
     {
         const byte partition = 128;
-        const long initialOffset = 0;
         var now = DateTimeOffset.UtcNow;
         var cts = new CancellationTokenSource();
         var linesCount = randomNumber % 34;
 
-        var logSegment = new FileLogSegment(partition, initialOffset, _fixture.GetFilePath(partition));
+        var logSegment = FileLogSegment.New(partition, _fixture.GetFilePath(partition));
 
         var request1 = new LogOffsetRequest
         {
@@ -226,7 +221,7 @@ public sealed class JsonFileEventLoggerTests : IAsyncLifetime, IClassFixture<Fil
         var cts = new CancellationTokenSource();
         var linesCount = randomNumber % 22;
         var newOffset = linesCount;
-        var logSegment = new FileLogSegment(partition, initialOffset, _fixture.GetFilePath(partition));
+        var logSegment = FileLogSegment.New(partition, _fixture.GetFilePath(partition));
 
         var logMessage1 = LogMessage<TestEvent>.Create(key1, payload1, ++newOffset);
         var logMessage2 = LogMessage<TestEvent>.Create(key2, payload2, ++newOffset);

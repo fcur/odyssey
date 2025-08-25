@@ -24,10 +24,10 @@ public sealed class FileEventLogBrokerTests : IAsyncLifetime, IClassFixture<File
 
         _fixture.InitFolders(topic, name1,"1", "3", name2, "5", name3);
 
-        var partitionFolders = FileLogSegment.InitWorkingDirectory(topic);
+        var partitionFolders = _fixture.InitWorkingDirectory(topic);
         var allFolders = _fixture.GetFolders(topic);
         
-        FileLogSegment.CleanupWorkingDirectory(topic.Name);
+        _fixture.CleanupWorkingDirectory(topic.Name);
 
         using var scope = new AssertionScope();
         

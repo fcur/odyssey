@@ -47,7 +47,7 @@ public sealed class EventConsumer<TEvent> : IEventConsumer<TEvent> where TEvent 
 
     public void AssignSegment(LogSegment segment)
     {
-        _logSegments.AddOrUpdate(segment.PartitionId, segment, (key, value) => segment);
+        _logSegments.AddOrUpdate(segment.Partition, segment, (key, value) => segment);
         _logSegmentsCount = _logSegments.Count;
     }
 
@@ -100,7 +100,7 @@ public sealed class EventConsumer<TEvent> : IEventConsumer<TEvent> where TEvent 
                 _logger.LogDebug("Pulling is being started, RequestId: {RequestId}", requestId);
 
                 sw.Start();
-                var tasks = assignedSegments.Select(segment => _broker.PollEvents(pollRequest, segment, currentOffsets[segment.PartitionId], targetToken));
+                var tasks = assignedSegments.Select(segment => _broker.PollEvents(pollRequest, segment, currentOffsets[segment.Partition], targetToken));
                 var results = await Task.WhenAll(tasks);
                 var events = results.SelectMany(v => v).ToArray();
                 sw.Stop();

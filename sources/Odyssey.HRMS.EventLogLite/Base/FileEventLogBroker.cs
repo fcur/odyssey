@@ -106,7 +106,7 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
 
             var logMessage = LogMessage<TEvent>.Create(request, newOffset);
 
-            _logger.LogDebug("New message with Key: {Key}, PartitionId: {PartitionId}, Offset: {Offset}", logMessage.Key, segment.PartitionId, logMessage.Offset);
+            _logger.LogDebug("New message with Key: {Key}, PartitionId: {PartitionId}, Offset: {Offset}", logMessage.Key, segment.Partition, logMessage.Offset);
             
             await _eventLogger.Write(logMessage, segment, cancellationToken);
             break;
@@ -123,7 +123,7 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
     public async Task<IReadOnlyCollection<LogResponse<TEvent>>> PollEvents(PollRequest request, LogSegment logSegment, long offset, CancellationToken cancellationToken = default)
     {
         var result = new List<LogResponse<TEvent>>(request.BatchSize);
-        var segment = _segmentsMap[logSegment.PartitionId];
+        var segment = _segmentsMap[logSegment.Partition];
         
         // TODO: Convert offset to position
         
@@ -135,7 +135,7 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
                 Payload = logMessage.Payload,
                 Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(logMessage.Timestamp),
                 Offset = logMessage.Offset,
-                PartitionId = logSegment.PartitionId,
+                PartitionId = logSegment.Partition,
                 Metadata = logMessage.Metadata
             };
             
@@ -205,25 +205,25 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
 
     private void EnsureWorkingDirectory()
     {
-        FileLogSegment.InitWorkingDirectory(_topic);
-        FileLogSegment.InitWorkingDirectory(_offsetsTopic);
+        // FileLogSegment.InitWorkingDirectory(_topic);
+        // FileLogSegment.InitWorkingDirectory(_offsetsTopic);
     }
 
     private void InitOffsetTopic()
     {
-        var segmentsMap = FileLogSegment.MapPartitionsWithSegments(_offsetsTopic);
+        // var segmentsMap = FileLogSegment.MapPartitionsWithSegments(_offsetsTopic);
 
-        _offsetsMap = segmentsMap;
+        // _offsetsMap = segmentsMap;
     }
     
     private async Task InitBrokerCounters(CancellationToken cancellationToken)
     {
-        var segmentsMap = FileLogSegment.MapPartitionsWithSegments(_topic);
-        var latestOffsets = await PrepareLatestOffsets(segmentsMap, cancellationToken);
-
-        _segmentsMap = segmentsMap;
-        _partitionsCount = Convert.ToByte(segmentsMap.Count);
-        _latestOffsets = new ConcurrentDictionary<byte, long>(latestOffsets);
+        // var segmentsMap = FileLogSegment.MapPartitionsWithSegments(_topic);
+        // var latestOffsets = await PrepareLatestOffsets(segmentsMap, cancellationToken);
+        //
+        // _segmentsMap = segmentsMap;
+        // _partitionsCount = Convert.ToByte(segmentsMap.Count);
+        // _latestOffsets = new ConcurrentDictionary<byte, long>(latestOffsets);
     }
 
     private Task AssignConsumers(CancellationToken cancellationToken)

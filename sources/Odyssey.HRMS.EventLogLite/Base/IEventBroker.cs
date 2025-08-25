@@ -22,12 +22,3 @@ public sealed record EventLogTopic(string Name, byte Partitions);
 
 
 
-public class LogSegment(byte partitionId)
-{
-    public byte PartitionId => partitionId;
-}
-
-public sealed class LogSegmentWithOffset(byte partitionId, ulong offset) : LogSegment(partitionId)
-{
-    public ulong Offset => offset;
-}

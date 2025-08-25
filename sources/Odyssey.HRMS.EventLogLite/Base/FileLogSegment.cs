@@ -5,7 +5,7 @@ public sealed record EventFileType(byte Type)
     private const string EventLogFileExtension = ".log";
     private const string EventIndexFileExtension = ".index";
     private const string EventTimeFileExtension = ".tindex";
-    
+
     public static readonly EventFileType LogFile = new EventFileType(0);
     public static readonly EventFileType IndexFile = new EventFileType(1);
     public static readonly EventFileType TimeIndexFile = new EventFileType(2);
@@ -22,51 +22,49 @@ public sealed record EventFileType(byte Type)
     }
 }
 
-
-public sealed class FileLogSegment(byte partitionId, long initialOffset, string root) : LogSegment(partitionId)
+public static class FileLogSegmentExtensions
 {
-    public const string EventLoggingRootKey = "EventLoggingRoot";
-    public string Root => $"{root}/{partitionId}";
-
     private const string EventLogFileExtension = ".log";
     private const string EventIndexFileExtension = ".index";
     private const string EventTimeFileExtension = ".tindex";
 
-    [Obsolete]
-    public static Dictionary<byte, FileLogSegment> MapPartitionsWithSegments(EventLogTopic topic)
-    {
-        var workingDirectory = Path.Combine(Environment.CurrentDirectory, topic.Name);
-        var partitionsCount = topic.Partitions;
+    // [Obsolete]
+    // public static Dictionary<byte, FileLogSegment> MapPartitionsWithSegments(EventLogTopic topic)
+    // {
+    //     var workingDirectory = Path.Combine(Environment.CurrentDirectory, topic.Name);
+    //     var partitionsCount = topic.Partitions;
+    //
+    //     var logSegments = GetOrCreateLogSegments(workingDirectory, partitionsCount);
+    //
+    //     var segmentsMap = Enumerable.Range(0, logSegments.Length).Zip(logSegments, (k, v) => new { key = (byte)k, val = v })
+    //         .ToDictionary(v => v.key, v => new FileLogSegment(v.key, v.val, 0,0,0 ));
+    //
+    //     return segmentsMap;
+    // }
 
-        var logSegments = GetOrCreateLogSegments(workingDirectory, partitionsCount);
+    //
+    // {
+    //     var logSegments = new List<string>(GetLogSegments(workingDirectory));
+    //     var newFilesCount = Math.Max(partitionsCount, logSegments.Count) - logSegments.Count;
+    //     if (newFilesCount == 0)
+    //     {
+    //         return logSegments.ToArray();
+    //     }
+    //
+    //     var fileNames = logSegments.Select(Path.GetFileNameWithoutExtension).Select(v => int.Parse(v!)).ToArray();
+    //     var maxSegment = fileNames.Length > 0 ? fileNames.Max() : -1;
+    //     var newFiles = Enumerable.Range(maxSegment + 1, newFilesCount).Select(v => FileLogSegment.PreparePath(workingDirectory, v)).ToArray();
+    //     logSegments.AddRange(newFiles);
+    //
+    //     return logSegments.ToArray();
+    // }
+    //
+    private static string[] GetLogSegments(string workingDirectory) => Directory.GetFiles(workingDirectory, $"*{EventLogFileExtension}");
 
-        var segmentsMap = Enumerable.Range(0, logSegments.Length).Zip(logSegments, (k, v) => new { key = (byte)k, val = v })
-            .ToDictionary(v => v.key, v => new FileLogSegment(v.key, 0, v.val));
 
-        return segmentsMap;
-    }
-    
-    public static string SetEventLoggingRoot(string path)
-    {
-        var fullPath = Path.GetFullPath(path);
-        Environment.SetEnvironmentVariable(EventLoggingRootKey, fullPath, EnvironmentVariableTarget.Process);
-        
-        return fullPath;
-    }
-
-    public static string GetEventLoggingRoot()
-    {
-        var baseDirectory = Environment.GetEnvironmentVariable(EventLoggingRootKey, EnvironmentVariableTarget.Process) ??
-                            Environment.CurrentDirectory;
-
-        return baseDirectory;
-    }
-    
-    
     public static IReadOnlyCollection<string> InitWorkingDirectory(string topicName, byte partitions)
     {
-        
-        var baseDirectory = GetEventLoggingRoot();
+        var baseDirectory = FileLogSegment.GetEventLoggingRoot();
 
         var workingDirectory = Path.GetFullPath(Path.Combine(baseDirectory, topicName));
         if (!Directory.Exists(workingDirectory))
@@ -106,7 +104,7 @@ public sealed class FileLogSegment(byte partitionId, long initialOffset, string 
 
     public static void CleanupWorkingDirectory(string topicName)
     {
-        var baseDirectory = GetEventLoggingRoot();
+        var baseDirectory = FileLogSegment.GetEventLoggingRoot();
 
         var workingDirectory = Path.GetFullPath(Path.Combine(baseDirectory, topicName));
         if (!Directory.Exists(workingDirectory))
@@ -117,33 +115,69 @@ public sealed class FileLogSegment(byte partitionId, long initialOffset, string 
         Directory.Delete(workingDirectory, true);
     }
 
-    private static string[] GetOrCreateLogSegments(string workingDirectory, byte partitionsCount)
-    {
-        var logSegments = new List<string>(GetLogSegments(workingDirectory));
-        var newFilesCount = Math.Max(partitionsCount, logSegments.Count) - logSegments.Count;
-        if (newFilesCount == 0)
-        {
-            return logSegments.ToArray();
-        }
-
-        var fileNames = logSegments.Select(Path.GetFileNameWithoutExtension).Select(v => int.Parse(v!)).ToArray();
-        var maxSegment = fileNames.Length > 0 ? fileNames.Max() : -1;
-        var newFiles = Enumerable.Range(maxSegment + 1, newFilesCount).Select(v => FileLogSegment.PreparePath(workingDirectory, v)).ToArray();
-        logSegments.AddRange(newFiles);
-
-        return logSegments.ToArray();
-    }
-
-    private static string[] GetLogSegments(string workingDirectory) => Directory.GetFiles(workingDirectory, $"*{EventLogFileExtension}");
 
     private static string PreparePath(string partitionRoot, int fileIndex) =>
         Path.Combine(partitionRoot, $"{fileIndex}{EventLogFileExtension}");
-    
-    
-    public static string PreparePath(string partitionRoot, long initialOffset, EventFileType  eventType)
+
+
+    public static string PreparePath(string partitionRoot, long initialOffset, EventFileType eventType)
     {
         var extension = eventType.GetExtension();
-        
+
         return Path.Combine(partitionRoot, $"{initialOffset:0000000000000000000}{extension}");
+    }
+}
+
+public record LogSegment(byte Partition, long BaseOffset, long BaseTime)
+{
+}
+
+public sealed record FileLogSegment(byte Partition, string Root, long BaseOffset, long BaseTime, long Size)
+    : LogSegment(Partition, BaseOffset, BaseTime)
+{
+    // public string Root => $"{Root}/{Partition}";
+    public const string EventLoggingRootKey = "EventLoggingRoot";
+
+    private const string EventLogFileExtension = ".log";
+    private const string EventIndexFileExtension = ".index";
+    private const string EventTimeFileExtension = ".tindex";
+
+    public string GetLogFilePath() => GetFilePath(Root, Partition, BaseOffset, EventLogFileExtension);
+    public string GetIndexFilePath() => GetFilePath(Root, Partition, BaseOffset, EventIndexFileExtension);
+    public string GetTimeIndexFilePath() => GetFilePath(Root, Partition, BaseOffset, EventTimeFileExtension);
+
+    public string GetPath(EventFileType eventType)
+    {
+        var extension = eventType.GetExtension();
+
+        return GetFilePath(Root, Partition, BaseOffset, extension);
+    }
+
+    public bool IsEmpty() => BaseTime == 0 && Size == 0;
+
+    public static FileLogSegment New(byte partition, string root)
+    {
+        return new FileLogSegment(partition, root, 0, 0, 0);
+    }
+
+    private static string GetFilePath(string root, byte partition, long baseOffset, string extension)
+    {
+        return Path.Combine(root, partition.ToString(), $"{baseOffset:0000000000000000000}{extension}");
+    }
+
+    public static string SetEventLoggingRoot(string path)
+    {
+        var fullPath = Path.GetFullPath(path);
+        Environment.SetEnvironmentVariable(EventLoggingRootKey, fullPath, EnvironmentVariableTarget.Process);
+
+        return fullPath;
+    }
+
+    public static string GetEventLoggingRoot()
+    {
+        var baseDirectory = Environment.GetEnvironmentVariable(EventLoggingRootKey, EnvironmentVariableTarget.Process) ??
+                            Environment.CurrentDirectory;
+
+        return baseDirectory;
     }
 }
