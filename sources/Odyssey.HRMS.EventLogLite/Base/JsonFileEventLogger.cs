@@ -38,8 +38,16 @@ public sealed class JsonFileEventLogger : IFileEventLogger
     {
         var position = await WriteInternal(logMessage, segment, cancellationToken);
 
-        WriteIndexInternal((logMessage.Offset, position.Start), EventFileType.IndexFile, segment, cancellationToken);
+        if (segment.IsEmpty())
+        {
+            segment = segment with { BaseTime = logMessage.Timestamp, Size = position.Next };
+        }
+        else
+        {
+            segment = segment with { Size = position.Next };
+        }
         
+        WriteIndexInternal((logMessage.Offset, position.Start), EventFileType.IndexFile, segment, cancellationToken);
         WriteIndexInternal((logMessage.Timestamp, position.Start), EventFileType.TimeIndexFile, segment, cancellationToken);
         return position;
     }
@@ -160,16 +168,16 @@ public sealed class JsonFileEventLogger : IFileEventLogger
         return new PositionPair(startPosition, fs.Position);
     }
 
-    private void WriteIndexInternal((long mark, long position) payload, EventFileType fileType, FileLogSegment segment,
+    private void WriteIndexInternal((long index, long position) payload, EventFileType fileType, FileLogSegment segment,
         CancellationToken cancellationToken)
     {
         var path = segment.GetPath(fileType);
 
-        var newOffset = new FileInfo(path).Length;
+        var offset = Path.Exists(path)? new FileInfo(path).Length: 0;
 
-        using var mmf = MemoryMappedFile.CreateFromFile(path, FileMode.OpenOrCreate, mapName: null, capacity: newOffset + 16);
-        using var accessor = mmf.CreateViewAccessor(newOffset, 16);
-        accessor.Write(0, payload.mark);
+        using var mmf = MemoryMappedFile.CreateFromFile(path, FileMode.OpenOrCreate, mapName: null, capacity: offset + 16);
+        using var accessor = mmf.CreateViewAccessor(offset, 16);
+        accessor.Write(0, payload.index);
         accessor.Write(8, payload.position);
     }
 }

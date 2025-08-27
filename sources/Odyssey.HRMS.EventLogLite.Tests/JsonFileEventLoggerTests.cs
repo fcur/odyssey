@@ -27,7 +27,7 @@ public sealed class JsonFileEventLoggerTests : IAsyncLifetime, IClassFixture<Fil
         var linesCount = randomNumber % 21;
         var cts = new CancellationTokenSource();
         
-        var logSegment = FileLogSegment.New(partition, _fixture.GetFilePath(partition));
+        var logSegment = FileLogSegment.New(partition, _fixture.CreateSegmentRoot(partition));
         
         var position = await _fixture.WriteManyLines(linesCount, logSegment.Root, cts.Token);
         var linesCountResult = _fixture.GetLinesCount(logSegment.Root);
@@ -44,11 +44,11 @@ public sealed class JsonFileEventLoggerTests : IAsyncLifetime, IClassFixture<Fil
         var cts = new CancellationTokenSource();
         var request = new LogRequest<TestEvent> { Key = key, Payload = payload };
         var logMessage = LogMessage<TestEvent>.Create(request, 1);
-        var logSegment = FileLogSegment.New(partition, _fixture.GetFilePath(partition));
+        var logSegment = FileLogSegment.New(partition, _fixture.CreateSegmentRoot(partition));
 
         var position = await _logger.Write(logMessage, logSegment, cts.Token);
         var size = _fixture.GetBytesCount(logMessage);
-        var linesCount = _fixture.GetLinesCount(logSegment.Root);
+        var linesCount = _fixture.GetLinesCount(logSegment.GetLogFilePath());
 
         position.Start.Should().Be(0);
         position.Next.Should().Be(size + 1);
@@ -64,7 +64,7 @@ public sealed class JsonFileEventLoggerTests : IAsyncLifetime, IClassFixture<Fil
         var linesCount = randomNumber % 23;
         var request = new LogRequest<TestEvent> { Key = key, Payload = payload };
         var logMessage = LogMessage<TestEvent>.Create(request, linesCount + 1);
-        var logSegment = FileLogSegment.New(partition, _fixture.GetFilePath(partition));
+        var logSegment = FileLogSegment.New(partition, _fixture.CreateSegmentRoot(partition));
         
         // additional line for new message
         var position1 = await _fixture.WriteManyLines(linesCount + 1, logSegment.Root, cts.Token);
@@ -93,7 +93,7 @@ public sealed class JsonFileEventLoggerTests : IAsyncLifetime, IClassFixture<Fil
         var cts = new CancellationTokenSource();
         var linesCount = randomNumber % 123;
         var newOffset = linesCount;
-        var logSegment = FileLogSegment.New(partition, _fixture.GetFilePath(partition));
+        var logSegment = FileLogSegment.New(partition, _fixture.CreateSegmentRoot(partition));
 
         var logMessage1 = LogMessage<TestEvent>.Create(key1, payload1, ++newOffset);
         var logMessage2 = LogMessage<TestEvent>.Create(key2, payload2, ++newOffset);
@@ -139,7 +139,7 @@ public sealed class JsonFileEventLoggerTests : IAsyncLifetime, IClassFixture<Fil
         var cts = new CancellationTokenSource();
         var linesCount = randomNumber % 34;
 
-        var logSegment = FileLogSegment.New(partition, _fixture.GetFilePath(partition));
+        var logSegment = FileLogSegment.New(partition, _fixture.CreateSegmentRoot(partition));
 
         var request1 = new LogOffsetRequest
         {
@@ -181,7 +181,7 @@ public sealed class JsonFileEventLoggerTests : IAsyncLifetime, IClassFixture<Fil
         var cts = new CancellationTokenSource();
         var linesCount = randomNumber % 34;
 
-        var logSegment = FileLogSegment.New(partition, _fixture.GetFilePath(partition));
+        var logSegment = FileLogSegment.New(partition, _fixture.CreateSegmentRoot(partition));
 
         var request1 = new LogOffsetRequest
         {
@@ -216,12 +216,11 @@ public sealed class JsonFileEventLoggerTests : IAsyncLifetime, IClassFixture<Fil
     public async Task TestWriteBatch(string key1, TestEvent payload1, string key2, TestEvent payload2, int randomNumber)
     {
         const byte partition = 129;
-        const long initialOffset = 0;
         var now = DateTimeOffset.UtcNow;
         var cts = new CancellationTokenSource();
         var linesCount = randomNumber % 22;
         var newOffset = linesCount;
-        var logSegment = FileLogSegment.New(partition, _fixture.GetFilePath(partition));
+        var logSegment = FileLogSegment.New(partition, _fixture.CreateSegmentRoot(partition));
 
         var logMessage1 = LogMessage<TestEvent>.Create(key1, payload1, ++newOffset);
         var logMessage2 = LogMessage<TestEvent>.Create(key2, payload2, ++newOffset);

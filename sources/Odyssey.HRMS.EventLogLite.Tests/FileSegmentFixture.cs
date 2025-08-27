@@ -11,7 +11,7 @@ namespace Odyssey.HRMS.EventLogLite.Tests;
 public sealed class FileSegmentFixture : IAsyncLifetime
 {
     private const string BaseDirectoryRoot = "../../../../../JsonFileEventLoggerTests";
-    private const string DirectoryPath = "TestEvent";
+    private const string TopicName = "TestEvent";
     private static readonly JsonSerializerOptions SerializerOptions = new() { WriteIndented = false };
 
     static FileSegmentFixture()
@@ -19,19 +19,26 @@ public sealed class FileSegmentFixture : IAsyncLifetime
         FileLogSegment.SetEventLoggingRoot(BaseDirectoryRoot);
     }
     
-    public string WorkingDirectory => Path.Combine(Environment.CurrentDirectory, DirectoryPath);
-    public string GetFilePath(byte partition) => Path.Combine(Environment.CurrentDirectory, DirectoryPath, $"test-event.{partition}.log");
-    public string GetOffsetsPath(byte partition) => Path.Combine(Environment.CurrentDirectory, DirectoryPath, $"__consumer_offsets.{partition}.log");
+    public string WorkingDirectory => Path.Combine( TopicName);
+
+    public string CreateSegmentRoot(byte partition)
+    {
+        var topicRoot = Path.Combine(Path.GetFullPath(BaseDirectoryRoot), TopicName);
+        Directory.CreateDirectory(Path.Combine(topicRoot, partition.ToString()));
+        return topicRoot;
+    }
     
     public Task InitializeAsync()
     {
-        Directory.CreateDirectory(WorkingDirectory);
+        var workingDirectory = Path.GetFullPath(BaseDirectoryRoot);
+        Directory.CreateDirectory(workingDirectory);
         return Task.CompletedTask;
     }
 
     public Task DisposeAsync()
     {
-        var files = Directory.GetFiles(WorkingDirectory);
+        var workingDirectory = Path.GetFullPath(BaseDirectoryRoot);
+        var files = Directory.GetFiles(workingDirectory);
         foreach (var path in files)
         {
             File.Delete(path);
