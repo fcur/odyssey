@@ -19,8 +19,6 @@ public sealed class FileSegmentFixture : IAsyncLifetime
         FileLogSegment.SetEventLoggingRoot(BaseDirectoryRoot);
     }
     
-    public string WorkingDirectory => Path.Combine( TopicName);
-
     public string CreateSegmentRoot(byte partition)
     {
         var topicRoot = Path.Combine(Path.GetFullPath(BaseDirectoryRoot), TopicName);
@@ -38,12 +36,7 @@ public sealed class FileSegmentFixture : IAsyncLifetime
     public Task DisposeAsync()
     {
         var workingDirectory = Path.GetFullPath(BaseDirectoryRoot);
-        var files = Directory.GetFiles(workingDirectory);
-        foreach (var path in files)
-        {
-            File.Delete(path);
-        }
-
+        Directory.Delete(workingDirectory, true);
         return Task.CompletedTask;
     }
 
