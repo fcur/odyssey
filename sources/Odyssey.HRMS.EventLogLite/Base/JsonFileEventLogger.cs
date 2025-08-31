@@ -18,7 +18,7 @@ public sealed class JsonFileEventLogger : IFileEventLogger
     public async Task<PositionPair> WriteBatch<TEvent>(IReadOnlyCollection<LogMessage<TEvent>> logMessages, FileLogSegment segment,
         CancellationToken cancellationToken = default) where TEvent : class
     {
-        await using var fs = new FileStream(segment.Root, FileMode.OpenOrCreate, FileAccess.Write);
+        await using var fs = new FileStream(segment.GetLogFilePath(), FileMode.OpenOrCreate, FileAccess.Write);
         fs.Seek(0, SeekOrigin.End);
 
         var startPosition = fs.Position;
@@ -55,7 +55,7 @@ public sealed class JsonFileEventLogger : IFileEventLogger
     public async Task<LogMessage<TEvent>?> ReadLastMessage<TEvent>(FileLogSegment segment, CancellationToken cancellationToken = default)
         where TEvent : class
     {
-        await using var fs = new FileStream(segment.Root, FileMode.OpenOrCreate, FileAccess.Read);
+        await using var fs = new FileStream(segment.GetLogFilePath(), FileMode.OpenOrCreate, FileAccess.Read);
         if (fs.Length == 0)
         {
             return null;
@@ -92,7 +92,7 @@ public sealed class JsonFileEventLogger : IFileEventLogger
     public async IAsyncEnumerable<LogMessage<TEvent>> Poll<TEvent>(PollRequest request, FileLogSegment segment, long startPosition,
         [EnumeratorCancellation] CancellationToken cancellationToken = default) where TEvent : class
     {
-        await using var fs = new FileStream(segment.Root, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+        await using var fs = new FileStream(segment.GetLogFilePath(), FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
         if (fs.Length == 0)
         {
             yield break;
@@ -129,7 +129,7 @@ public sealed class JsonFileEventLogger : IFileEventLogger
 
     public async Task<LogOffsetMessage> ReadSavedOffset(LogOffsetKey key, FileLogSegment segment, CancellationToken cancellationToken = default)
     {
-        await using var fs = new FileStream(segment.Root, FileMode.OpenOrCreate, FileAccess.Read);
+        await using var fs = new FileStream(segment.GetLogFilePath(), FileMode.OpenOrCreate, FileAccess.Read);
         if (fs.Length == 0)
         {
             return LogOffsetMessage.CreateNew(key);
