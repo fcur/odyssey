@@ -135,7 +135,7 @@ public sealed class TestHarness<TEvent> where TEvent : class, new()
         foreach (var item in latestOffsets)
         {
             eventLoggerMock.Setup(v =>
-                    v.ReadLastMessage<TEvent>(It.Is<FileLogSegment>(s => s.Partition == item.Key), It.IsAny<CancellationToken>()))
+                    v.ReadLast<TEvent>(It.Is<FileLogSegment>(s => s.Partition == item.Key), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(new LogMessage<TEvent>() { Key = Guid.NewGuid().ToString("D"), Offset = item.Value });
         }
 

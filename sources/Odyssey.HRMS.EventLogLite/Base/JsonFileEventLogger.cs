@@ -52,7 +52,7 @@ public sealed class JsonFileEventLogger : IFileEventLogger
         return position;
     }
 
-    public async Task<LogMessage<TEvent>?> ReadLastMessage<TEvent>(FileLogSegment segment, CancellationToken cancellationToken = default)
+    public async Task<LogMessage<TEvent>?> ReadLast<TEvent>(FileLogSegment segment, CancellationToken cancellationToken = default)
         where TEvent : class
     {
         await using var fs = new FileStream(segment.GetLogFilePath(), FileMode.OpenOrCreate, FileAccess.Read);

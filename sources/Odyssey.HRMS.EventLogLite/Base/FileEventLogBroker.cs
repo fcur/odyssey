@@ -156,20 +156,64 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
         _logger.LogDebug("Offset committing in progress, Key: {Key}, Topic: {TopicName}, Group: {GroupName}, Partition: {PartitionId}, Offset: {Offset}, RequestId: {RequestId}",
             itemKey?.ToString(), topicName, groupName, partitionId, request.Value.Offset, request.RequestId);
 
-        var position = await _eventLogger.Commit(request, offsetFileSegment, cancellationToken);
+        
+        var message = new LogOffsetMessage { Key = request.Key, Value = request.Value, Metadata = request.Metadata, OccuredAt = request.OccuredAt };
+
+        // TBD
+        var newOffset = 0;
+        
+        var logMessage = LogMessage<LogOffsetMessage>.Create(request.Key.ToString(), message, newOffset);
+        
+        var position = await _offsetLogger.Write(logMessage, offsetFileSegment, cancellationToken);
+        // var position = await _eventLogger.Commit(request, offsetFileSegment, cancellationToken);
     }
 
-    public Task<LogOffsetMessage> ReadSavedOffset(ReadOffsetRequest request, CancellationToken cancellationToken = default)
+    public async Task<LogOffsetMessage> ReadSavedOffset(ReadOffsetRequest request, CancellationToken cancellationToken = default)
     {
-        var offsetPartitionId = GetPartition(request.Key);
-        var offsetFileSegment = _offsetsMap[offsetPartitionId];
-        
-        var (groupName, topicName, partitionId) = request.Key;
-
-        _logger.LogDebug("Offset reading in progress, Topic: {TopicName}, Group: {GroupName}, Partition: {PartitionId}, RequestId: {RequestId}",
-            topicName, groupName, partitionId, request.RequestId);
-
-        return _eventLogger.ReadSavedOffset(request.Key, offsetFileSegment, cancellationToken);
+        throw new NotImplementedException();
+        // var offsetPartitionId = GetPartition(request.Key);
+        // var offsetFileSegment = _offsetsMap[offsetPartitionId];
+        //
+        // var (groupName, topicName, partitionId) = request.Key;
+        //
+        // _logger.LogDebug("Offset reading in progress, Topic: {TopicName}, Group: {GroupName}, Partition: {PartitionId}, RequestId: {RequestId}",
+        //     topicName, groupName, partitionId, request.RequestId);
+        //
+        // // TBD: position in file
+        // var offset = 0;
+        // var pollRequest = new PollRequest
+        // {
+        //     BatchSize = 10000,
+        //     TopicName =  _offsetsTopic.Name,
+        //     // not required
+        //     GroupName = nameof(PollRequest.GroupName),
+        //     RequestId = request.RequestId,
+        //     OccuredAt = request.OccuredAt
+        // };
+        //
+        // while (true)
+        // {
+        //     await foreach (var logMessage in _offsetLogger.Poll<LogOffsetMessage>(pollRequest, offsetFileSegment, offset, cancellationToken))
+        //     {
+        //         if (logMessage.Key != request.Key)
+        //         {
+        //             continue;
+        //         }
+        //     
+        //     }
+        // }
+        //
+        //
+        //
+        //
+        // var offsetLogMessage = await _offsetLogger.ReadLast<LogOffsetMessage>(offsetFileSegment, cancellationToken);
+        // if (offsetLogMessage == null)
+        // {
+        //     return LogOffsetMessage.CreateNew(request.Key);
+        // }
+        //
+        // // var result =  _eventLogger.ReadSavedOffset(request.Key, offsetFileSegment, cancellationToken);
+        // return offsetLogMessage.Payload;
     }
     
     private byte GetPartition(LogRequest<TEvent> request)
@@ -262,7 +306,7 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
         foreach (var item in partitionsMap)
         {
             var segment = item.Value;
-            var latestMsg = await _eventLogger.ReadLastMessage<TEvent>(segment, cancellationToken);
+            var latestMsg = await _eventLogger.ReadLast<TEvent>(segment, cancellationToken);
             var offset = latestMsg?.Offset ?? 0L;
 
             result.Add(item.Key, offset);

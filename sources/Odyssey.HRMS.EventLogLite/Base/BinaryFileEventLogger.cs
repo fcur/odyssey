@@ -45,7 +45,7 @@ public sealed class BinaryFileEventLogger: IFileEventLogger
         throw new NotImplementedException();
     }
 
-    public Task<LogMessage<TEvent>?> ReadLastMessage<TEvent>(FileLogSegment segment, CancellationToken cancellationToken = default)
+    public Task<LogMessage<TEvent>?> ReadLast<TEvent>(FileLogSegment segment, CancellationToken cancellationToken = default)
         where TEvent : class
     {
         throw new NotImplementedException();
