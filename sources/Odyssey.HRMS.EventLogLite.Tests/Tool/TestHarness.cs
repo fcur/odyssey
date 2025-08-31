@@ -7,7 +7,7 @@ using Odyssey.HRMS.EventLogLite.Producer;
 using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 
-namespace Odyssey.HRMS.EventLogLite.Tests;
+namespace Odyssey.HRMS.EventLogLite.Tests.Tool;
 
 [ExcludeFromCodeCoverage]
 public sealed record TestHarnessSettings
@@ -269,6 +269,7 @@ public sealed class TestHarness<TEvent> where TEvent : class, new()
 
         _committedOffsets.Enqueue(request);
 
+        
         if (!_unhandledEvents.TryGetValue(request.Key.ConsumerGroupName, out var unhandledEvents)
             || unhandledEvents.IsEmpty)
         {

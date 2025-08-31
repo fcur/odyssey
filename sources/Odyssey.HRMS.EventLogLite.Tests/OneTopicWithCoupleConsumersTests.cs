@@ -7,6 +7,7 @@ using Odyssey.HRMS.EventLogLite.Consumer;
 using Odyssey.HRMS.EventLogLite.Entities;
 using Odyssey.HRMS.EventLogLite.Producer;
 using Odyssey.HRMS.EventLogLite.Tests.Logging;
+using Odyssey.HRMS.EventLogLite.Tests.Tool;
 using System.Diagnostics.CodeAnalysis;
 using Xunit.Abstractions;
 

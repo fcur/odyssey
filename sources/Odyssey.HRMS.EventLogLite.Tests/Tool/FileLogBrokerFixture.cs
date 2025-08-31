@@ -4,7 +4,7 @@ using Odyssey.HRMS.EventLogLite.Base;
 using Odyssey.HRMS.EventLogLite.Producer;
 using System.Diagnostics.CodeAnalysis;
 
-namespace Odyssey.HRMS.EventLogLite.Tests;
+namespace Odyssey.HRMS.EventLogLite.Tests.Tool;
 
 [ExcludeFromCodeCoverage]
 // ReSharper disable once ClassNeverInstantiated.Global

@@ -4,7 +4,7 @@ using System.IO.MemoryMappedFiles;
 using System.Text;
 using System.Text.Json;
 
-namespace Odyssey.HRMS.EventLogLite.Tests;
+namespace Odyssey.HRMS.EventLogLite.Tests.Tool;
 
 [ExcludeFromCodeCoverage]
 // ReSharper disable once ClassNeverInstantiated.Global

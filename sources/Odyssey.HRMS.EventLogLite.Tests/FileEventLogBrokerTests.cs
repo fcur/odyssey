@@ -3,6 +3,7 @@ using FluentAssertions;
 using FluentAssertions.Execution;
 using Odyssey.HRMS.EventLogLite.Base;
 using Odyssey.HRMS.EventLogLite.Entities;
+using Odyssey.HRMS.EventLogLite.Tests.Tool;
 using System.Diagnostics.CodeAnalysis;
 
 namespace Odyssey.HRMS.EventLogLite.Tests;
