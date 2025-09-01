@@ -25,6 +25,10 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
     private Dictionary<byte, FileLogSegment> _segmentsMap = null!;
     private Dictionary<byte, FileLogSegment> _offsetsMap = null!;
 
+    private string _topicRoot;
+    private string _offsetsRoot;
+    
+    
     public FileEventLogBroker(ILogger<FileEventLogBroker<TEvent>> logger, EventBrokerSettings brokerSettings, IFileEventLogger eventLogger, IFileEventLogger offsetLogger, EventLogTopic topic)
     {
         ArgumentNullException.ThrowIfNull(logger);
@@ -249,8 +253,8 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
 
     private void EnsureWorkingDirectory()
     {
-        // FileLogSegment.InitWorkingDirectory(_topic);
-        // FileLogSegment.InitWorkingDirectory(_offsetsTopic);
+        _offsetsRoot = LogSegmentDirectory.Init(_offsetsTopic);
+        _topicRoot = LogSegmentDirectory.Init(_topic);
     }
 
     private void InitOffsetTopic()

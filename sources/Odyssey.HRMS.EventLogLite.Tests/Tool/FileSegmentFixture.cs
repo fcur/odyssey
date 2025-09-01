@@ -16,7 +16,7 @@ public sealed class FileSegmentFixture : IAsyncLifetime
 
     static FileSegmentFixture()
     {
-        FileLogSegment.SetEventLoggingRoot(BaseDirectoryRoot);
+        LogSegmentDirectory.SetEventLoggingRoot(BaseDirectoryRoot);
     }
     
     public string CreateSegmentRoot(byte partition)

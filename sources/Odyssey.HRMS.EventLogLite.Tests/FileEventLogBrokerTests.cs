@@ -22,23 +22,23 @@ public sealed class FileEventLogBrokerTests : IAsyncLifetime, IClassFixture<File
     public void TestWorkingDirectory(string name1, string name2, string name3)
     {
         var topic = new EventLogTopic("box-box", 6);
+        var workingDirectory = LogSegmentDirectory.Init(topic);
 
-        _fixture.InitFolders(topic, name1,"1", "3", name2, "5", name3);
+        _fixture.CreateDirectories(workingDirectory, name1, "1", "3", name2, "5", name3);
 
-        var partitionFolders = _fixture.InitWorkingDirectory(topic);
-        var allFolders = _fixture.GetFolders(topic);
+        var logSegments = LogSegmentDirectory.Scan(topic.Name);
+        var allFolders = _fixture.GetFolders(workingDirectory);
         
-        _fixture.CleanupWorkingDirectory(topic.Name);
+        LogSegmentDirectory.Cleanup(topic.Name);
 
         using var scope = new AssertionScope();
-        
+        logSegments.Should().BeEmpty();
         allFolders.Count.Should().Be(9);
-        partitionFolders.Count.Should().Be(topic.Partitions);
-        partitionFolders.SingleOrDefault(v => v.EndsWith("0")).Should().NotBeNull();
-        partitionFolders.SingleOrDefault(v => v.EndsWith("1")).Should().NotBeNull();
-        partitionFolders.SingleOrDefault(v => v.EndsWith("2")).Should().NotBeNull();
-        partitionFolders.SingleOrDefault(v => v.EndsWith("3")).Should().NotBeNull();
-        partitionFolders.SingleOrDefault(v => v.EndsWith("4")).Should().NotBeNull();
+        allFolders.SingleOrDefault(v => v.EndsWith("0")).Should().NotBeNull();
+        allFolders.SingleOrDefault(v => v.EndsWith("1")).Should().NotBeNull();
+        allFolders.SingleOrDefault(v => v.EndsWith("2")).Should().NotBeNull();
+        allFolders.SingleOrDefault(v => v.EndsWith("3")).Should().NotBeNull();
+        allFolders.SingleOrDefault(v => v.EndsWith("4")).Should().NotBeNull();
     }
     
     [Theory, AutoData]

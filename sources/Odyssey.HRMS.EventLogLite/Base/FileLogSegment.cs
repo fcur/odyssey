@@ -5,6 +5,10 @@ public sealed record EventFileType(byte Type)
     private const string EventLogFileExtension = ".log";
     private const string EventIndexFileExtension = ".index";
     private const string EventTimeFileExtension = ".tindex";
+    
+    private const string EventLogFilePattern = $"*{EventLogFileExtension}";
+    private const string EventIndexFilePattern = $"*{EventIndexFileExtension}";
+    private const string EventTimeFilePattern = $"*{EventTimeFileExtension}";
 
     public static readonly EventFileType LogFile = new EventFileType(0);
     public static readonly EventFileType IndexFile = new EventFileType(1);
@@ -20,13 +24,30 @@ public sealed record EventFileType(byte Type)
             _ => throw new ArgumentOutOfRangeException()
         };
     }
+    
+    public string GetSearchPattern()
+    {
+        return Type switch
+        {
+            0 => EventLogFilePattern,
+            1 => EventIndexFilePattern,
+            2 => EventTimeFilePattern,
+            _ => throw new ArgumentOutOfRangeException()
+        };
+    }
 }
 
-public static class FileLogSegmentExtensions
+public sealed class LogSegmentException : Exception
 {
-    private const string EventLogFileExtension = ".log";
-    private const string EventIndexFileExtension = ".index";
-    private const string EventTimeFileExtension = ".tindex";
+    public LogSegmentException(string message, string details) : base(message) { }
+}
+
+public static class LogSegmentDirectory
+{
+    private const string EventLoggingRootKey = "EventLoggingRoot";
+    // private const string EventLogFileExtension = ".log";
+    // private const string EventIndexFileExtension = ".index";
+    // private const string EventTimeFileExtension = ".tindex";
 
     // [Obsolete]
     // public static Dictionary<byte, FileLogSegment> MapPartitionsWithSegments(EventLogTopic topic)
@@ -59,14 +80,36 @@ public static class FileLogSegmentExtensions
     //     return logSegments.ToArray();
     // }
     //
-    private static string[] GetLogSegments(string workingDirectory) => Directory.GetFiles(workingDirectory, $"*{EventLogFileExtension}");
-
-
-    public static IReadOnlyCollection<string> InitWorkingDirectory(string topicName, byte partitions)
+    // private static string[] GetLogSegments(string workingDirectory) => Directory.GetFiles(workingDirectory, $"*{EventLogFileExtension}");
+    
+    public static string SetEventLoggingRoot(string path)
     {
-        var baseDirectory = FileLogSegment.GetEventLoggingRoot();
+        var fullPath = Path.GetFullPath(path);
+        Environment.SetEnvironmentVariable(EventLoggingRootKey, fullPath, EnvironmentVariableTarget.Process);
 
+        return fullPath;
+    }
+
+    public static string GetEventLoggingRoot()
+    {
+        var baseDirectory = Environment.GetEnvironmentVariable(EventLoggingRootKey, EnvironmentVariableTarget.Process) ??
+                            Environment.CurrentDirectory;
+
+        return baseDirectory;
+    }
+    
+    public static string GetWorkingDirectory(string topicName)
+    {
+        var baseDirectory = GetEventLoggingRoot();
         var workingDirectory = Path.GetFullPath(Path.Combine(baseDirectory, topicName));
+
+        return workingDirectory;
+    }
+    
+    public static string Init(string topicName, byte partitions)
+    {
+        var workingDirectory = GetWorkingDirectory(topicName);
+        
         if (!Directory.Exists(workingDirectory))
         {
             Directory.CreateDirectory(workingDirectory);
@@ -79,7 +122,8 @@ public static class FileLogSegmentExtensions
         if (!existingFolders.Any())
         {
             Array.ForEach(wantedFolders, item => Directory.CreateDirectory(item.Path));
-            return wantedFolders.Select(v => v.Path).ToArray();
+            // return wantedFolders.Select(v => v.Path).ToArray();
+            return workingDirectory;
         }
 
         var validFolders = existingFolders
@@ -89,24 +133,25 @@ public static class FileLogSegmentExtensions
         var missingFolders = wantedFolders.Except(validFolders).ToArray();
         if (missingFolders.Length == 0)
         {
-            return validFolders.Select(v => v!.Path).ToArray();
+            // return validFolders.Select(v => v!.Path).ToArray();
+            return workingDirectory;
         }
 
         Array.ForEach(missingFolders, item => Directory.CreateDirectory(item!.Path));
 
-        return validFolders.Concat(missingFolders).OrderBy(v => v!.PartitionId).Select(v => v!.Path).ToArray();
+        // return validFolders.Concat(missingFolders).OrderBy(v => v!.PartitionId).Select(v => v!.Path).ToArray();
+        return workingDirectory;
     }
 
-    public static IReadOnlyCollection<string> InitWorkingDirectory(EventLogTopic topic)
+    public static string Init(EventLogTopic topic)
     {
-        return InitWorkingDirectory(topic.Name, topic.Partitions);
+        return Init(topic.Name, topic.Partitions);
     }
 
-    public static void CleanupWorkingDirectory(string topicName)
+    public static void Cleanup(string topicName)
     {
-        var baseDirectory = FileLogSegment.GetEventLoggingRoot();
-
-        var workingDirectory = Path.GetFullPath(Path.Combine(baseDirectory, topicName));
+        var workingDirectory = GetWorkingDirectory(topicName);
+        
         if (!Directory.Exists(workingDirectory))
         {
             return;
@@ -114,29 +159,84 @@ public static class FileLogSegmentExtensions
 
         Directory.Delete(workingDirectory, true);
     }
-
-
-    private static string PreparePath(string partitionRoot, int fileIndex) =>
-        Path.Combine(partitionRoot, $"{fileIndex}{EventLogFileExtension}");
-
-
-    public static string PreparePath(string partitionRoot, long initialOffset, EventFileType eventType)
+    
+    public static IReadOnlyCollection<FileLogSegment> Scan(string topicName)
     {
-        var extension = eventType.GetExtension();
+        // workingDirectory/topicName
+        var workingDirectory = GetWorkingDirectory(topicName);
+        
+        // workingDirectory/topicName/0
+        // workingDirectory/topicName/1
+        // workingDirectory/topicName/2
+        var existingDirectories = Directory.GetDirectories(workingDirectory).Select(v => new DirectoryInfo(v)).ToArray();
+        
+        var logSegmentRoots = existingDirectories
+            .Select(v => byte.TryParse(v.Name, out var partitionIdResult) ? new FileLogSegmentRoot(partitionIdResult, v.FullName) : null)
+            .Where(v => v is not null).ToArray();
+        
+        var segments = new List<FileLogSegment>();
 
-        return Path.Combine(partitionRoot, $"{initialOffset:0000000000000000000}{extension}");
+        foreach (var logRoot in logSegmentRoots)
+        {
+            var partition = logRoot!.PartitionId;
+            var logFiles = Directory.GetFiles(logRoot.Path, EventFileType.LogFile.GetSearchPattern());
+            var indexFiles = Directory.GetFiles(logRoot.Path, EventFileType.IndexFile.GetSearchPattern());
+            var timeIndexFiles = Directory.GetFiles(logRoot.Path, EventFileType.TimeIndexFile.GetSearchPattern());
+
+            if (logFiles.Length == 0)
+            {
+                continue;
+            }
+
+            var validIndex = logFiles.Length == indexFiles.Length;
+            var validTimeIndex = logFiles.Length == timeIndexFiles.Length;
+            if (!validIndex || !validTimeIndex)
+            {
+                throw new LogSegmentException("Index files mismatch.", $"Root: '{logRoot.Path}', log files: '{logFiles.Length}', index files: '{indexFiles.Length}', time index files: '{timeIndexFiles.Length}'.");
+            }
+
+            foreach (var logSegmentFilePath in logFiles)
+            {
+                var logSegmentFileName = Path.GetFileNameWithoutExtension(logSegmentFilePath);
+                
+                if (!long.TryParse(logSegmentFileName, out var baseOffset))
+                {
+                    throw new LogSegmentException("Log segment file name mismatch.", $"Filename '{logSegmentFilePath}' should be integer.");
+                }
+
+                var logSegmentFileInfo = new FileInfo(logSegmentFilePath);
+                var size = logSegmentFileInfo.Exists ? logSegmentFileInfo.Length : 0;
+                var segment = new FileLogSegment(partition, workingDirectory, baseOffset, 0, size, false);
+                
+                segments.Add(segment);
+            }
+            
+        }
+        
+        
+        return segments.ToArray();
     }
+    
+
+    // private static string PreparePath(string partitionRoot, int fileIndex) =>
+    //     Path.Combine(partitionRoot, $"{fileIndex}{EventLogFileExtension}");
+    //
+    //
+    // public static string PreparePath(string partitionRoot, long initialOffset, EventFileType eventType)
+    // {
+    //     var extension = eventType.GetExtension();
+    //
+    //     return Path.Combine(partitionRoot, $"{initialOffset:0000000000000000000}{extension}");
+    // }
 }
 
 public record LogSegment(byte Partition, long BaseOffset, long BaseTime)
 {
 }
 
-public sealed record FileLogSegment(byte Partition, string Root, long BaseOffset, long BaseTime, long Size)
+public sealed record FileLogSegment(byte Partition, string Root, long BaseOffset, long BaseTime, long Size, bool IsActive)
     : LogSegment(Partition, BaseOffset, BaseTime)
 {
-    // public string Root => $"{Root}/{Partition}";
-    public const string EventLoggingRootKey = "EventLoggingRoot";
 
     private const string EventLogFileExtension = ".log";
     private const string EventIndexFileExtension = ".index";
@@ -157,27 +257,11 @@ public sealed record FileLogSegment(byte Partition, string Root, long BaseOffset
 
     public static FileLogSegment New(byte partition, string root)
     {
-        return new FileLogSegment(partition, root, 0, 0, 0);
+        return new FileLogSegment(partition, root, 0, 0, 0, false);
     }
 
     private static string GetFilePath(string root, byte partition, long baseOffset, string extension)
     {
         return Path.Combine(root, partition.ToString(), $"{baseOffset:0000000000000000000}{extension}");
-    }
-
-    public static string SetEventLoggingRoot(string path)
-    {
-        var fullPath = Path.GetFullPath(path);
-        Environment.SetEnvironmentVariable(EventLoggingRootKey, fullPath, EnvironmentVariableTarget.Process);
-
-        return fullPath;
-    }
-
-    public static string GetEventLoggingRoot()
-    {
-        var baseDirectory = Environment.GetEnvironmentVariable(EventLoggingRootKey, EnvironmentVariableTarget.Process) ??
-                            Environment.CurrentDirectory;
-
-        return baseDirectory;
     }
 }

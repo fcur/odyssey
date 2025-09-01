@@ -47,7 +47,7 @@ public sealed class TestHarness<TEvent> where TEvent : class, new()
     
     static TestHarness()
     {
-        FileLogSegment.SetEventLoggingRoot(BaseDirectoryRoot);
+        LogSegmentDirectory.SetEventLoggingRoot(BaseDirectoryRoot);
     }
     
     public TestHarness(TestHarnessSettings settings, ILoggerFactory loggerFactory)
@@ -149,12 +149,12 @@ public sealed class TestHarness<TEvent> where TEvent : class, new()
             .Callback<PollRequest, FileLogSegment, long, CancellationToken>((request, segment, offset, _) =>
                 HandlePollRequest(request, segment, offset));
 
-        eventLoggerMock.Setup(v => v.Commit(It.IsAny<LogOffsetRequest>(), It.IsAny<FileLogSegment>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((LogOffsetRequest request, FileLogSegment segment,CancellationToken _) => new PositionPair(0,0))
-            .Callback<LogOffsetRequest, FileLogSegment, CancellationToken>((request, segment, _) => HandleCommitedEvent(request, segment));
-
-        eventLoggerMock.Setup(v => v.ReadSavedOffset(It.IsAny<LogOffsetKey>(), It.IsAny<FileLogSegment>(), It.IsAny<CancellationToken>()))
-            .Returns((LogOffsetKey key, FileLogSegment segment, CancellationToken _) => PrepareOffsetResults(key, segment));
+        // eventLoggerMock.Setup(v => v.Commit(It.IsAny<LogOffsetRequest>(), It.IsAny<FileLogSegment>(), It.IsAny<CancellationToken>()))
+        //     .ReturnsAsync((LogOffsetRequest request, FileLogSegment segment,CancellationToken _) => new PositionPair(0,0))
+        //     .Callback<LogOffsetRequest, FileLogSegment, CancellationToken>((request, segment, _) => HandleCommitedEvent(request, segment));
+        //
+        // eventLoggerMock.Setup(v => v.ReadSavedOffset(It.IsAny<LogOffsetKey>(), It.IsAny<FileLogSegment>(), It.IsAny<CancellationToken>()))
+        //     .Returns((LogOffsetKey key, FileLogSegment segment, CancellationToken _) => PrepareOffsetResults(key, segment));
 
         return eventLoggerMock;
     }
