@@ -1,8 +1,11 @@
 using Microsoft.Extensions.Logging;
 using Moq;
 using Odyssey.HRMS.EventLogLite.Base;
+using Odyssey.HRMS.EventLogLite.Entities;
 using Odyssey.HRMS.EventLogLite.Producer;
 using System.Diagnostics.CodeAnalysis;
+using System.Runtime.InteropServices;
+using System.Text.Json;
 
 namespace Odyssey.HRMS.EventLogLite.Tests.Tool;
 
@@ -17,6 +20,9 @@ public sealed class FileLogBrokerFixture : IAsyncLifetime
     private readonly FileEventLogBroker<TestEvent> _broker;
     private readonly EventLogTopic _topic;
     private readonly EventLogTopic _offsetsTopic;
+    private const byte EventLogDivider = 10;
+    
+    private static readonly JsonSerializerOptions SerializerOptions = new() { WriteIndented = false };
     static FileLogBrokerFixture()
     {
         LogSegmentDirectory.SetEventLoggingRoot(BaseDirectoryRoot);
@@ -46,6 +52,55 @@ public sealed class FileLogBrokerFixture : IAsyncLifetime
             Directory.CreateDirectory(newFolder);
         }
     }
+
+    // public string GetFileLogSegmentRoot(string workingDirectory, byte partition)
+    // {
+    //     var rootPath = Path.Combine(workingDirectory, partition.ToString());
+    //     if (!Directory.Exists(rootPath))
+    //     {
+    //         Directory.CreateDirectory(rootPath);
+    //     }
+    //     
+    //     return workingDirectory;
+    // }
+    
+    public async Task<FileLogSegment> Write<TEvent>(FileLogSegment segment, LogMessage<TEvent>[] messages, CancellationToken cancellationToken) where TEvent : class
+    {
+        if (messages.Length == 0)
+        {
+            return segment;
+        }
+        
+        await using var logSegmentWriter = new FileStream(segment.GetLogFilePath(), FileMode.OpenOrCreate, FileAccess.Write);
+        await using var offsetIndexWriter = new BinaryWriter(File.Open(segment.GetIndexFilePath(), FileMode.OpenOrCreate, FileAccess.Write));
+        await using var timeIndexWriter = new BinaryWriter(File.Open(segment.GetTimeIndexFilePath(), FileMode.OpenOrCreate, FileAccess.Write));
+
+        logSegmentWriter.Seek(0, SeekOrigin.End);
+        offsetIndexWriter.Seek(0, SeekOrigin.End);
+        timeIndexWriter.Seek(0, SeekOrigin.End);
+
+        foreach (var item in messages)
+        {
+            var offsetIndexesBytes = MemoryMarshal.AsBytes<long>(new[] { item.Offset, logSegmentWriter.Position }).ToArray();
+            var timeIndexes = MemoryMarshal.AsBytes<long>(new[] { item.Timestamp, logSegmentWriter.Position }).ToArray();
+
+            await JsonSerializer.SerializeAsync(logSegmentWriter, item, SerializerOptions, cancellationToken);
+            await logSegmentWriter.WriteAsync(new[] { EventLogDivider }, cancellationToken);
+
+            offsetIndexWriter.Write(offsetIndexesBytes);
+            timeIndexWriter.Write(timeIndexes);
+
+            segment = segment with
+            {
+                Size = logSegmentWriter.Length,
+                BaseOffset = segment.IsEmpty() ? item.Offset : segment.BaseOffset,
+                BaseTime = segment.IsEmpty() ? item.Timestamp : segment.BaseTime,
+            };
+        }
+
+        return segment;
+    }
+    
 
     public IReadOnlyCollection<string> GetFolders(string workingDirectory)
     {

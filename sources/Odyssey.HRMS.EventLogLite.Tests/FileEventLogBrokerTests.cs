@@ -12,6 +12,7 @@ namespace Odyssey.HRMS.EventLogLite.Tests;
 public sealed class FileEventLogBrokerTests : IAsyncLifetime, IClassFixture<FileLogBrokerFixture>
 {
     private readonly FileLogBrokerFixture _fixture;
+
     // ReSharper disable once ConvertToPrimaryConstructor
     public FileEventLogBrokerTests(FileLogBrokerFixture fixture)
     {
@@ -19,7 +20,7 @@ public sealed class FileEventLogBrokerTests : IAsyncLifetime, IClassFixture<File
     }
 
     [Theory, AutoData]
-    public void TestWorkingDirectory(string name1, string name2, string name3)
+    public void TestWorkingDirectoryWithoutSegments(string name1, string name2, string name3)
     {
         var topic = new EventLogTopic("box-box", 6);
         var workingDirectory = LogSegmentDirectory.Init(topic);
@@ -28,7 +29,7 @@ public sealed class FileEventLogBrokerTests : IAsyncLifetime, IClassFixture<File
 
         var logSegments = LogSegmentDirectory.Scan(topic.Name);
         var allFolders = _fixture.GetFolders(workingDirectory);
-        
+
         LogSegmentDirectory.Cleanup(topic.Name);
 
         using var scope = new AssertionScope();
@@ -40,7 +41,33 @@ public sealed class FileEventLogBrokerTests : IAsyncLifetime, IClassFixture<File
         allFolders.SingleOrDefault(v => v.EndsWith("3")).Should().NotBeNull();
         allFolders.SingleOrDefault(v => v.EndsWith("4")).Should().NotBeNull();
     }
-    
+
+    [Theory, AutoData]
+    public async Task TestWorkingDirectoryWithSegments(string topicName, string key1, TestEvent payload1, string key2, TestEvent payload2)
+    {
+        const byte partition = 1;
+        var now = DateTimeOffset.UtcNow;
+        var cts = new CancellationTokenSource();
+        var topic = new EventLogTopic(topicName, 3);
+        var workingDirectory = LogSegmentDirectory.Init(topic);
+        var logSegment = FileLogSegment.New(partition, workingDirectory);
+        var time1 = now.AddMinutes(-2.0).ToUnixTimeMilliseconds();
+        var time2 = now.AddMinutes(1.0).ToUnixTimeMilliseconds();
+        var logMessage1 = LogMessage<TestEvent>.Create(key1, payload1, 0) with { Timestamp = time1 };
+        var logMessage2 = LogMessage<TestEvent>.Create(key2, payload2, 1) with { Timestamp = time2 };
+
+        var logSegmentResult = await _fixture.Write(logSegment, [logMessage1, logMessage2], cts.Token);
+        var logSegments = LogSegmentDirectory.Scan(topic.Name);
+
+        LogSegmentDirectory.Cleanup(topic.Name);
+
+        using var scope = new AssertionScope();
+        logSegmentResult.BaseOffset.Should().Be(logMessage1.Offset);
+        logSegmentResult.BaseTime.Should().Be(logMessage1.Timestamp);
+        
+        logSegments.Should().NotBeNullOrEmpty();
+    }
+
     [Theory, AutoData]
     public async Task TestLogEvent(string key, TestEvent payload)
     {

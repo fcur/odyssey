@@ -47,8 +47,8 @@ public sealed class JsonFileEventLogger : IFileEventLogger
             segment = segment with { Size = position.Next };
         }
         
-        WriteIndexInternal((logMessage.Offset, position.Start), EventFileType.IndexFile, segment, cancellationToken);
-        WriteIndexInternal((logMessage.Timestamp, position.Start), EventFileType.TimeIndexFile, segment, cancellationToken);
+        WriteIndexInternal(new LogIndex(logMessage.Offset, position.Start), EventFileType.IndexFile, segment, cancellationToken);
+        WriteIndexInternal(new LogIndex(logMessage.Timestamp, position.Start), EventFileType.TimeIndexFile, segment, cancellationToken);
         return position;
     }
 
@@ -168,8 +168,7 @@ public sealed class JsonFileEventLogger : IFileEventLogger
         return new PositionPair(startPosition, fs.Position);
     }
 
-    private void WriteIndexInternal((long index, long position) payload, EventFileType fileType, FileLogSegment segment,
-        CancellationToken cancellationToken)
+    private void WriteIndexInternal(LogIndex payload, EventFileType fileType, FileLogSegment segment, CancellationToken cancellationToken)
     {
         var path = segment.GetPath(fileType);
 
@@ -177,7 +176,10 @@ public sealed class JsonFileEventLogger : IFileEventLogger
 
         using var mmf = MemoryMappedFile.CreateFromFile(path, FileMode.OpenOrCreate, mapName: null, capacity: offset + 16);
         using var accessor = mmf.CreateViewAccessor(offset, 16);
-        accessor.Write(0, payload.index);
-        accessor.Write(8, payload.position);
+        accessor.Write(0, payload.Index);
+        accessor.Write(8, payload.Position);
     }
 }
+
+
+public record struct LogIndex(long Index, long Position);
