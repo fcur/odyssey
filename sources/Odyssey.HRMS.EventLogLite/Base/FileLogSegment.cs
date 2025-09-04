@@ -1,3 +1,5 @@
+using CSharpFunctionalExtensions;
+
 namespace Odyssey.HRMS.EventLogLite.Base;
 
 public sealed record EventFileType(byte Type)
@@ -5,7 +7,7 @@ public sealed record EventFileType(byte Type)
     private const string EventLogFileExtension = ".log";
     private const string EventIndexFileExtension = ".index";
     private const string EventTimeFileExtension = ".tindex";
-    
+
     private const string EventLogFilePattern = $"*{EventLogFileExtension}";
     private const string EventIndexFilePattern = $"*{EventIndexFileExtension}";
     private const string EventTimeFilePattern = $"*{EventTimeFileExtension}";
@@ -24,7 +26,7 @@ public sealed record EventFileType(byte Type)
             _ => throw new ArgumentOutOfRangeException()
         };
     }
-    
+
     public string GetSearchPattern()
     {
         return Type switch
@@ -44,7 +46,13 @@ public sealed class LogSegmentException : Exception
 
 public static class LogSegmentDirectory
 {
+    public const string EventLogFileExtension = ".log";
+    public const string EventIndexFileExtension = ".index";
+    public const string EventTimeFileExtension = ".tindex";
+
     private const string EventLoggingRootKey = "EventLoggingRoot";
+
+
     // private const string EventLogFileExtension = ".log";
     // private const string EventIndexFileExtension = ".index";
     // private const string EventTimeFileExtension = ".tindex";
@@ -81,7 +89,7 @@ public static class LogSegmentDirectory
     // }
     //
     // private static string[] GetLogSegments(string workingDirectory) => Directory.GetFiles(workingDirectory, $"*{EventLogFileExtension}");
-    
+
     public static string SetEventLoggingRoot(string path)
     {
         var fullPath = Path.GetFullPath(path);
@@ -97,7 +105,7 @@ public static class LogSegmentDirectory
 
         return baseDirectory;
     }
-    
+
     public static string GetWorkingDirectory(string topicName)
     {
         var baseDirectory = GetEventLoggingRoot();
@@ -105,11 +113,11 @@ public static class LogSegmentDirectory
 
         return workingDirectory;
     }
-    
+
     public static string Init(string topicName, byte partitions)
     {
         var workingDirectory = GetWorkingDirectory(topicName);
-        
+
         if (!Directory.Exists(workingDirectory))
         {
             Directory.CreateDirectory(workingDirectory);
@@ -151,7 +159,7 @@ public static class LogSegmentDirectory
     public static void Cleanup(string topicName)
     {
         var workingDirectory = GetWorkingDirectory(topicName);
-        
+
         if (!Directory.Exists(workingDirectory))
         {
             return;
@@ -159,64 +167,71 @@ public static class LogSegmentDirectory
 
         Directory.Delete(workingDirectory, true);
     }
+
+
+    
+    
     
     public static IReadOnlyCollection<FileLogSegment> Scan(string topicName)
     {
         // workingDirectory/topicName
         var workingDirectory = GetWorkingDirectory(topicName);
-        
+
         // workingDirectory/topicName/0
         // workingDirectory/topicName/1
         // workingDirectory/topicName/2
         var existingDirectories = Directory.GetDirectories(workingDirectory).Select(v => new DirectoryInfo(v)).ToArray();
-        
+
         var logSegmentRoots = existingDirectories
             .Select(v => byte.TryParse(v.Name, out var partitionIdResult) ? new FileLogSegmentRoot(partitionIdResult, v.FullName) : null)
             .Where(v => v is not null).ToArray();
-        
+
         var segments = new List<FileLogSegment>();
 
         foreach (var logRoot in logSegmentRoots)
         {
             var partition = logRoot!.PartitionId;
             var logFiles = Directory.GetFiles(logRoot.Path, EventFileType.LogFile.GetSearchPattern());
-            var indexFiles = Directory.GetFiles(logRoot.Path, EventFileType.IndexFile.GetSearchPattern());
-            var timeIndexFiles = Directory.GetFiles(logRoot.Path, EventFileType.TimeIndexFile.GetSearchPattern());
-
+          
             if (logFiles.Length == 0)
             {
                 continue;
             }
 
-            var validIndex = logFiles.Length == indexFiles.Length;
-            var validTimeIndex = logFiles.Length == timeIndexFiles.Length;
-            if (!validIndex || !validTimeIndex)
+            foreach (var logSegmentPath in logFiles)
             {
-                throw new LogSegmentException("Index files mismatch.", $"Root: '{logRoot.Path}', log files: '{logFiles.Length}', index files: '{indexFiles.Length}', time index files: '{timeIndexFiles.Length}'.");
-            }
-
-            foreach (var logSegmentFilePath in logFiles)
-            {
-                var logSegmentFileName = Path.GetFileNameWithoutExtension(logSegmentFilePath);
-                
-                if (!long.TryParse(logSegmentFileName, out var baseOffset))
+                var segmentFileValid = ValidateSegmentFileName(logSegmentPath);
+                if (segmentFileValid.IsFailure)
                 {
-                    throw new LogSegmentException("Log segment file name mismatch.", $"Filename '{logSegmentFilePath}' should be integer.");
+                    throw segmentFileValid.Error;
+                }
+                
+                var baseOffset = segmentFileValid.Value;
+                
+                var indexFileValid = ValidateSegmentIndex(workingDirectory, partition, baseOffset);
+                if (indexFileValid.HasValue)
+                {
+                    throw indexFileValid.Value;
                 }
 
-                var logSegmentFileInfo = new FileInfo(logSegmentFilePath);
-                var size = logSegmentFileInfo.Exists ? logSegmentFileInfo.Length : 0;
-                var segment = new FileLogSegment(partition, workingDirectory, baseOffset, 0, size, false);
+                var timeIndexFileValid = ValidateSegmentTimeIndex(workingDirectory, partition, baseOffset);
+                if (timeIndexFileValid.IsFailure)
+                {
+                    throw timeIndexFileValid.Error;
+                }
                 
+                var logSegmentFileInfo = new FileInfo(logSegmentPath);
+                var size = logSegmentFileInfo.Length;
+                var baseTime = timeIndexFileValid.Value;
+                var segment = new FileLogSegment(partition, workingDirectory, baseOffset, baseTime, size, false);
+
                 segments.Add(segment);
             }
-            
         }
-        
-        
+
         return segments.ToArray();
     }
-    
+
 
     // private static string PreparePath(string partitionRoot, int fileIndex) =>
     //     Path.Combine(partitionRoot, $"{fileIndex}{EventLogFileExtension}");
@@ -228,6 +243,43 @@ public static class LogSegmentDirectory
     //
     //     return Path.Combine(partitionRoot, $"{initialOffset:0000000000000000000}{extension}");
     // }
+    private static Result<long, LogSegmentException> ValidateSegmentFileName(string logSegmentPath)
+    {
+        var segmentFileName = Path.GetFileNameWithoutExtension(logSegmentPath);
+        
+        if (!long.TryParse(segmentFileName, out var baseOffset))
+        {
+            return new LogSegmentException("Log segment file name mismatch.", $"Filename '{segmentFileName}' should be integer.");
+        }
+
+        return baseOffset;
+    }
+    
+    private static Maybe<LogSegmentException> ValidateSegmentIndex(string root, byte partition, long baseOffset)
+    {
+        var logSegmentIndexPath = FileLogSegment.GetFilePath(root, partition, baseOffset, EventIndexFileExtension);
+
+        if (!Path.Exists(logSegmentIndexPath))
+        {
+            return new LogSegmentException("Log segment file name mismatch.", $"Index file '{logSegmentIndexPath}' should exist.");
+        }
+        
+        return Maybe<LogSegmentException>.None;
+    }
+    
+    private static Result<long, LogSegmentException> ValidateSegmentTimeIndex(string root, byte partition, long baseOffset)
+    {
+        var logSegmentTimeIndexPath = FileLogSegment.GetFilePath(root, partition, baseOffset, EventTimeFileExtension);
+        if (!Path.Exists(logSegmentTimeIndexPath))
+        {
+            return new LogSegmentException("Log segment file name mismatch.", $"Time index '{logSegmentTimeIndexPath}' file should exist.");
+        }
+
+        using var timeIndexReader = new BinaryReader(File.Open(logSegmentTimeIndexPath, FileMode.Open));
+        var baseTime = timeIndexReader.ReadInt64();
+        
+        return baseTime;
+    }
 }
 
 public record LogSegment(byte Partition, long BaseOffset, long BaseTime)
@@ -237,14 +289,9 @@ public record LogSegment(byte Partition, long BaseOffset, long BaseTime)
 public sealed record FileLogSegment(byte Partition, string Root, long BaseOffset, long BaseTime, long Size, bool IsActive)
     : LogSegment(Partition, BaseOffset, BaseTime)
 {
-
-    private const string EventLogFileExtension = ".log";
-    private const string EventIndexFileExtension = ".index";
-    private const string EventTimeFileExtension = ".tindex";
-
-    public string GetLogFilePath() => GetFilePath(Root, Partition, BaseOffset, EventLogFileExtension);
-    public string GetIndexFilePath() => GetFilePath(Root, Partition, BaseOffset, EventIndexFileExtension);
-    public string GetTimeIndexFilePath() => GetFilePath(Root, Partition, BaseOffset, EventTimeFileExtension);
+    public string GetLogFilePath() => GetFilePath(Root, Partition, BaseOffset, LogSegmentDirectory.EventLogFileExtension);
+    public string GetIndexFilePath() => GetFilePath(Root, Partition, BaseOffset, LogSegmentDirectory.EventIndexFileExtension);
+    public string GetTimeIndexFilePath() => GetFilePath(Root, Partition, BaseOffset, LogSegmentDirectory.EventTimeFileExtension);
 
     public string GetPath(EventFileType eventType)
     {
@@ -260,7 +307,7 @@ public sealed record FileLogSegment(byte Partition, string Root, long BaseOffset
         return new FileLogSegment(partition, root, 0, 0, 0, false);
     }
 
-    private static string GetFilePath(string root, byte partition, long baseOffset, string extension)
+    public static string GetFilePath(string root, byte partition, long baseOffset, string extension)
     {
         return Path.Combine(root, partition.ToString(), $"{baseOffset:0000000000000000000}{extension}");
     }

@@ -62,10 +62,13 @@ public sealed class FileEventLogBrokerTests : IAsyncLifetime, IClassFixture<File
         LogSegmentDirectory.Cleanup(topic.Name);
 
         using var scope = new AssertionScope();
+        logSegmentResult.Should().NotBeNull();
         logSegmentResult.BaseOffset.Should().Be(logMessage1.Offset);
         logSegmentResult.BaseTime.Should().Be(logMessage1.Timestamp);
         
-        logSegments.Should().NotBeNullOrEmpty();
+        logSegments.Should().ContainSingle();
+        logSegments.Single().BaseOffset.Should().Be(logMessage1.Offset);
+        logSegments.Single().BaseTime.Should().Be(logMessage1.Timestamp);
     }
 
     [Theory, AutoData]

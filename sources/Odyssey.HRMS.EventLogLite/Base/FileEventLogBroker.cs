@@ -60,8 +60,10 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
         
         EnsureWorkingDirectory();
         
+        var segments = LogSegmentDirectory.Scan(_topic.Name);
+        ActivateSegment(segments);
         
-        Scan();
+        // Scan();
         
         
         InitOffsetTopic();
@@ -327,7 +329,13 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
     
     private void ScanTopic(EventLogTopic  topic)
     {
-        
+        LogSegmentDirectory.Scan(topic.Name);
+    }
+
+
+    private void ActivateSegment(IReadOnlyCollection<FileLogSegment> segments)
+    {
+        segments.OrderByDescending(v=>v.BaseOffset).GroupBy(v=>v.Partition)
     }
 }
 
