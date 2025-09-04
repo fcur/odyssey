@@ -335,7 +335,7 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
 
     private void ActivateSegment(IReadOnlyCollection<FileLogSegment> segments)
     {
-        segments.OrderByDescending(v=>v.BaseOffset).GroupBy(v=>v.Partition)
+        segments.OrderByDescending(v => v.BaseOffset).GroupBy(v => v.Partition);
     }
 }
 
