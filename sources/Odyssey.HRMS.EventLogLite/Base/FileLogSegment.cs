@@ -168,10 +168,6 @@ public static class LogSegmentDirectory
         Directory.Delete(workingDirectory, true);
     }
 
-
-    
-    
-    
     public static IReadOnlyCollection<FileLogSegment> Scan(string topicName)
     {
         // workingDirectory/topicName
@@ -192,22 +188,27 @@ public static class LogSegmentDirectory
         {
             var partition = logRoot!.PartitionId;
             var logFiles = Directory.GetFiles(logRoot.Path, EventFileType.LogFile.GetSearchPattern());
-          
+
             if (logFiles.Length == 0)
             {
                 continue;
             }
 
-            foreach (var logSegmentPath in logFiles)
+            var logFilesWithValidationResult = logFiles.Select(v => new FileLogSegmentPath(v)).ToArray();
+            var logFilesWithFailure = logFilesWithValidationResult.Where(v => v.Result.IsFailure).Select(v => v.Result.Error).ToArray();
+            if (logFilesWithFailure.Any())
             {
-                var segmentFileValid = ValidateSegmentFileName(logSegmentPath);
-                if (segmentFileValid.IsFailure)
-                {
-                    throw segmentFileValid.Error;
-                }
-                
-                var baseOffset = segmentFileValid.Value;
-                
+                // TODO: to aggregate exception with `logFilesWithFailure`
+                throw new Exception();
+            }
+
+            var logFilesResults = logFilesWithValidationResult.OrderByDescending(v => v.BaseOffset).ToArray();
+
+            for (var index = 0; index < logFilesResults.Length; index++)
+            {
+                var logSegmentPath = logFilesResults[index];
+                var baseOffset = logSegmentPath.BaseOffset;
+
                 var indexFileValid = ValidateSegmentIndex(workingDirectory, partition, baseOffset);
                 if (indexFileValid.HasValue)
                 {
@@ -219,11 +220,11 @@ public static class LogSegmentDirectory
                 {
                     throw timeIndexFileValid.Error;
                 }
-                
-                var logSegmentFileInfo = new FileInfo(logSegmentPath);
+
+                var logSegmentFileInfo = new FileInfo(logSegmentPath.Value);
                 var size = logSegmentFileInfo.Length;
                 var baseTime = timeIndexFileValid.Value;
-                var segment = new FileLogSegment(partition, workingDirectory, baseOffset, baseTime, size, false);
+                var segment = new FileLogSegment(partition, workingDirectory, baseOffset, baseTime, size, index == 0);
 
                 segments.Add(segment);
             }
@@ -246,7 +247,7 @@ public static class LogSegmentDirectory
     private static Result<long, LogSegmentException> ValidateSegmentFileName(string logSegmentPath)
     {
         var segmentFileName = Path.GetFileNameWithoutExtension(logSegmentPath);
-        
+
         if (!long.TryParse(segmentFileName, out var baseOffset))
         {
             return new LogSegmentException("Log segment file name mismatch.", $"Filename '{segmentFileName}' should be integer.");
@@ -254,7 +255,7 @@ public static class LogSegmentDirectory
 
         return baseOffset;
     }
-    
+
     private static Maybe<LogSegmentException> ValidateSegmentIndex(string root, byte partition, long baseOffset)
     {
         var logSegmentIndexPath = FileLogSegment.GetFilePath(root, partition, baseOffset, EventIndexFileExtension);
@@ -263,10 +264,10 @@ public static class LogSegmentDirectory
         {
             return new LogSegmentException("Log segment file name mismatch.", $"Index file '{logSegmentIndexPath}' should exist.");
         }
-        
+
         return Maybe<LogSegmentException>.None;
     }
-    
+
     private static Result<long, LogSegmentException> ValidateSegmentTimeIndex(string root, byte partition, long baseOffset)
     {
         var logSegmentTimeIndexPath = FileLogSegment.GetFilePath(root, partition, baseOffset, EventTimeFileExtension);
@@ -277,17 +278,17 @@ public static class LogSegmentDirectory
 
         using var timeIndexReader = new BinaryReader(File.Open(logSegmentTimeIndexPath, FileMode.Open));
         var baseTime = timeIndexReader.ReadInt64();
-        
+
         return baseTime;
     }
 }
 
-public record LogSegment(byte Partition, long BaseOffset, long BaseTime)
+public record LogSegment(byte Partition, long BaseOffset, long BaseTime, bool IsActive)
 {
 }
 
 public sealed record FileLogSegment(byte Partition, string Root, long BaseOffset, long BaseTime, long Size, bool IsActive)
-    : LogSegment(Partition, BaseOffset, BaseTime)
+    : LogSegment(Partition, BaseOffset, BaseTime, IsActive)
 {
     public string GetLogFilePath() => GetFilePath(Root, Partition, BaseOffset, LogSegmentDirectory.EventLogFileExtension);
     public string GetIndexFilePath() => GetFilePath(Root, Partition, BaseOffset, LogSegmentDirectory.EventIndexFileExtension);
@@ -302,6 +303,11 @@ public sealed record FileLogSegment(byte Partition, string Root, long BaseOffset
 
     public bool IsEmpty() => BaseTime == 0 && Size == 0;
 
+    public FileLogSegment Activate()
+    {
+        return this with { IsActive = true };
+    }
+
     public static FileLogSegment New(byte partition, string root)
     {
         return new FileLogSegment(partition, root, 0, 0, 0, false);
@@ -310,5 +316,26 @@ public sealed record FileLogSegment(byte Partition, string Root, long BaseOffset
     public static string GetFilePath(string root, byte partition, long baseOffset, string extension)
     {
         return Path.Combine(root, partition.ToString(), $"{baseOffset:0000000000000000000}{extension}");
+    }
+}
+
+public sealed class FileLogSegmentPath
+{
+    public string Value { get; init; }
+
+    public long BaseOffset => Result.IsSuccess? Result.Value : throw new ArgumentException();
+    
+    public Result<long, LogSegmentException> Result { get; private set; }
+
+    public FileLogSegmentPath(string path)
+    {
+        Value = path;
+        
+        if (!long.TryParse(path, out var baseOffset))
+        {
+            Result =  new LogSegmentException("Log segment file name mismatch.", $"Filename '{path}' should be integer.");
+        }
+
+        Result = baseOffset;
     }
 }
