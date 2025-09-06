@@ -63,6 +63,26 @@ public sealed class FileLogBrokerFixture : IAsyncLifetime
     //     
     //     return workingDirectory;
     // }
+
+    public void CreateEmptyLogSegments(FileLogSegment[] segments)
+    {
+        if (segments.Length == 0)
+        {
+            return;
+        }
+
+        foreach (var segment in segments)
+        {
+            var logPath = segment.GetLogFilePath();
+            var indexPath = segment.GetIndexFilePath();
+            var timeIndexPath = segment.GetTimeIndexFilePath();
+            
+            File.Create(logPath).Dispose();
+            File.Create(indexPath).Dispose();
+            File.Create(timeIndexPath).Dispose();
+        }
+    }
+    
     
     public async Task<FileLogSegment> Write<TEvent>(FileLogSegment segment, LogMessage<TEvent>[] messages, CancellationToken cancellationToken) where TEvent : class
     {
