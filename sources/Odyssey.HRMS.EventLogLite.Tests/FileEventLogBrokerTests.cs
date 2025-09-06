@@ -89,23 +89,25 @@ public sealed class FileEventLogBrokerTests : IAsyncLifetime, IClassFixture<File
         var logSegment1 = FileLogSegment.New(partition, workingDirectory) with { BaseOffset = baseOffset1 };
         var logSegment2 = FileLogSegment.New(partition, workingDirectory) with { BaseOffset = baseOffset2 };
         
+        var time0 = now.AddMinutes(-8.0).ToUnixTimeMilliseconds();
         var time1 = now.AddMinutes(-2.0).ToUnixTimeMilliseconds();
         var time2 = now.AddMinutes(1.0).ToUnixTimeMilliseconds();
+        var logMessage0 = LogMessage<TestEvent>.Create(key1, payload1, baseOffset1) with { Timestamp = time0 };
         var logMessage1 = LogMessage<TestEvent>.Create(key1, payload1, baseOffset2) with { Timestamp = time1 };
         var logMessage2 = LogMessage<TestEvent>.Create(key2, payload2, baseOffset2 + 1) with { Timestamp = time2 };
 
         _fixture.CreateEmptyLogSegments([logSegment1, logSegment2]);
-        var logSegmentResult = await _fixture.Write(logSegment2, [logMessage1, logMessage2], cts.Token);
+        var logSegmentResult1 = await _fixture.Write(logSegment1, [logMessage0], cts.Token);
+        var logSegmentResult2 = await _fixture.Write(logSegment2, [logMessage1, logMessage2], cts.Token);
         var logSegments = LogSegmentDirectory.Scan(topic.Name);
-        var logSegmentScanResult = logSegments.SingleOrDefault();
 
         LogSegmentDirectory.Cleanup(topic.Name);
 
         using var scope = new AssertionScope();
-        logSegmentResult.Should().NotBeNull();
-        logSegmentResult.BaseOffset.Should().Be(logMessage1.Offset);
-        logSegmentResult.BaseTime.Should().Be(logMessage1.Timestamp);
-        logSegmentResult.IsActive.Should().BeTrue();
+        logSegmentResult2.Should().NotBeNull();
+        logSegmentResult2.BaseOffset.Should().Be(logMessage1.Offset);
+        logSegmentResult2.BaseTime.Should().Be(logMessage1.Timestamp);
+        logSegmentResult2.IsActive.Should().BeTrue();
 
         logSegments.Should().ContainSingle();
         logSegmentScanResult.Should().NotBeNull();

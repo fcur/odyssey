@@ -330,10 +330,11 @@ public sealed class FileLogSegmentPath
     public FileLogSegmentPath(string path)
     {
         Value = path;
+        var fileName = Path.GetFileNameWithoutExtension(path);
         
-        if (!long.TryParse(path, out var baseOffset))
+        if (!long.TryParse(fileName, out var baseOffset))
         {
-            Result =  new LogSegmentException("Log segment file name mismatch.", $"Filename '{path}' should be integer.");
+            Result =  new LogSegmentException("Log segment file name mismatch.", $"Filename '{fileName}' should be integer.");
         }
 
         Result = baseOffset;

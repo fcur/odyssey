@@ -142,6 +142,8 @@ public sealed class FileLogBrokerFixture : IAsyncLifetime
 
         LogSegmentDirectory.Cleanup(TopicName);
         LogSegmentDirectory.Cleanup(OffsetsTopic);
+        
+        Directory.Delete(BaseDirectoryRoot, true);
 
         return Task.CompletedTask;
     }
