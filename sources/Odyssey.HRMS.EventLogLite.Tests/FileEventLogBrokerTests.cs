@@ -27,7 +27,7 @@ public sealed class FileEventLogBrokerTests : IAsyncLifetime, IClassFixture<File
 
         _fixture.CreateDirectories(workingDirectory, name1, "1", "3", name2, "5", name3);
 
-        var logSegments = LogSegmentDirectory.Scan(topic.Name);
+        var logSegments = LogSegmentDirectory.Scan(topic.Name).Values.SelectMany(v=>v).ToArray();
         var allFolders = _fixture.GetFolders(workingDirectory);
 
         LogSegmentDirectory.Cleanup(topic.Name);
@@ -43,7 +43,7 @@ public sealed class FileEventLogBrokerTests : IAsyncLifetime, IClassFixture<File
     }
 
     [Theory, AutoData]
-    public async Task TestWorkingDirectoryWithSegments(string topicName, string key1, TestEvent payload1, string key2, TestEvent payload2)
+    public async Task TestWorkingDirectoryWithSingleSegment(string topicName, string key1, TestEvent payload1, string key2, TestEvent payload2)
     {
         const byte partition = 1;
         var now = DateTimeOffset.UtcNow;
@@ -57,8 +57,8 @@ public sealed class FileEventLogBrokerTests : IAsyncLifetime, IClassFixture<File
         var logMessage2 = LogMessage<TestEvent>.Create(key2, payload2, 1) with { Timestamp = time2 };
 
         var logSegmentResult = await _fixture.Write(logSegment, [logMessage1, logMessage2], cts.Token);
-        var logSegments = LogSegmentDirectory.Scan(topic.Name);
-        var logSegmentScanResult = logSegments.SingleOrDefault();
+        var logSegments = LogSegmentDirectory.Scan(topic.Name).Values.SelectMany(v=>v).ToArray();
+        var activeLogSegment = logSegments.Single();
 
         LogSegmentDirectory.Cleanup(topic.Name);
 
@@ -66,13 +66,12 @@ public sealed class FileEventLogBrokerTests : IAsyncLifetime, IClassFixture<File
         logSegmentResult.Should().NotBeNull();
         logSegmentResult.BaseOffset.Should().Be(logMessage1.Offset);
         logSegmentResult.BaseTime.Should().Be(logMessage1.Timestamp);
-        logSegmentResult.IsActive.Should().BeTrue();
 
         logSegments.Should().ContainSingle();
-        logSegmentScanResult.Should().NotBeNull();
-        logSegmentScanResult!.BaseOffset.Should().Be(logMessage1.Offset);
-        logSegmentScanResult.BaseTime.Should().Be(logMessage1.Timestamp);
-        logSegmentScanResult.IsActive.Should().BeTrue();
+        activeLogSegment.Should().NotBeNull();
+        activeLogSegment.BaseOffset.Should().Be(logMessage1.Offset);
+        activeLogSegment.BaseTime.Should().Be(logMessage1.Timestamp);
+        activeLogSegment.IsActive.Should().BeTrue();
     }
 
     [Theory, AutoData]
@@ -100,7 +99,7 @@ public sealed class FileEventLogBrokerTests : IAsyncLifetime, IClassFixture<File
         _fixture.CreateEmptyLogSegments([logSegment1, logSegment2]);
         var logSegmentResult1 = await _fixture.Write(logSegment1, [logMessage1], cts.Token);
         var logSegmentResult2 = await _fixture.Write(logSegment2, [logMessage2, logMessage3], cts.Token);
-        var logSegmentScanResult = LogSegmentDirectory.Scan(topic.Name).ToArray();
+        var logSegmentScanResult = LogSegmentDirectory.Scan(topic.Name).Values.SelectMany(v=>v).ToArray();
 
         var activeSegment = logSegmentScanResult.Length == 2 ? logSegmentScanResult[0] : throw new InvalidOperationException();
         var notActiveSegment = logSegmentScanResult.Length == 2 ? logSegmentScanResult[1] : throw new InvalidOperationException();

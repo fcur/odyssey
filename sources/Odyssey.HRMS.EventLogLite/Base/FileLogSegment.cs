@@ -168,7 +168,7 @@ public static class LogSegmentDirectory
         Directory.Delete(workingDirectory, true);
     }
 
-    public static IReadOnlyCollection<FileLogSegment> Scan(string topicName)
+    public static IReadOnlyDictionary<byte,FileLogSegment[]> Scan(string topicName)
     {
         // workingDirectory/topicName
         var workingDirectory = GetWorkingDirectory(topicName);
@@ -182,12 +182,13 @@ public static class LogSegmentDirectory
             .Select(v => byte.TryParse(v.Name, out var partitionIdResult) ? new FileLogSegmentRoot(partitionIdResult, v.FullName) : null)
             .Where(v => v is not null).ToArray();
 
-        var segments = new List<FileLogSegment>();
-
+        var scanResult = new Dictionary<byte, FileLogSegment[]>();
+        
         foreach (var logRoot in logSegmentRoots)
         {
             var partition = logRoot!.PartitionId;
             var logFiles = Directory.GetFiles(logRoot.Path, EventFileType.LogFile.GetSearchPattern());
+            var segments = new List<FileLogSegment>();
 
             if (logFiles.Length == 0)
             {
@@ -228,9 +229,11 @@ public static class LogSegmentDirectory
 
                 segments.Add(segment);
             }
+            
+            scanResult.Add(partition, segments.ToArray());
         }
 
-        return segments.ToArray();
+        return scanResult;
     }
 
 

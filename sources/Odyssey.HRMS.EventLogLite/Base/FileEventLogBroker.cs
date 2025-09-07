@@ -61,7 +61,7 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
         EnsureWorkingDirectory();
         
         var segments = LogSegmentDirectory.Scan(_topic.Name);
-        ActivateLatestSegments(segments);
+
         
         // Scan();
         
@@ -330,19 +330,6 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
     private void ScanTopic(EventLogTopic  topic)
     {
         LogSegmentDirectory.Scan(topic.Name);
-    }
-
-    private IReadOnlyCollection<FileLogSegment> ActivateLatestSegments(IReadOnlyCollection<FileLogSegment> segments)
-    {
-        var groups = segments.OrderByDescending(v => v.BaseOffset).GroupBy(v => v.Partition);
-        foreach (var item in groups)
-        {
-            // item[0] = item[0].Activate();
-        }
-        
-
-
-        return segments;
     }
 }
 
