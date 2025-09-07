@@ -27,7 +27,8 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
 
     private string _topicRoot;
     private string _offsetsRoot;
-    
+
+    private readonly ConcurrentDictionary<byte, LinkedList<FileLogSegment>> _segmentMap;
     
     public FileEventLogBroker(ILogger<FileEventLogBroker<TEvent>> logger, EventBrokerSettings brokerSettings, IFileEventLogger eventLogger, IFileEventLogger offsetLogger, EventLogTopic topic)
     {
@@ -45,6 +46,7 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
 
         _offsetsTopic = new EventLogTopic(_brokerSettings.TopicName, _brokerSettings.Partitions);
         _consumers = [];
+        _segmentMap = [];
 
         // var opt = new BoundedChannelOptions(1000) { SingleReader = false, SingleWriter = true, FullMode = BoundedChannelFullMode.Wait };
         // _mainChannel = Channel.CreateBounded<LogResponse<TEvent>>(opt);
@@ -61,9 +63,10 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
         EnsureWorkingDirectory();
         
         var segments = LogSegmentDirectory.Scan(_topic.Name);
-
-        
-        // Scan();
+        foreach (var item in segments)
+        {
+            _segmentMap.AddOrUpdate(item.Key, item.Value, (key, oldValue) => item.Value);
+        }
         
         
         InitOffsetTopic();
