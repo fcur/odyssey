@@ -168,7 +168,7 @@ public static class LogSegmentDirectory
         Directory.Delete(workingDirectory, true);
     }
 
-    public static IReadOnlyDictionary<byte,LinkedList<FileLogSegment>> Scan(string topicName)
+    public static IReadOnlyDictionary<byte, LinkedList<FileLogSegment>> Scan(string topicName)
     {
         // workingDirectory/topicName
         var workingDirectory = GetWorkingDirectory(topicName);
@@ -183,18 +183,21 @@ public static class LogSegmentDirectory
             .Where(v => v is not null).ToArray();
 
         var scanResult = new Dictionary<byte, LinkedList<FileLogSegment>>();
-        
+
         foreach (var logRoot in logSegmentRoots)
         {
             var partition = logRoot!.PartitionId;
             var logFiles = Directory.GetFiles(logRoot.Path, EventFileType.LogFile.GetSearchPattern());
-            var segments = new LinkedList<FileLogSegment>();
 
             if (logFiles.Length == 0)
             {
+                var newSegment = FileLogSegment.New(partition, workingDirectory);
+                scanResult.Add(partition, new LinkedList<FileLogSegment>([newSegment]));
                 continue;
             }
 
+            var segments = new LinkedList<FileLogSegment>();
+            
             var logFilesWithValidationResult = logFiles.Select(v => new FileLogSegmentPath(v)).ToArray();
             var logFilesWithFailure = logFilesWithValidationResult.Where(v => v.Result.IsFailure).Select(v => v.Result.Error).ToArray();
             if (logFilesWithFailure.Any())
@@ -229,7 +232,7 @@ public static class LogSegmentDirectory
 
                 segments.AddLast(segment);
             }
-            
+
             scanResult.Add(partition, segments);
         }
 
@@ -313,7 +316,7 @@ public sealed record FileLogSegment(byte Partition, string Root, long BaseOffset
 
     public static FileLogSegment New(byte partition, string root)
     {
-        return new FileLogSegment(partition, root, 0, 0, 0, false);
+        return new FileLogSegment(partition, root, 0, 0, 0, true);
     }
 
     public static string GetFilePath(string root, byte partition, long baseOffset, string extension)
@@ -326,18 +329,18 @@ public sealed class FileLogSegmentPath
 {
     public string Value { get; init; }
 
-    public long BaseOffset => Result.IsSuccess? Result.Value : throw new ArgumentException();
-    
+    public long BaseOffset => Result.IsSuccess ? Result.Value : throw new ArgumentException();
+
     public Result<long, LogSegmentException> Result { get; private set; }
 
     public FileLogSegmentPath(string path)
     {
         Value = path;
         var fileName = Path.GetFileNameWithoutExtension(path);
-        
+
         if (!long.TryParse(fileName, out var baseOffset))
         {
-            Result =  new LogSegmentException("Log segment file name mismatch.", $"Filename '{fileName}' should be integer.");
+            Result = new LogSegmentException("Log segment file name mismatch.", $"Filename '{fileName}' should be integer.");
         }
 
         Result = baseOffset;

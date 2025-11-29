@@ -83,7 +83,6 @@ public sealed class FileLogBrokerFixture : IAsyncLifetime
         }
     }
     
-    
     public async Task<FileLogSegment> Write<TEvent>(FileLogSegment segment, LogMessage<TEvent>[] messages, CancellationToken cancellationToken) where TEvent : class
     {
         if (messages.Length == 0)
@@ -115,6 +114,8 @@ public sealed class FileLogBrokerFixture : IAsyncLifetime
                 Size = logSegmentWriter.Length,
                 BaseOffset = segment.IsEmpty() ? item.Offset : segment.BaseOffset,
                 BaseTime = segment.IsEmpty() ? item.Timestamp : segment.BaseTime,
+                IsActive = false, // can't determine in tests
+                
             };
         }
 

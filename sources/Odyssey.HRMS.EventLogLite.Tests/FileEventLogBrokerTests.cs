@@ -128,13 +128,16 @@ public sealed class FileEventLogBrokerTests : IAsyncLifetime, IClassFixture<File
     }
     
     [Theory, AutoData]
-    public async Task TestLogEvent(string key, TestEvent payload)
+    public async Task TestLogEventInPartition(string key, TestEvent payload)
     {
+        const byte partition = 1;
         var cts = new CancellationTokenSource();
-        var request = new LogRequest<TestEvent> { Key = key, Payload = payload };
+        var request = new LogRequest<TestEvent> { Key = key, Payload = payload, PartitionId = partition };
 
+        // missing segments throws exception
         var broker = _fixture.GetBroker();
         await broker.Start(cts.Token);
+        
 
         var logResult = await broker.LogEvent(request, cts.Token);
     }

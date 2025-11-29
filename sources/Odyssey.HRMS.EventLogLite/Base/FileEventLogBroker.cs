@@ -60,10 +60,17 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
         // TODO: add index file for each segment as MMF
         // start consuming from the position of the nearest found offset 
         
-        EnsureWorkingDirectory();
+        // ensure working directory
+        _offsetsRoot = LogSegmentDirectory.Init(_offsetsTopic);
+        _topicRoot = LogSegmentDirectory.Init(_topic);
         
-        var segments = LogSegmentDirectory.Scan(_topic.Name);
-        foreach (var item in segments)
+        var topicSegments = LogSegmentDirectory.Scan(_topic.Name);
+        // if (!topicSegments.Any())
+        // {
+        //     topicSegments = LogSegmentDirectory.Init(_topic.Name);
+        // }
+        
+        foreach (var item in topicSegments)
         {
             _segmentMap.AddOrUpdate(item.Key, item.Value, (key, oldValue) => item.Value);
         }
@@ -254,12 +261,6 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
     {
         Interlocked.Exchange(ref _tempPartition, (_tempPartition + 1) % _partitionsCount);
         return Convert.ToByte(_tempPartition);
-    }
-
-    private void EnsureWorkingDirectory()
-    {
-        _offsetsRoot = LogSegmentDirectory.Init(_offsetsTopic);
-        _topicRoot = LogSegmentDirectory.Init(_topic);
     }
 
     private void InitOffsetTopic()
