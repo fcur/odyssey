@@ -27,19 +27,20 @@ public sealed class FileEventLogBrokerTests : IAsyncLifetime, IClassFixture<File
 
         _fixture.CreateDirectories(workingDirectory, name1, "1", "3", name2, "5", name3);
 
-        var logSegments = LogSegmentDirectory.Scan(topic.Name).Values.SelectMany(v=>v).ToArray();
-        var allFolders = _fixture.GetFolders(workingDirectory);
+        var logSegments = LogSegmentDirectory.Scan(topic.Name).Values.SelectMany(v => v).ToArray();
+        var subDirectories = _fixture.GetSubDirectories(workingDirectory);
 
         LogSegmentDirectory.Cleanup(topic.Name);
 
         using var scope = new AssertionScope();
-        logSegments.Should().BeEmpty();
-        allFolders.Count.Should().Be(9);
-        allFolders.SingleOrDefault(v => v.EndsWith("0")).Should().NotBeNull();
-        allFolders.SingleOrDefault(v => v.EndsWith("1")).Should().NotBeNull();
-        allFolders.SingleOrDefault(v => v.EndsWith("2")).Should().NotBeNull();
-        allFolders.SingleOrDefault(v => v.EndsWith("3")).Should().NotBeNull();
-        allFolders.SingleOrDefault(v => v.EndsWith("4")).Should().NotBeNull();
+        logSegments.Length.Should().Be(6);
+        subDirectories.Count.Should().Be(9);
+        subDirectories.SingleOrDefault(v => v.Name.Equals("0")).Should().NotBeNull();
+        subDirectories.SingleOrDefault(v => v.Name.Equals("1")).Should().NotBeNull();
+        subDirectories.SingleOrDefault(v => v.Name.Equals("2")).Should().NotBeNull();
+        subDirectories.SingleOrDefault(v => v.Name.Equals("3")).Should().NotBeNull();
+        subDirectories.SingleOrDefault(v => v.Name.Equals("4")).Should().NotBeNull();
+        subDirectories.SingleOrDefault(v => v.Name.Equals("5")).Should().NotBeNull();
     }
 
     [Theory, AutoData]
@@ -57,9 +58,8 @@ public sealed class FileEventLogBrokerTests : IAsyncLifetime, IClassFixture<File
         var logMessage2 = LogMessage<TestEvent>.Create(key2, payload2, 1) with { Timestamp = time2 };
 
         var logSegmentResult = await _fixture.Write(logSegment, [logMessage1, logMessage2], cts.Token);
-        var logSegments = LogSegmentDirectory.Scan(topic.Name).Values.SelectMany(v=>v).ToArray();
-        var activeLogSegment = logSegments.Single();
-
+        var logSegments = LogSegmentDirectory.Scan(topic.Name).Values.SelectMany(v => v).ToArray();
+        var usedLogSegment = logSegments.Single(v => !v.IsEmpty());
         LogSegmentDirectory.Cleanup(topic.Name);
 
         using var scope = new AssertionScope();
@@ -67,11 +67,11 @@ public sealed class FileEventLogBrokerTests : IAsyncLifetime, IClassFixture<File
         logSegmentResult.BaseOffset.Should().Be(logMessage1.Offset);
         logSegmentResult.BaseTime.Should().Be(logMessage1.Timestamp);
 
-        logSegments.Should().ContainSingle();
-        activeLogSegment.Should().NotBeNull();
-        activeLogSegment.BaseOffset.Should().Be(logMessage1.Offset);
-        activeLogSegment.BaseTime.Should().Be(logMessage1.Timestamp);
-        activeLogSegment.IsActive.Should().BeTrue();
+        logSegments.Length.Should().Be(3);
+        usedLogSegment.Should().NotBeNull();
+        usedLogSegment.BaseOffset.Should().Be(logMessage1.Offset);
+        usedLogSegment.BaseTime.Should().Be(logMessage1.Timestamp);
+        usedLogSegment.IsActive.Should().BeTrue();
     }
 
     [Theory, AutoData]
@@ -99,10 +99,11 @@ public sealed class FileEventLogBrokerTests : IAsyncLifetime, IClassFixture<File
         _fixture.CreateEmptyLogSegments([logSegment1, logSegment2]);
         var logSegmentResult1 = await _fixture.Write(logSegment1, [logMessage1], cts.Token);
         var logSegmentResult2 = await _fixture.Write(logSegment2, [logMessage2, logMessage3], cts.Token);
-        var logSegmentScanResult = LogSegmentDirectory.Scan(topic.Name).Values.SelectMany(v=>v).ToArray();
+        var logSegmentScanResult = LogSegmentDirectory.Scan(topic.Name).Values.SelectMany(v => v).ToArray();
 
-        var activeSegment = logSegmentScanResult.Length == 2 ? logSegmentScanResult[0] : throw new InvalidOperationException();
-        var notActiveSegment = logSegmentScanResult.Length == 2 ? logSegmentScanResult[1] : throw new InvalidOperationException();
+        var selectedPartitionLogSegments = logSegmentScanResult.Where(v=>v.Partition==partition).ToArray();
+        var activeSegment = selectedPartitionLogSegments.Length == 2 ? selectedPartitionLogSegments[0] : throw new InvalidOperationException();
+        var notActiveSegment = selectedPartitionLogSegments.Length == 2 ? selectedPartitionLogSegments[1] : throw new InvalidOperationException();
 
         LogSegmentDirectory.Cleanup(topic.Name);
 
@@ -126,7 +127,7 @@ public sealed class FileEventLogBrokerTests : IAsyncLifetime, IClassFixture<File
         notActiveSegment.BaseTime.Should().Be(logMessage1.Timestamp);
         notActiveSegment.IsActive.Should().BeFalse();
     }
-    
+
     [Theory, AutoData]
     public async Task TestLogEventInPartition(string key, TestEvent payload)
     {
@@ -137,7 +138,7 @@ public sealed class FileEventLogBrokerTests : IAsyncLifetime, IClassFixture<File
         // missing segments throws exception
         var broker = _fixture.GetBroker();
         await broker.Start(cts.Token);
-        
+
 
         var logResult = await broker.LogEvent(request, cts.Token);
     }
