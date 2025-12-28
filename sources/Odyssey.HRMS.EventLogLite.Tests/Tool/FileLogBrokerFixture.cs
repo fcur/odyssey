@@ -43,6 +43,8 @@ public sealed class FileLogBrokerFixture : IAsyncLifetime
     }
 
     public FileEventLogBroker<TestEvent> GetBroker() => _broker;
+    public EventLogTopic GetTopic() => _topic;
+    public EventLogTopic GetOffsetsTopic() => _offsetsTopic;
 
     public void CreateDirectories(string workingDirectory, params string[] folders)
     {
@@ -121,11 +123,10 @@ public sealed class FileLogBrokerFixture : IAsyncLifetime
 
         return segment;
     }
-    
 
-    public IReadOnlyCollection<string> GetFolders(string workingDirectory)
+    public IReadOnlyCollection<DirectoryInfo> GetSubDirectories(string workingDirectory)
     {
-        return Directory.GetDirectories(workingDirectory);
+        return Directory.GetDirectories(workingDirectory).Select(v=> new DirectoryInfo(v)).ToArray();
     }
     
     public Task InitializeAsync()

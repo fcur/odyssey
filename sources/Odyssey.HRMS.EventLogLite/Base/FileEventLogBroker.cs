@@ -54,15 +54,20 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
 
     public async Task Start(CancellationToken cancellationToken = default)
     {
+        // ensure working directory
+        _offsetsRoot = LogSegmentDirectory.Init(_offsetsTopic);
+        _topicRoot = LogSegmentDirectory.Init(_topic);
+        
+        var offsetTopicSegments = LogSegmentDirectory.Scan(_offsetsTopic.Name);
+
+        
         // TODO: add rebalance
         // NOT possible to decrease partitions count for active topic
 
         // TODO: add index file for each segment as MMF
         // start consuming from the position of the nearest found offset 
         
-        // ensure working directory
-        _offsetsRoot = LogSegmentDirectory.Init(_offsetsTopic);
-        _topicRoot = LogSegmentDirectory.Init(_topic);
+        
         
         var topicSegments = LogSegmentDirectory.Scan(_topic.Name);
         // if (!topicSegments.Any())

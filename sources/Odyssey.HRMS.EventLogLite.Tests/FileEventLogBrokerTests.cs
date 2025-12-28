@@ -137,10 +137,11 @@ public sealed class FileEventLogBrokerTests : IAsyncLifetime, IClassFixture<File
 
         // missing segments throws exception
         var broker = _fixture.GetBroker();
+        var topic = _fixture.GetTopic();
         await broker.Start(cts.Token);
-
-
+        
         var logResult = await broker.LogEvent(request, cts.Token);
+        LogSegmentDirectory.Cleanup(topic.Name);
     }
 
 

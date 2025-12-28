@@ -180,7 +180,7 @@ public static class LogSegmentDirectory
 
         var logSegmentRoots = existingDirectories
             .Select(v => byte.TryParse(v.Name, out var partitionIdResult) ? new FileLogSegmentRoot(partitionIdResult, v.FullName) : null)
-            .Where(v => v is not null).ToArray();
+            .Where(v => v is not null).OrderBy(v=>v!.PartitionId).ToArray();
 
         var scanResult = new Dictionary<byte, LinkedList<FileLogSegment>>();
 
@@ -236,7 +236,7 @@ public static class LogSegmentDirectory
             scanResult.Add(partition, segments);
         }
 
-        return scanResult;
+        return scanResult.OrderBy(v=>v.Key).ToDictionary();
     }
 
 
