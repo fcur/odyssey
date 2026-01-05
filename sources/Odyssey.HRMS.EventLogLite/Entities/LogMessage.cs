@@ -57,7 +57,6 @@ public sealed class LogOffsetRequest
     public LogOffsetValue Value { get; init; } =  null!;
     public Dictionary<string, object> Metadata { get; init; } = new();
     public Guid RequestId { get; init; }
-    public DateTimeOffset OccuredAt { get; init; }
 }
 
 public sealed record LogOffsetKey(string ConsumerGroupName, string TopicName, byte PartitionId)

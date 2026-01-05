@@ -120,11 +120,26 @@ public sealed class JsonFileEventLogger : IFileEventLogger
         }
     }
 
-    public Task<PositionPair> Commit(LogOffsetRequest request, FileLogSegment segment, CancellationToken cancellationToken = default)
+    public async Task<PositionPair> Commit(LogOffsetRequest request, FileLogSegment segment, CancellationToken cancellationToken = default)
     {
-        var message = new LogOffsetMessage { Key = request.Key, Value = request.Value, Metadata = request.Metadata, OccuredAt = request.OccuredAt };
+        var occuredAt = DateTimeOffset.FromUnixTimeMilliseconds(request.Value.CommitTimestamp);
+        var message = new LogOffsetMessage { Key = request.Key, Value = request.Value, Metadata = request.Metadata, OccuredAt = occuredAt };
 
-        return WriteInternal(message, segment, cancellationToken);
+        var position = await WriteInternal(message, segment, cancellationToken);
+        
+        if (segment.IsEmpty())
+        {
+            segment = segment with { BaseTime = request.Value.CommitTimestamp, Size = position.Next };
+        }
+        else
+        {
+            segment = segment with { Size = position.Next };
+        }
+        
+        WriteIndexInternal(new LogIndex(request.Value.Offset, position.Start), EventFileType.IndexFile, segment, cancellationToken);
+        WriteIndexInternal(new LogIndex(request.Value.CommitTimestamp, position.Start), EventFileType.TimeIndexFile, segment, cancellationToken);
+
+        return position;
     }
 
     public async Task<LogOffsetMessage> ReadSavedOffset(LogOffsetKey key, FileLogSegment segment, CancellationToken cancellationToken = default)
@@ -182,4 +197,6 @@ public sealed class JsonFileEventLogger : IFileEventLogger
 }
 
 
+/// <param name="Index">time or offset</param>
+/// <param name="Position">position in bytes</param>
 public record struct LogIndex(long Index, long Position);

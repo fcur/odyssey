@@ -149,19 +149,17 @@ public sealed class JsonFileEventLoggerTests : IAsyncLifetime, IClassFixture<Fil
         var request1 = new LogOffsetRequest
         {
             Key = key1,
-            OccuredAt = now,
+            Value = value1,
             Metadata = new Dictionary<string, object>(),
-            RequestId = Guid.CreateVersion7(now),
-            Value = value1
+            RequestId = Guid.CreateVersion7(now)
         };
         
         var request2 = new LogOffsetRequest
         {
             Key = key2,
-            OccuredAt = now,
+            Value = value2,
             Metadata = new Dictionary<string, object>(),
-            RequestId = Guid.CreateVersion7(now),
-            Value = value2
+            RequestId = Guid.CreateVersion7(now)
         };
         
         var position1 = await _fixture.WriteManyLines(linesCount + 1, logFilePath, cts.Token);

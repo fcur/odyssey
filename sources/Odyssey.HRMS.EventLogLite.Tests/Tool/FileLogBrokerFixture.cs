@@ -66,22 +66,32 @@ public sealed class FileLogBrokerFixture : IAsyncLifetime
     //     return workingDirectory;
     // }
 
-    public void CreateEmptyLogSegments(FileLogSegment[] segments)
+    public async Task CreateEmptyLogSegments(FileLogSegment[] segments, CancellationToken cancellationToken)
     {
         if (segments.Length == 0)
         {
             return;
         }
 
+        const long newItemPosition = 0;
+        
         foreach (var segment in segments)
         {
-            var logPath = segment.GetLogFilePath();
             var indexPath = segment.GetIndexFilePath();
             var timeIndexPath = segment.GetTimeIndexFilePath();
+            var logPath = segment.GetLogFilePath();
             
-            File.Create(logPath).Dispose();
-            File.Create(indexPath).Dispose();
-            File.Create(timeIndexPath).Dispose();
+            var offsetIndexesBytes = MemoryMarshal.AsBytes<long>(new[] { segment.BaseOffset, newItemPosition }).ToArray();
+            await using var offsetIndexWriter = new BinaryWriter(File.Open(indexPath, FileMode.OpenOrCreate, FileAccess.Write));
+            offsetIndexWriter.Write(offsetIndexesBytes);
+            
+            var timeIndexes = MemoryMarshal.AsBytes<long>(new[] { segment.BaseTime, newItemPosition }).ToArray();
+            await using var timeIndexWriter = new BinaryWriter(File.Open(timeIndexPath, FileMode.OpenOrCreate, FileAccess.Write));
+            timeIndexWriter.Write(timeIndexes);
+
+            // await File.Create(indexPath).DisposeAsync();
+            // await File.Create(timeIndexPath).DisposeAsync();
+            await File.Create(logPath).DisposeAsync();
         }
     }
     
@@ -117,7 +127,6 @@ public sealed class FileLogBrokerFixture : IAsyncLifetime
                 BaseOffset = segment.IsEmpty() ? item.Offset : segment.BaseOffset,
                 BaseTime = segment.IsEmpty() ? item.Timestamp : segment.BaseTime,
                 IsActive = false, // can't determine in tests
-                
             };
         }
 

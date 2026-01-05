@@ -151,8 +151,7 @@ public sealed class EventConsumer<TEvent> : IEventConsumer<TEvent> where TEvent 
                 Key = new LogOffsetKey(_settings.GroupName, _settings.TopicName, item.PartitionId),
                 Value = new LogOffsetValue(item.Offset + 1, time.ToUnixTimeMilliseconds()),
                 Metadata = new Dictionary<string, object> { { "Key", item.Key ?? string.Empty } },
-                RequestId = requestId,
-                OccuredAt = time
+                RequestId = requestId
             };
 
             var scope = ScopeState.Create().WithOffset(item.Offset).WithTopic(_settings.TopicName)

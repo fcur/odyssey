@@ -59,7 +59,6 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
         _topicRoot = LogSegmentDirectory.Init(_topic);
         
         var offsetTopicSegments = LogSegmentDirectory.Scan(_offsetsTopic.Name);
-
         
         // TODO: add rebalance
         // NOT possible to decrease partitions count for active topic
@@ -177,8 +176,8 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
         _logger.LogDebug("Offset committing in progress, Key: {Key}, Topic: {TopicName}, Group: {GroupName}, Partition: {PartitionId}, Offset: {Offset}, RequestId: {RequestId}",
             itemKey?.ToString(), topicName, groupName, partitionId, request.Value.Offset, request.RequestId);
 
-        
-        var message = new LogOffsetMessage { Key = request.Key, Value = request.Value, Metadata = request.Metadata, OccuredAt = request.OccuredAt };
+        var occuredAt = DateTimeOffset.FromUnixTimeMilliseconds(request.Value.CommitTimestamp);
+        var message = new LogOffsetMessage { Key = request.Key, Value = request.Value, Metadata = request.Metadata, OccuredAt = occuredAt };
 
         // TBD
         var newOffset = 0;

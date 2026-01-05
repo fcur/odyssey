@@ -96,12 +96,12 @@ public sealed class FileEventLogBrokerTests : IAsyncLifetime, IClassFixture<File
         var logMessage2 = LogMessage<TestEvent>.Create(key1, payload1, baseOffset2) with { Timestamp = time2 };
         var logMessage3 = LogMessage<TestEvent>.Create(key2, payload2, baseOffset2 + 1) with { Timestamp = time3 };
 
-        _fixture.CreateEmptyLogSegments([logSegment1, logSegment2]);
+        await _fixture.CreateEmptyLogSegments([logSegment1, logSegment2], cts.Token);
         var logSegmentResult1 = await _fixture.Write(logSegment1, [logMessage1], cts.Token);
         var logSegmentResult2 = await _fixture.Write(logSegment2, [logMessage2, logMessage3], cts.Token);
         var logSegmentScanResult = LogSegmentDirectory.Scan(topic.Name).Values.SelectMany(v => v).ToArray();
 
-        var selectedPartitionLogSegments = logSegmentScanResult.Where(v=>v.Partition==partition).ToArray();
+        var selectedPartitionLogSegments = logSegmentScanResult.Where(v => v.Partition == partition).ToArray();
         var activeSegment = selectedPartitionLogSegments.Length == 2 ? selectedPartitionLogSegments[0] : throw new InvalidOperationException();
         var notActiveSegment = selectedPartitionLogSegments.Length == 2 ? selectedPartitionLogSegments[1] : throw new InvalidOperationException();
 
@@ -131,15 +131,27 @@ public sealed class FileEventLogBrokerTests : IAsyncLifetime, IClassFixture<File
     [Theory, AutoData]
     public async Task TestLogEventInPartition(string key, TestEvent payload)
     {
+        var timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         const byte partition = 1;
+        var logIndex1 = new LogIndex(0L, 0);
+        var timeIndex1 = new LogIndex(timestamp, 0);
+        var logIndex2 = new LogIndex(10000234510L, 0);
+        var timeIndex2 = new LogIndex(timestamp + 10010L, 0);
+        
         var cts = new CancellationTokenSource();
         var request = new LogRequest<TestEvent> { Key = key, Payload = payload, PartitionId = partition };
 
         // missing segments throws exception
         var broker = _fixture.GetBroker();
         var topic = _fixture.GetTopic();
-        await broker.Start(cts.Token);
+        var workingDirectory = LogSegmentDirectory.Init(topic);
+        var logSegment1 = FileLogSegment.New(partition, workingDirectory) with { BaseOffset = logIndex1.Index, BaseTime = timeIndex1.Index };
+        var logSegment2 = FileLogSegment.New(partition, workingDirectory) with { BaseOffset = logIndex2.Index, BaseTime =  timeIndex2.Index };
         
+        await _fixture.CreateEmptyLogSegments([logSegment1, logSegment2], cts.Token);
+
+        await broker.Start(cts.Token);
+
         var logResult = await broker.LogEvent(request, cts.Token);
         LogSegmentDirectory.Cleanup(topic.Name);
     }
