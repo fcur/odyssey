@@ -26,13 +26,13 @@ public static class Extensions
             services.AddKeyedSingleton<IFileEventLogger>(OffsetLoggerKey);
         }
         
-        var topic = new EventLogTopic(producerConfiguration.TopicName, producerConfiguration.Partitions);
+        var eventTopic = new EventLogTopic(producerConfiguration.TopicName, producerConfiguration.Partitions);
         
         // TODO: register broker separately 
         var eventLogger = new JsonFileEventLogger();
         
         var brokerLogger = serviceProvider.GetRequiredService<ILogger<FileEventLogBroker<TEvent>>>();
-        var broker = new FileEventLogBroker<TEvent>(brokerLogger, brokerConfiguration, eventLogger, offsetLogger!, topic);
+        var broker = new FileEventLogBroker<TEvent>(brokerLogger, brokerConfiguration, eventLogger, eventTopic, offsetLogger!);
         
         var producerLogger = serviceProvider.GetRequiredService<ILogger<EventProducer<TEvent>>>();
         var producer = new EventProducer<TEvent>(producerLogger, broker, producerConfiguration);

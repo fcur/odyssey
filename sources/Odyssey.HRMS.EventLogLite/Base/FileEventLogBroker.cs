@@ -14,7 +14,7 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
     private readonly EventBrokerSettings _brokerSettings;
     private readonly IFileEventLogger _eventLogger;
     private readonly IFileEventLogger _offsetLogger;
-    private readonly EventLogTopic _topic;
+    private readonly EventLogTopic _eventTopic;
     private readonly EventLogTopic _offsetsTopic;
     // private readonly Channel<LogRespone<TEvent>> _mainChannel;
     private readonly ConcurrentQueue<IEventConsumer<TEvent>> _consumers;
@@ -30,19 +30,19 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
 
     private readonly ConcurrentDictionary<byte, LinkedList<FileLogSegment>> _segmentMap;
     
-    public FileEventLogBroker(ILogger<FileEventLogBroker<TEvent>> logger, EventBrokerSettings brokerSettings, IFileEventLogger eventLogger, IFileEventLogger offsetLogger, EventLogTopic topic)
+    public FileEventLogBroker(ILogger<FileEventLogBroker<TEvent>> logger, EventBrokerSettings brokerSettings, IFileEventLogger eventLogger, EventLogTopic eventTopic, IFileEventLogger offsetLogger)
     {
         ArgumentNullException.ThrowIfNull(logger);
         ArgumentNullException.ThrowIfNull(brokerSettings);
         ArgumentNullException.ThrowIfNull(eventLogger);
         ArgumentNullException.ThrowIfNull(offsetLogger);
-        ArgumentNullException.ThrowIfNull(topic);
+        ArgumentNullException.ThrowIfNull(eventTopic);
 
         _logger = logger;
         _brokerSettings = brokerSettings;
         _eventLogger = eventLogger;
         _offsetLogger = offsetLogger;
-        _topic = topic;
+        _eventTopic = eventTopic;
 
         _offsetsTopic = new EventLogTopic(_brokerSettings.TopicName, _brokerSettings.Partitions);
         _consumers = [];
@@ -56,7 +56,7 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
     {
         // ensure working directory
         _offsetsRoot = LogSegmentDirectory.Init(_offsetsTopic);
-        _topicRoot = LogSegmentDirectory.Init(_topic);
+        _topicRoot = LogSegmentDirectory.Init(_eventTopic);
         
         var offsetTopicSegments = LogSegmentDirectory.Scan(_offsetsTopic.Name);
         
@@ -68,7 +68,7 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
         
         
         
-        var topicSegments = LogSegmentDirectory.Scan(_topic.Name);
+        var topicSegments = LogSegmentDirectory.Scan(_eventTopic.Name);
         // if (!topicSegments.Any())
         // {
         //     topicSegments = LogSegmentDirectory.Init(_topic.Name);
@@ -132,7 +132,7 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
             break;
         }
 
-        return new EventLogResult(_topic.Name, partitionId, newOffset);
+        return new EventLogResult(_eventTopic.Name, partitionId, newOffset);
     }
 
     public void Join(IEventConsumer<TEvent> consumer)
@@ -332,7 +332,7 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
     private void Scan()
     {
         ScanTopic(_offsetsTopic);
-        ScanTopic(_topic);
+        ScanTopic(_eventTopic);
     }
     
     private void ScanTopic(EventLogTopic  topic)

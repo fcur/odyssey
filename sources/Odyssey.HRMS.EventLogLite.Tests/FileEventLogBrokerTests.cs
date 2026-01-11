@@ -129,32 +129,59 @@ public sealed class FileEventLogBrokerTests : IAsyncLifetime, IClassFixture<File
     }
 
     [Theory, AutoData]
-    public async Task TestLogEventInPartition(string key, TestEvent payload)
+    public async Task TestLogFirstEvent(string key, TestEvent payload)
     {
         var timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         const byte partition = 1;
-        var logIndex1 = new LogIndex(0L, 0);
-        var timeIndex1 = new LogIndex(timestamp, 0);
-        var logIndex2 = new LogIndex(10000234510L, 0);
-        var timeIndex2 = new LogIndex(timestamp + 10010L, 0);
+        // var logIndex1 = new LogIndex(0L, 0);
+        // var timeIndex1 = new LogIndex(timestamp, 0);
         
         var cts = new CancellationTokenSource();
         var request = new LogRequest<TestEvent> { Key = key, Payload = payload, PartitionId = partition };
-
+    
         // missing segments throws exception
         var broker = _fixture.GetBroker();
         var topic = _fixture.GetTopic();
-        var workingDirectory = LogSegmentDirectory.Init(topic);
-        var logSegment1 = FileLogSegment.New(partition, workingDirectory) with { BaseOffset = logIndex1.Index, BaseTime = timeIndex1.Index };
-        var logSegment2 = FileLogSegment.New(partition, workingDirectory) with { BaseOffset = logIndex2.Index, BaseTime =  timeIndex2.Index };
-        
-        await _fixture.CreateEmptyLogSegments([logSegment1, logSegment2], cts.Token);
+        // var workingDirectory = LogSegmentDirectory.Init(topic);
+        // var logSegment1 = FileLogSegment.New(partition, workingDirectory) with { BaseOffset = logIndex1.Index, BaseTime = timeIndex1.Index };
 
+        // await _fixture.CreateEmptyLogSegments([logSegment1], cts.Token);
+    
         await broker.Start(cts.Token);
-
+    
         var logResult = await broker.LogEvent(request, cts.Token);
         LogSegmentDirectory.Cleanup(topic.Name);
     }
+    
+    
+    
+    // [Theory, AutoData]
+    // public async Task TestLogEventInPartition(string key, TestEvent payload)
+    // {
+    //     var timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+    //     const byte partition = 1;
+    //     var logIndex1 = new LogIndex(0L, 0);
+    //     var timeIndex1 = new LogIndex(timestamp, 0);
+    //     var logIndex2 = new LogIndex(10000234510L, 0);
+    //     var timeIndex2 = new LogIndex(timestamp + 10010L, 0);
+    //     
+    //     var cts = new CancellationTokenSource();
+    //     var request = new LogRequest<TestEvent> { Key = key, Payload = payload, PartitionId = partition };
+    //
+    //     // missing segments throws exception
+    //     var broker = _fixture.GetBroker();
+    //     var topic = _fixture.GetTopic();
+    //     var workingDirectory = LogSegmentDirectory.Init(topic);
+    //     var logSegment1 = FileLogSegment.New(partition, workingDirectory) with { BaseOffset = logIndex1.Index, BaseTime = timeIndex1.Index };
+    //     var logSegment2 = FileLogSegment.New(partition, workingDirectory) with { BaseOffset = logIndex2.Index, BaseTime =  timeIndex2.Index };
+    //     
+    //     await _fixture.CreateEmptyLogSegments([logSegment1, logSegment2], cts.Token);
+    //
+    //     await broker.Start(cts.Token);
+    //
+    //     var logResult = await broker.LogEvent(request, cts.Token);
+    //     LogSegmentDirectory.Cleanup(topic.Name);
+    // }
 
 
     public Task InitializeAsync()

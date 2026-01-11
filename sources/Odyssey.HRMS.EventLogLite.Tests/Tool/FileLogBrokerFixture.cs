@@ -14,30 +14,37 @@ namespace Odyssey.HRMS.EventLogLite.Tests.Tool;
 public sealed class FileLogBrokerFixture : IAsyncLifetime
 {
     private const string BaseDirectoryRoot = "../../../../../FileEventLogBrokerTests";
-    private const string TopicName = "test_event";
-    private const byte Partitions = 5;
-    private const string OffsetsTopic = "__consumer_offsets";
+    private const string EventTopicName = "test_event";
+    private const byte EventTopicPartitions = 5;
+    private const byte OffsetPartitions = 50;
+    private const string OffsetsTopicName = "__consumer_offsets";
     private readonly FileEventLogBroker<TestEvent> _broker;
     private readonly EventLogTopic _topic;
     private readonly EventLogTopic _offsetsTopic;
     private const byte EventLogDivider = 10;
-    
+
     private static readonly JsonSerializerOptions SerializerOptions = new() { WriteIndented = false };
+
     static FileLogBrokerFixture()
     {
         LogSegmentDirectory.SetEventLoggingRoot(BaseDirectoryRoot);
     }
-    
+
     public FileLogBrokerFixture()
     {
         var brokerLoggerMock = new Mock<ILogger<FileEventLogBroker<TestEvent>>>();
-        var brokerSettings = new EventBrokerSettings { TopicName = OffsetsTopic, Partitions = Partitions };
-        var topic = new EventLogTopic(TopicName, Partitions);
-        var offsetsTopic = new EventLogTopic(OffsetsTopic, Partitions);
-        var eventLoggerMock = new Mock<IFileEventLogger>();
-        var broker = new FileEventLogBroker<TestEvent>(brokerLoggerMock.Object, brokerSettings, eventLoggerMock.Object, eventLoggerMock.Object, topic);
 
-        _topic = topic;
+        var eventTopic = new EventLogTopic(EventTopicName, EventTopicPartitions);
+        var offsetsTopic = new EventLogTopic(OffsetsTopicName, OffsetPartitions);
+
+        var brokerSettings = new EventBrokerSettings { TopicName = offsetsTopic.Name, Partitions = offsetsTopic.Partitions };
+
+        var eventLoggerMock = new Mock<IFileEventLogger>();
+        var broker = new FileEventLogBroker<TestEvent>(brokerLoggerMock.Object, brokerSettings, 
+            eventLogger: eventLoggerMock.Object, eventTopic,
+            offsetLogger:eventLoggerMock.Object);
+
+        _topic = eventTopic;
         _offsetsTopic = offsetsTopic;
         _broker = broker;
     }
@@ -74,17 +81,17 @@ public sealed class FileLogBrokerFixture : IAsyncLifetime
         }
 
         const long newItemPosition = 0;
-        
+
         foreach (var segment in segments)
         {
             var indexPath = segment.GetIndexFilePath();
             var timeIndexPath = segment.GetTimeIndexFilePath();
             var logPath = segment.GetLogFilePath();
-            
+
             var offsetIndexesBytes = MemoryMarshal.AsBytes<long>(new[] { segment.BaseOffset, newItemPosition }).ToArray();
             await using var offsetIndexWriter = new BinaryWriter(File.Open(indexPath, FileMode.OpenOrCreate, FileAccess.Write));
             offsetIndexWriter.Write(offsetIndexesBytes);
-            
+
             var timeIndexes = MemoryMarshal.AsBytes<long>(new[] { segment.BaseTime, newItemPosition }).ToArray();
             await using var timeIndexWriter = new BinaryWriter(File.Open(timeIndexPath, FileMode.OpenOrCreate, FileAccess.Write));
             timeIndexWriter.Write(timeIndexes);
@@ -94,14 +101,15 @@ public sealed class FileLogBrokerFixture : IAsyncLifetime
             await File.Create(logPath).DisposeAsync();
         }
     }
-    
-    public async Task<FileLogSegment> Write<TEvent>(FileLogSegment segment, LogMessage<TEvent>[] messages, CancellationToken cancellationToken) where TEvent : class
+
+    public async Task<FileLogSegment> Write<TEvent>(FileLogSegment segment, LogMessage<TEvent>[] messages, CancellationToken cancellationToken)
+        where TEvent : class
     {
         if (messages.Length == 0)
         {
             return segment;
         }
-        
+
         await using var logSegmentWriter = new FileStream(segment.GetLogFilePath(), FileMode.OpenOrCreate, FileAccess.Write);
         await using var offsetIndexWriter = new BinaryWriter(File.Open(segment.GetIndexFilePath(), FileMode.OpenOrCreate, FileAccess.Write));
         await using var timeIndexWriter = new BinaryWriter(File.Open(segment.GetTimeIndexFilePath(), FileMode.OpenOrCreate, FileAccess.Write));
@@ -135,14 +143,14 @@ public sealed class FileLogBrokerFixture : IAsyncLifetime
 
     public IReadOnlyCollection<DirectoryInfo> GetSubDirectories(string workingDirectory)
     {
-        return Directory.GetDirectories(workingDirectory).Select(v=> new DirectoryInfo(v)).ToArray();
+        return Directory.GetDirectories(workingDirectory).Select(v => new DirectoryInfo(v)).ToArray();
     }
-    
+
     public Task InitializeAsync()
     {
-        LogSegmentDirectory.Init(OffsetsTopic, Partitions);
-        LogSegmentDirectory.Init(TopicName, Partitions);
-        
+        LogSegmentDirectory.Init(OffsetsTopicName, OffsetPartitions);
+        LogSegmentDirectory.Init(EventTopicName, OffsetPartitions);
+
         // await _broker.Start(CancellationToken.None);
         return Task.CompletedTask;
     }
@@ -151,9 +159,9 @@ public sealed class FileLogBrokerFixture : IAsyncLifetime
     {
         // await _broker.Stop(CancellationToken.None);
 
-        LogSegmentDirectory.Cleanup(TopicName);
-        LogSegmentDirectory.Cleanup(OffsetsTopic);
-        
+        LogSegmentDirectory.Cleanup(EventTopicName);
+        LogSegmentDirectory.Cleanup(OffsetsTopicName);
+
         Directory.Delete(BaseDirectoryRoot, true);
 
         return Task.CompletedTask;
