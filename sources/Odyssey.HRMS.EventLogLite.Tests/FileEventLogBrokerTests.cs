@@ -23,7 +23,7 @@ public sealed class FileEventLogBrokerTests : IAsyncLifetime, IClassFixture<File
     public void TestWorkingDirectoryWithoutSegments(string name1, string name2, string name3)
     {
         var topic = new EventLogTopic("box-box", 6);
-        var workingDirectory = LogSegmentDirectory.Init(topic);
+        var workingDirectory = LogSegmentDirectory.GetOrCreate(topic);
 
         _fixture.CreateDirectories(workingDirectory, name1, "1", "3", name2, "5", name3);
 
@@ -50,7 +50,7 @@ public sealed class FileEventLogBrokerTests : IAsyncLifetime, IClassFixture<File
         var now = DateTimeOffset.UtcNow;
         var cts = new CancellationTokenSource();
         var topic = new EventLogTopic(topicName, 3);
-        var workingDirectory = LogSegmentDirectory.Init(topic);
+        var workingDirectory = LogSegmentDirectory.GetOrCreate(topic);
         var logSegment = FileLogSegment.New(partition, workingDirectory);
         var time1 = now.AddMinutes(-2.0).ToUnixTimeMilliseconds();
         var time2 = now.AddMinutes(1.0).ToUnixTimeMilliseconds();
@@ -84,7 +84,7 @@ public sealed class FileEventLogBrokerTests : IAsyncLifetime, IClassFixture<File
         var now = DateTimeOffset.UtcNow;
         var cts = new CancellationTokenSource();
         var topic = new EventLogTopic(topicName, 3);
-        var workingDirectory = LogSegmentDirectory.Init(topic);
+        var workingDirectory = LogSegmentDirectory.GetOrCreate(topic);
         var logSegment1 = FileLogSegment.New(partition, workingDirectory) with { BaseOffset = baseOffset1 };
         var logSegment2 = FileLogSegment.New(partition, workingDirectory) with { BaseOffset = baseOffset2 };
 
@@ -129,7 +129,26 @@ public sealed class FileEventLogBrokerTests : IAsyncLifetime, IClassFixture<File
     }
 
     [Theory, AutoData]
-    public async Task TestLogFirstEvent(string key, TestEvent payload)
+    public async Task TestBrokerStart(string topic1Name, string topic2Name)
+    {
+        var cts = new CancellationTokenSource();
+        var topic1 = new EventLogTopic(topic1Name, 6);
+        var topic2 = new EventLogTopic(topic2Name, 3);
+        
+        _ = LogSegmentDirectory.GetOrCreate(topic1);
+        _ = LogSegmentDirectory.GetOrCreate(topic2);
+        
+        var broker = _fixture.GetBroker();
+        
+        await broker.Start(cts.Token);
+        
+        
+        
+        
+    }
+    
+    [Theory, AutoData]
+    public async Task TestLogFirstEventWithoutConsumer(string key, TestEvent payload)
     {
         var timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         const byte partition = 1;
@@ -152,8 +171,6 @@ public sealed class FileEventLogBrokerTests : IAsyncLifetime, IClassFixture<File
         var logResult = await broker.LogEvent(request, cts.Token);
         LogSegmentDirectory.Cleanup(topic.Name);
     }
-    
-    
     
     // [Theory, AutoData]
     // public async Task TestLogEventInPartition(string key, TestEvent payload)

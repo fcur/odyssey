@@ -54,9 +54,21 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
 
     public async Task Start(CancellationToken cancellationToken = default)
     {
+        var loggingRoot = LogSegmentDirectory.GetEventLoggingRoot();
+        var topics = LogSegmentDirectory.ScanLoggingRoot(loggingRoot);
+        
+        
+        /*
+         * scan log dirs
+         * read latest segment 
+         * 
+         */
+        
+        
         // ensure working directory
-        _offsetsRoot = LogSegmentDirectory.Init(_offsetsTopic);
-        _topicRoot = LogSegmentDirectory.Init(_eventTopic);
+        _offsetsRoot = LogSegmentDirectory.GetOrCreate(_offsetsTopic);
+        _topicRoot = LogSegmentDirectory.GetOrCreate(_eventTopic);
+        
         
         var offsetTopicSegments = LogSegmentDirectory.Scan(_offsetsTopic.Name);
         
@@ -79,10 +91,10 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
             _segmentMap.AddOrUpdate(item.Key, item.Value, (key, oldValue) => item.Value);
         }
         
-        
-        InitOffsetTopic();
-        await InitBrokerCounters(cancellationToken);
-        await AssignConsumers(cancellationToken);
+        // Consuming: TBD
+        // InitOffsetTopic();
+        // await InitBrokerCounters(cancellationToken);
+        // await AssignConsumers(cancellationToken);
         
         //_ = Task.Factory.StartNew(async () => await StartConsumePublishedEventsInternal(cancellationToken), TaskCreationOptions.LongRunning).Unwrap();
     }

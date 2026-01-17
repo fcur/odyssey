@@ -148,8 +148,8 @@ public sealed class FileLogBrokerFixture : IAsyncLifetime
 
     public Task InitializeAsync()
     {
-        LogSegmentDirectory.Init(OffsetsTopicName, OffsetPartitions);
-        LogSegmentDirectory.Init(EventTopicName, OffsetPartitions);
+        LogSegmentDirectory.GetOrCreate(OffsetsTopicName, OffsetPartitions);
+        LogSegmentDirectory.GetOrCreate(EventTopicName, OffsetPartitions);
 
         // await _broker.Start(CancellationToken.None);
         return Task.CompletedTask;
