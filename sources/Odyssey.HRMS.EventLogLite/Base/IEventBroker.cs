@@ -20,5 +20,10 @@ public sealed record EventLogResult(string TopicName, byte PartitionId, long Off
 
 public sealed record EventLogTopic(string Name, byte Partitions);
 
+public sealed record EventLogTopicScanResult(string Name, PartitionSegments[] PartitionSegments)
+{
+    private byte Partitions => Convert.ToByte(PartitionSegments.Length);
+}
 
+public sealed record PartitionSegments(byte PartitionId,  string Path, FileLogSegment[]  Segments);
 

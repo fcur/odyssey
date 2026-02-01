@@ -27,7 +27,7 @@ public sealed class FileEventLogBrokerTests : IAsyncLifetime, IClassFixture<File
 
         _fixture.CreateDirectories(workingDirectory, name1, "1", "3", name2, "5", name3);
 
-        var logSegments = LogSegmentDirectory.Scan(topic.Name).Values.SelectMany(v => v).ToArray();
+        var logSegments = LogSegmentDirectory.ScanOffsets(topic.Name).Values.SelectMany(v => v).ToArray();
         var subDirectories = _fixture.GetSubDirectories(workingDirectory);
 
         LogSegmentDirectory.Cleanup(topic.Name);
@@ -58,7 +58,7 @@ public sealed class FileEventLogBrokerTests : IAsyncLifetime, IClassFixture<File
         var logMessage2 = LogMessage<TestEvent>.Create(key2, payload2, 1) with { Timestamp = time2 };
 
         var logSegmentResult = await _fixture.Write(logSegment, [logMessage1, logMessage2], cts.Token);
-        var logSegments = LogSegmentDirectory.Scan(topic.Name).Values.SelectMany(v => v).ToArray();
+        var logSegments = LogSegmentDirectory.ScanOffsets(topic.Name).Values.SelectMany(v => v).ToArray();
         var usedLogSegment = logSegments.Single(v => !v.IsEmpty());
         LogSegmentDirectory.Cleanup(topic.Name);
 
@@ -99,7 +99,7 @@ public sealed class FileEventLogBrokerTests : IAsyncLifetime, IClassFixture<File
         await _fixture.CreateEmptyLogSegments([logSegment1, logSegment2], cts.Token);
         var logSegmentResult1 = await _fixture.Write(logSegment1, [logMessage1], cts.Token);
         var logSegmentResult2 = await _fixture.Write(logSegment2, [logMessage2, logMessage3], cts.Token);
-        var logSegmentScanResult = LogSegmentDirectory.Scan(topic.Name).Values.SelectMany(v => v).ToArray();
+        var logSegmentScanResult = LogSegmentDirectory.ScanOffsets(topic.Name).Values.SelectMany(v => v).ToArray();
 
         var selectedPartitionLogSegments = logSegmentScanResult.Where(v => v.Partition == partition).ToArray();
         var activeSegment = selectedPartitionLogSegments.Length == 2 ? selectedPartitionLogSegments[0] : throw new InvalidOperationException();
@@ -132,9 +132,9 @@ public sealed class FileEventLogBrokerTests : IAsyncLifetime, IClassFixture<File
     public async Task TestBrokerStart(string topic1Name, string topic2Name)
     {
         var cts = new CancellationTokenSource();
-        var topic1 = new EventLogTopic(topic1Name, 6);
-        var topic2 = new EventLogTopic(topic2Name, 3);
-        
+        var topic1 = new EventLogTopic(topic1Name, Partitions: 6);
+        var topic2 = new EventLogTopic(topic2Name, Partitions: 3);
+
         _ = LogSegmentDirectory.GetOrCreate(topic1);
         _ = LogSegmentDirectory.GetOrCreate(topic2);
         

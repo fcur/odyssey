@@ -16,6 +16,7 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
     private readonly IFileEventLogger _offsetLogger;
     private readonly EventLogTopic _eventTopic;
     private readonly EventLogTopic _offsetsTopic;
+    
     // private readonly Channel<LogRespone<TEvent>> _mainChannel;
     private readonly ConcurrentQueue<IEventConsumer<TEvent>> _consumers;
 
@@ -55,13 +56,19 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
     public async Task Start(CancellationToken cancellationToken = default)
     {
         var loggingRoot = LogSegmentDirectory.GetEventLoggingRoot();
-        var topics = LogSegmentDirectory.ScanLoggingRoot(loggingRoot);
-        
-        
-        /*
-         * scan log dirs
-         * read latest segment 
-         * 
+        var knownTopics = LogSegmentDirectory.ScanLoggingRoot(loggingRoot).ToArray();
+        /* topic
+         * - name
+         * - partition-segments
+         *  - partition-id
+         *  - path
+         *  - segments
+         *   - partition
+         *   - topic-root
+         *   - base-offset
+         *   - base-time
+         *   - size
+         *   - is-active
          */
         
         
@@ -70,7 +77,7 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
         _topicRoot = LogSegmentDirectory.GetOrCreate(_eventTopic);
         
         
-        var offsetTopicSegments = LogSegmentDirectory.Scan(_offsetsTopic.Name);
+        var offsetTopicSegments = LogSegmentDirectory.ScanOffsets(_offsetsTopic.Name);
         
         // TODO: add rebalance
         // NOT possible to decrease partitions count for active topic
@@ -80,7 +87,7 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
         
         
         
-        var topicSegments = LogSegmentDirectory.Scan(_eventTopic.Name);
+        var topicSegments = LogSegmentDirectory.ScanOffsets(_eventTopic.Name);
         // if (!topicSegments.Any())
         // {
         //     topicSegments = LogSegmentDirectory.Init(_topic.Name);
@@ -349,7 +356,7 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
     
     private void ScanTopic(EventLogTopic  topic)
     {
-        LogSegmentDirectory.Scan(topic.Name);
+        LogSegmentDirectory.ScanOffsets(topic.Name);
     }
 }
 

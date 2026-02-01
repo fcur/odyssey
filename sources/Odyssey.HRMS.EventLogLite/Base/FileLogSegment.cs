@@ -167,20 +167,15 @@ public static class LogSegmentDirectory
 
         Directory.Delete(workingDirectory, true);
     }
-
-
-    public static EventLogTopic ScanTopicRoot(DirectoryInfo directoryInfo)
-    {
-        var segments = ScanSegmentRoot(directoryInfo).ToArray();
-        
-        return new EventLogTopic(directoryInfo.Name, (byte)segments.Length);
-    }
     
-    
-    public static IReadOnlyDictionary<byte, LinkedList<FileLogSegment>> ScanLoggingRoot(string loggingRoot)
+    public static IEnumerable<EventLogTopicScanResult> ScanLoggingRoot(string loggingRoot)
     {
         var topicDirectories= Directory.GetDirectories(loggingRoot).Select(v => new DirectoryInfo(v)).ToArray();
-        
+
+        foreach (var td in topicDirectories)
+        {
+            yield return ScanTopicRoot(td);
+        }
         
         // topic1, 3 partitions
         // workingDirectory/topicName1
@@ -193,8 +188,16 @@ public static class LogSegmentDirectory
         // workingDirectory/topicName2/0
         // workingDirectory/topicName2/1
     }
-
-    public static IEnumerable<(FileLogSegmentRoot root, FileLogSegment[] segments)> ScanSegmentRoot(DirectoryInfo directoryInfo)
+    
+    
+    public static EventLogTopicScanResult ScanTopicRoot(DirectoryInfo directoryInfo)
+    {
+        var segments = ScanSegmentRoot(directoryInfo).ToArray();
+        
+        return new EventLogTopicScanResult(directoryInfo.Name, segments);
+    }
+    
+    public static IEnumerable<PartitionSegments> ScanSegmentRoot(DirectoryInfo directoryInfo)
     {
         var directories = Directory.GetDirectories(directoryInfo.FullName).Select(v => new DirectoryInfo(v)).ToArray();
         if (directories.Length == 0)
@@ -211,7 +214,8 @@ public static class LogSegmentDirectory
             }
             
             var segments = ScanFileLogSegmentRoot(directory).ToArray();
-            yield return (new FileLogSegmentRoot(partitionIdResult, directory.FullName), segments);
+            yield return new PartitionSegments(partitionIdResult, directory.FullName, segments);
+                // (new FileLogSegmentRoot(partitionIdResult, directory.FullName), segments);
         }
     }
 
@@ -224,7 +228,6 @@ public static class LogSegmentDirectory
         }
 
         var logFilesWithValidationResult = logFiles.Select(v => new FileLogSegmentPath(v)).ToArray();
-        
         var logFilesWithFailure = logFilesWithValidationResult.Where(v => v.Result.IsFailure).Select(v => v.Result.Error);
         if (logFilesWithFailure.Any())
         {
@@ -235,35 +238,40 @@ public static class LogSegmentDirectory
         
         for (var index = 0; index < logFilesResults.Length; index++)
         {
-            var logSegmentPath = logFilesResults[index];
-            var baseOffset = logSegmentPath.BaseOffset;
-            var partitionRoot = logSegmentPath.Value;
-
-            var indexFileValid = ValidateSegmentIndex(partitionRoot, baseOffset);
-            if (indexFileValid.HasValue)
-            {
-                throw indexFileValid.Value;
-            }
-
-            var timeIndexFileValid = ValidateSegmentTimeIndex(partitionRoot, baseOffset);
-            if (timeIndexFileValid.IsFailure)
-            {
-                throw timeIndexFileValid.Error;
-            }
-
-            var logSegmentFileInfo = new FileInfo(logSegmentPath.Value);
-            var size = logSegmentFileInfo.Length;
-            var baseTime = timeIndexFileValid.Value;
             var partition = byte.Parse(directoryInfo.Name);
             var topicRoot = directoryInfo.Parent!.FullName;
-            var segment = new FileLogSegment(partition, topicRoot, baseOffset, baseTime, size, index == 0);
+            var segment = BuildFileLogSegment(logFilesResults[index], topicRoot, partition, index == 0);
 
             yield return segment;
         }
     }
+
+    private static FileLogSegment BuildFileLogSegment(FileLogSegmentPath logSegmentPath, string topicRoot, byte partition, bool isActive)
+    {
+        var baseOffset = logSegmentPath.BaseOffset;
+
+        var indexFileValid = ValidateSegmentIndex(topicRoot, partition, baseOffset);
+        if (indexFileValid.HasValue)
+        {
+            throw indexFileValid.Value;
+        }
+
+        var timeIndexFileValid = ValidateSegmentTimeIndex(topicRoot, partition, baseOffset);
+        if (timeIndexFileValid.IsFailure)
+        {
+            throw timeIndexFileValid.Error;
+        }
+
+        var logSegmentFileInfo = new FileInfo(logSegmentPath.Value);
+        var size = logSegmentFileInfo.Length;
+        var baseTime = timeIndexFileValid.Value;
+        var segment = new FileLogSegment(partition, topicRoot, baseOffset, baseTime, size, isActive);
+
+        return segment;
+    }
     
     
-    public static IReadOnlyDictionary<byte, LinkedList<FileLogSegment>> Scan(string topicName)
+    public static IReadOnlyDictionary<byte, LinkedList<FileLogSegment>> ScanOffsets(string topicName)
     {
         // workingDirectory/topicName
         var topicRoot = GetWorkingDirectory(topicName);
@@ -273,7 +281,8 @@ public static class LogSegmentDirectory
         // workingDirectory/topicName/2
         // var existingDirectories = Directory.GetDirectories(workingDirectory).Select(v => new DirectoryInfo(v)).ToArray();
 
-        (FileLogSegmentRoot Root, FileLogSegment[] segments)[]? logSegmentRoots = ScanSegmentRoot(new  DirectoryInfo(topicRoot)).ToArray();
+        var logSegmentRoots = ScanSegmentRoot(new DirectoryInfo(topicRoot)).ToArray();
+        // (FileLogSegmentRoot Root, FileLogSegment[] segments)[]? logSegmentRoots = ScanSegmentRoot(new  DirectoryInfo(topicRoot)).ToArray();
         // var logSegmentRoots = existingDirectories
         //     .Select(v => byte.TryParse(v.Name, out var partitionIdResult) ? new FileLogSegmentRoot(partitionIdResult, v.FullName) : null)
         //     .Where(v => v is not null).OrderBy(v=>v!.PartitionId).ToArray();
@@ -282,8 +291,9 @@ public static class LogSegmentDirectory
 
         foreach (var logRoot in logSegmentRoots)
         {
-            var partition = logRoot.Root.PartitionId;
-            var logFiles = Directory.GetFiles(logRoot.Root.Path, EventFileType.LogFile.GetSearchPattern());
+            var partition = logRoot.PartitionId;// Root.PartitionId;
+            var logFiles = Directory.GetFiles(logRoot.Path//.Root.Path
+                , EventFileType.LogFile.GetSearchPattern());
 
             if (logFiles.Length == 0)
             {
@@ -306,26 +316,7 @@ public static class LogSegmentDirectory
 
             for (var index = 0; index < logFilesResults.Length; index++)
             {
-                var logSegmentPath = logFilesResults[index];
-                var baseOffset = logSegmentPath.BaseOffset;
-
-                var indexFileValid = ValidateSegmentIndex(topicRoot, partition, baseOffset);
-                if (indexFileValid.HasValue)
-                {
-                    throw indexFileValid.Value;
-                }
-
-                var timeIndexFileValid = ValidateSegmentTimeIndex(topicRoot, partition, baseOffset);
-                if (timeIndexFileValid.IsFailure)
-                {
-                    throw timeIndexFileValid.Error;
-                }
-
-                var logSegmentFileInfo = new FileInfo(logSegmentPath.Value);
-                var size = logSegmentFileInfo.Length;
-                var baseTime = timeIndexFileValid.Value;
-                var segment = new FileLogSegment(partition, topicRoot, baseOffset, baseTime, size, index == 0);
-
+                var segment = BuildFileLogSegment(logFilesResults[index], topicRoot, partition, index == 0);
                 segments.AddLast(segment);
             }
 
@@ -334,7 +325,6 @@ public static class LogSegmentDirectory
 
         return scanResult.OrderBy(v=>v.Key).ToDictionary();
     }
-
 
     // private static string PreparePath(string partitionRoot, int fileIndex) =>
     //     Path.Combine(partitionRoot, $"{fileIndex}{EventLogFileExtension}");
