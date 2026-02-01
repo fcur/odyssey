@@ -140,11 +140,8 @@ public sealed class FileEventLogBrokerTests : IAsyncLifetime, IClassFixture<File
         
         var broker = _fixture.GetBroker();
         
-        await broker.Start(cts.Token);
-        
-        
-        
-        
+        var exception =  await Record.ExceptionAsync(async () => await broker.Start(cts.Token));
+        exception.Should().BeNull();
     }
     
     [Theory, AutoData]
