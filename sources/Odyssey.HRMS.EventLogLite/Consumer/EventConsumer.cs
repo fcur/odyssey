@@ -7,7 +7,7 @@ using System.Threading.Channels;
 
 namespace Odyssey.HRMS.EventLogLite.Consumer;
 
-public sealed class EventConsumer<TEvent> : IEventConsumer<TEvent> where TEvent : class
+public sealed class EventConsumer<TEvent> : IDisposable, IEventConsumer<TEvent> where TEvent : class
 {
     private readonly ILogger<EventConsumer<TEvent>> _logger;
     private readonly IEventBroker<TEvent> _broker;
@@ -44,6 +44,10 @@ public sealed class EventConsumer<TEvent> : IEventConsumer<TEvent> where TEvent 
     }
     
     public ConsumerAssigmentState GetConsumerAssigmentState() => new(_index, _settings.GroupName, _logSegmentsCount);
+    public EventConsumerSettings GetConsumerSettings()
+    {
+        return _settings;
+    }
 
     public void AssignSegment(LogSegment segment)
     {
@@ -182,6 +186,11 @@ public sealed class EventConsumer<TEvent> : IEventConsumer<TEvent> where TEvent 
         {
             _savedOffsets.AddOrUpdate(item.Key.PartitionId, item.Value.NextMsgOffset, (key, value) => item.Value.NextMsgOffset);
         }
+    }
+
+    public void Dispose()
+    {
+        _channel.Writer.TryComplete();
     }
 }
 

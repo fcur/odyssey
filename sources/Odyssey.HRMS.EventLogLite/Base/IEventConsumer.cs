@@ -12,4 +12,6 @@ public interface IEventConsumer : IEventLogLite
 {
     void AssignSegment(LogSegment segment);
     ConsumerAssigmentState GetConsumerAssigmentState();
+    
+    EventConsumerSettings GetConsumerSettings();
 }

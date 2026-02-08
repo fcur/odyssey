@@ -18,7 +18,11 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
     private readonly EventLogTopic _offsetsTopic;
     
     // private readonly Channel<LogRespone<TEvent>> _mainChannel;
-    private readonly ConcurrentQueue<IEventConsumer<TEvent>> _consumers;
+    private readonly ConcurrentQueue<IEventConsumer<TEvent>> _consumers2;
+    
+    
+    private readonly ConcurrentQueue<IEventConsumer> _consumers;
+    private readonly ConcurrentQueue<IEventProducer> _producers;
 
     private byte _partitionsCount = 0;
     private int _tempPartition = 0;
@@ -47,29 +51,31 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
 
         _offsetsTopic = new EventLogTopic(_brokerSettings.TopicName, _brokerSettings.Partitions);
         _consumers = [];
+        _producers = [];
+        
+        _consumers2 = [];
         _segmentMap = [];
 
         // var opt = new BoundedChannelOptions(1000) { SingleReader = false, SingleWriter = true, FullMode = BoundedChannelFullMode.Wait };
         // _mainChannel = Channel.CreateBounded<LogResponse<TEvent>>(opt);
     }
 
-    public async Task Start(CancellationToken cancellationToken = default)
+    public Task Start(CancellationToken cancellationToken = default)
     {
         var loggingRoot = LogSegmentDirectory.GetEventLoggingRoot();
-        var knownTopics = LogSegmentDirectory.ScanLoggingRoot(loggingRoot).ToArray();
-        /* topic
-         * - name
-         * - partition-segments
-         *  - partition-id
-         *  - path
-         *  - segments
-         *   - partition
-         *   - topic-root
-         *   - base-offset
-         *   - base-time
-         *   - size
-         *   - is-active
-         */
+        var knownTopics = LogSegmentDirectory.ScanLoggingRoot(loggingRoot);
+        var offsetTopicResult = knownTopics.Single(v => v.Name == _brokerSettings.TopicName);
+        
+        var foundOffsetsTopic = new EventLogTopic(offsetTopicResult.Name, (byte)offsetTopicResult.PartitionSegments.Length);
+        if (foundOffsetsTopic != _offsetsTopic)
+        {
+            throw new InvalidDataException("Found invalid offsets topic, broker is not ready to start");
+        }
+
+        var registeredTopics = _producers.Select(v => v.GetSettings()).Select(v=> new EventLogTopic(v.TopicName, v.Partitions)).ToArray();
+        
+
+        return Task.CompletedTask;
         
         
         // ensure working directory
@@ -156,9 +162,20 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
 
     public void Join(IEventConsumer<TEvent> consumer)
     {
+        _consumers2.Enqueue(consumer);
         _consumers.Enqueue(consumer);
     }
-
+    
+    public void Join(IEventConsumer consumer)
+    {
+        _consumers.Enqueue(consumer);
+    }
+    
+    public void Join(IEventProducer producer)
+    {
+        _producers.Enqueue(producer);
+    }
+    
     public async Task<IReadOnlyCollection<LogResponse<TEvent>>> PollEvents(PollRequest request, LogSegment logSegment, long offset, CancellationToken cancellationToken = default)
     {
         var result = new List<LogResponse<TEvent>>(request.BatchSize);
@@ -305,7 +322,7 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
 
     private Task AssignConsumers(CancellationToken cancellationToken)
     {
-        var groupedConsumers = _consumers.GroupBy(v => v.GetConsumerAssigmentState().GroupName).ToArray();
+        var groupedConsumers = _consumers2.GroupBy(v => v.GetConsumerAssigmentState().GroupName).ToArray();
         if (groupedConsumers.Length == 0)
         {
             return Task.CompletedTask;

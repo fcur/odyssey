@@ -1,4 +1,5 @@
 using Odyssey.HRMS.EventLogLite.Entities;
+using Odyssey.HRMS.EventLogLite.Producer;
 
 namespace Odyssey.HRMS.EventLogLite.Base;
 
@@ -16,4 +17,5 @@ public interface IEventProducer<TEvent> : IEventProducer where TEvent : class
 
 public interface IEventProducer : IEventLogLite
 {
+    EventProducerSettings GetSettings();
 }

@@ -20,6 +20,19 @@ public sealed record EventLogResult(string TopicName, byte PartitionId, long Off
 
 public sealed record EventLogTopic(string Name, byte Partitions);
 
+/* topic scan result structure:
+ * - name
+ * - partition-segments
+ *  - partition-id
+ *  - path
+ *  - segments
+ *   - partition
+ *   - topic-root
+ *   - base-offset
+ *   - base-time
+ *   - size
+ *   - is-active
+ */
 public sealed record EventLogTopicScanResult(string Name, PartitionSegments[] PartitionSegments)
 {
     private byte Partitions => Convert.ToByte(PartitionSegments.Length);

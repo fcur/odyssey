@@ -1,4 +1,5 @@
 using CSharpFunctionalExtensions;
+using System.Collections.Concurrent;
 
 namespace Odyssey.HRMS.EventLogLite.Base;
 
@@ -168,21 +169,25 @@ public static class LogSegmentDirectory
         Directory.Delete(workingDirectory, true);
     }
     
-    public static IEnumerable<EventLogTopicScanResult> ScanLoggingRoot(string loggingRoot)
+    public static IReadOnlyCollection<EventLogTopicScanResult> ScanLoggingRoot(string loggingRoot)
     {
-        var topicDirectories= Directory.GetDirectories(loggingRoot).Select(v => new DirectoryInfo(v)).ToArray();
-
-        foreach (var td in topicDirectories)
-        {
-            yield return ScanTopicRoot(td);
-        }
         
+        var scanResults = new ConcurrentBag<EventLogTopicScanResult>();
+
+        Parallel.ForEach(Directory.GetDirectories(loggingRoot).Select(v => new DirectoryInfo(v)), td =>
+        {
+            var topicScanResult = ScanTopicRoot(td);
+            scanResults.Add(topicScanResult);
+        });
+
+        return scanResults.ToArray();
+
         // topic1, 3 partitions
         // workingDirectory/topicName1
         // workingDirectory/topicName1/0
         // workingDirectory/topicName1/1
         // workingDirectory/topicName1/2
-        
+
         // topic 2, 2 partitions
         // workingDirectory/topicName2
         // workingDirectory/topicName2/0
@@ -221,7 +226,19 @@ public static class LogSegmentDirectory
 
     public static IEnumerable<FileLogSegment> ScanFileLogSegmentRoot(DirectoryInfo directoryInfo)
     {
-        var logFiles = Directory.GetFiles(directoryInfo.FullName, EventFileType.LogFile.GetSearchPattern());
+        var segmentSearchPattern = EventFileType.LogFile.GetSearchPattern();
+        // foreach (var file in directoryInfo.EnumerateFiles(segmentSearchPattern, SearchOption.AllDirectories))
+        // {
+        //     var logFileResult = new FileLogSegmentPath(file.FullName);
+        //     if (logFileResult.Result.IsFailure)
+        //     {
+        //         throw new Exception($"Found at least one invalid partition for log segment root: '{directoryInfo.FullName}'.");
+        //     }
+        //     
+        // }
+        // return;
+        
+        var logFiles = Directory.GetFiles(directoryInfo.FullName, segmentSearchPattern);
         if (logFiles.Length == 0)
         {
             yield break;
@@ -463,3 +480,4 @@ public sealed class FileLogSegmentPath
         Result = baseOffset;
     }
 }
+

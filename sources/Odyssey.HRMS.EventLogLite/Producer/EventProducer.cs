@@ -5,7 +5,7 @@ using System.Threading.Channels;
 
 namespace Odyssey.HRMS.EventLogLite.Producer;
 
-public sealed class EventProducer<TEvent> : IEventProducer<TEvent> where TEvent : class
+public sealed class EventProducer<TEvent> : IDisposable, IEventProducer<TEvent> where TEvent : class
 {
     private readonly ILogger<EventProducer<TEvent>> _logger;
     private readonly IEventBroker<TEvent> _broker;
@@ -59,4 +59,15 @@ public sealed class EventProducer<TEvent> : IEventProducer<TEvent> where TEvent 
         _channel.Writer.Complete();
         return Task.CompletedTask;
     }
+
+    public EventProducerSettings GetSettings()
+    {
+        return _settings;
+    }
+
+    public void Dispose()
+    {
+        _channel.Writer.TryComplete();
+    }
+
 }
