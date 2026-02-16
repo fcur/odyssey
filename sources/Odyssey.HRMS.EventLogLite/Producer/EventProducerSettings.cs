@@ -13,4 +13,5 @@ public sealed class EventBrokerSettings : EventLogBaseSettings
 {
     public uint FileSizeLimitBytes { get; set; } = 1000;
     public byte Partitions { get; set; } = 50;
+    public int DegreeOfParallelism { get; set; } = 16;
 }

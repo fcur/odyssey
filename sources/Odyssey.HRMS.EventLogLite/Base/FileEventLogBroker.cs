@@ -14,15 +14,12 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
     private readonly EventBrokerSettings _brokerSettings;
     private readonly IFileEventLogger _eventLogger;
     private readonly IFileEventLogger _offsetLogger;
-    private readonly EventLogTopic _eventTopic;
+    // private readonly EventLogTopic _eventTopic;
     private readonly EventLogTopic _offsetsTopic;
     
     // private readonly Channel<LogRespone<TEvent>> _mainChannel;
-    private readonly ConcurrentQueue<IEventConsumer<TEvent>> _consumers2;
-    
-    
-    private readonly ConcurrentQueue<IEventConsumer> _consumers;
-    private readonly ConcurrentQueue<IEventProducer> _producers;
+    private readonly ConcurrentQueue<IEventConsumer<TEvent>> _consumers;
+    private readonly ConcurrentBag<EventLogTopic> _activeTopics;
 
     private byte _partitionsCount = 0;
     private int _tempPartition = 0;
@@ -35,25 +32,23 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
 
     private readonly ConcurrentDictionary<byte, LinkedList<FileLogSegment>> _segmentMap;
     
-    public FileEventLogBroker(ILogger<FileEventLogBroker<TEvent>> logger, EventBrokerSettings brokerSettings, IFileEventLogger eventLogger, EventLogTopic eventTopic, IFileEventLogger offsetLogger)
+    public FileEventLogBroker(ILogger<FileEventLogBroker<TEvent>> logger, EventBrokerSettings brokerSettings, IFileEventLogger eventLogger, IFileEventLogger offsetLogger, params EventLogTopic[] topics)
     {
         ArgumentNullException.ThrowIfNull(logger);
         ArgumentNullException.ThrowIfNull(brokerSettings);
         ArgumentNullException.ThrowIfNull(eventLogger);
         ArgumentNullException.ThrowIfNull(offsetLogger);
-        ArgumentNullException.ThrowIfNull(eventTopic);
+        ArgumentNullException.ThrowIfNull(topics);
 
         _logger = logger;
         _brokerSettings = brokerSettings;
         _eventLogger = eventLogger;
         _offsetLogger = offsetLogger;
-        _eventTopic = eventTopic;
 
-        _offsetsTopic = new EventLogTopic(_brokerSettings.TopicName, _brokerSettings.Partitions);
-        _consumers = [];
-        _producers = [];
+        _offsetsTopic = GetOffsetTopic(brokerSettings);
+        _activeTopics = new ConcurrentBag<EventLogTopic>(topics.DistinctBy(v=>v.Name));
         
-        _consumers2 = [];
+        _consumers = [];
         _segmentMap = [];
 
         // var opt = new BoundedChannelOptions(1000) { SingleReader = false, SingleWriter = true, FullMode = BoundedChannelFullMode.Wait };
@@ -72,15 +67,15 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
             throw new InvalidDataException("Found invalid offsets topic, broker is not ready to start");
         }
 
-        var registeredTopics = _producers.Select(v => v.GetSettings()).Select(v=> new EventLogTopic(v.TopicName, v.Partitions)).ToArray();
+        var registeredTopics = _activeTopics.DistinctBy(v=>v.Name).ToArray();
         
 
         return Task.CompletedTask;
         
         
         // ensure working directory
-        _offsetsRoot = LogSegmentDirectory.GetOrCreate(_offsetsTopic);
-        _topicRoot = LogSegmentDirectory.GetOrCreate(_eventTopic);
+        // _offsetsRoot = LogSegmentDirectory.GetOrCreate(_offsetsTopic);
+        // _topicRoot = LogSegmentDirectory.GetOrCreate(_eventTopic);
         
         
         var offsetTopicSegments = LogSegmentDirectory.ScanOffsets(_offsetsTopic.Name);
@@ -162,18 +157,13 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
 
     public void Join(IEventConsumer<TEvent> consumer)
     {
-        _consumers2.Enqueue(consumer);
         _consumers.Enqueue(consumer);
+        // _consumerTopics.Enqueue(consumer);
     }
     
-    public void Join(IEventConsumer consumer)
+    public void Join(EventLogTopic topic)
     {
-        _consumers.Enqueue(consumer);
-    }
-    
-    public void Join(IEventProducer producer)
-    {
-        _producers.Enqueue(producer);
+        _activeTopics.Enqueue(topic);
     }
     
     public async Task<IReadOnlyCollection<LogResponse<TEvent>>> PollEvents(PollRequest request, LogSegment logSegment, long offset, CancellationToken cancellationToken = default)
@@ -322,7 +312,7 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
 
     private Task AssignConsumers(CancellationToken cancellationToken)
     {
-        var groupedConsumers = _consumers2.GroupBy(v => v.GetConsumerAssigmentState().GroupName).ToArray();
+        var groupedConsumers = _consumers.GroupBy(v => v.GetConsumerAssigmentState().GroupName).ToArray();
         if (groupedConsumers.Length == 0)
         {
             return Task.CompletedTask;
@@ -374,6 +364,11 @@ public sealed class FileEventLogBroker<TEvent> : IEventBroker<TEvent> where TEve
     private void ScanTopic(EventLogTopic  topic)
     {
         LogSegmentDirectory.ScanOffsets(topic.Name);
+    }
+    
+    private static EventLogTopic GetOffsetTopic(EventBrokerSettings brokerSettings)
+    {
+        return new EventLogTopic(brokerSettings.TopicName, brokerSettings.Partitions);
     }
 }
 

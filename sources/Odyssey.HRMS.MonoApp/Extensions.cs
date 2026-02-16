@@ -32,7 +32,7 @@ public static class Extensions
         var eventLogger = new JsonFileEventLogger();
         
         var brokerLogger = serviceProvider.GetRequiredService<ILogger<FileEventLogBroker<TEvent>>>();
-        var broker = new FileEventLogBroker<TEvent>(brokerLogger, brokerConfiguration, eventLogger, eventTopic, offsetLogger!);
+        var broker = new FileEventLogBroker<TEvent>(brokerLogger, brokerConfiguration, eventLogger, offsetLogger, eventTopic);
         
         var producerLogger = serviceProvider.GetRequiredService<ILogger<EventProducer<TEvent>>>();
         var producer = new EventProducer<TEvent>(producerLogger, broker, producerConfiguration);

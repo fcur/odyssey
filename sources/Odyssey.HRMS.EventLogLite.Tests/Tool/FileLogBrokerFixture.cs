@@ -41,11 +41,11 @@ public sealed class FileLogBrokerFixture : IAsyncLifetime
 
         var eventLoggerMock = new Mock<IFileEventLogger>();
         var broker = new FileEventLogBroker<TestEvent>(brokerLoggerMock.Object, brokerSettings, 
-            eventLogger: eventLoggerMock.Object, eventTopic,
-            offsetLogger:eventLoggerMock.Object);
+            eventLogger: eventLoggerMock.Object, offsetLogger:eventLoggerMock.Object, eventTopic);
 
         _topic = eventTopic;
         _offsetsTopic = offsetsTopic;
+        
         _broker = broker;
     }
 

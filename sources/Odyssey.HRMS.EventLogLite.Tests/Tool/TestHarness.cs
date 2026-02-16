@@ -60,7 +60,7 @@ public sealed class TestHarness<TEvent> where TEvent : class, new()
         
         var eventLoggerMock = PrepareEventLogger(settings.LatestOffsets);
 
-        _broker = new FileEventLogBroker<TEvent>(brokerLogger, settings.BrokerSettings, eventLoggerMock.Object, settings.Topic, eventLoggerMock.Object);
+        _broker = new FileEventLogBroker<TEvent>(brokerLogger, settings.BrokerSettings, eventLoggerMock.Object, eventLoggerMock.Object, settings.Topic);
         _producer = new EventProducer<TEvent>(producerLogger, _broker, settings.ProducerSettings);
         _consumers = PrepareTopicConsumers(logger, settings.ConsumerSettings);
     }
