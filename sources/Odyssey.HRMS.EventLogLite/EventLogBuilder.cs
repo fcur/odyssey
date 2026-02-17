@@ -62,7 +62,7 @@ public class EventLogBuilder
             
             var consumer = new EventConsumer<TEvent>(logger, broker, handler, consumerConfiguration, i);
             _consumers.Add(consumer);
-            broker.Join(consumer);
+            broker.Join(new ConsumerBrokerConfig(consumerConfiguration.TopicName, consumerConfiguration.GroupName, consumerConfiguration.ReplicaCount));
         }
 
         return this;

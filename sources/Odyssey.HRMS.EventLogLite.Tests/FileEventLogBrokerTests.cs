@@ -149,13 +149,14 @@ public sealed class FileEventLogBrokerTests : IAsyncLifetime, IClassFixture<File
         var logMessage2 = LogMessage<TestEvent>.Create(key1, payload1, baseOffset2) with { Timestamp = time2 };
         var logMessage3 = LogMessage<TestEvent>.Create(key2, payload2, baseOffset2 + 1) with { Timestamp = time3 };
 
-        // await _fixture.CreateEmptyLogSegments([logSegment1, logSegment2], cts.Token);
         _ = await _fixture.Write(logSegment1, [logMessage1], cts.Token);
         _ = await _fixture.Write(logSegment2, [logMessage2, logMessage3], cts.Token);
-        
+
         var broker = _fixture.GetBroker();
-        
-        var exception =  await Record.ExceptionAsync(async () => await broker.Start(cts.Token));
+        broker.Join(new ProducerBrokerConfig(topic1.Name, topic1.Partitions));
+        broker.Join(new ConsumerBrokerConfig(topic1.Name, Guid.NewGuid().ToString("D"), Replicas: 2));
+
+        var exception = await Record.ExceptionAsync(async () => await broker.Start(cts.Token));
         exception.Should().BeNull();
     }
     

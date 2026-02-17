@@ -111,11 +111,11 @@ public sealed class FileEventLogBroker : IEventBroker
                         _logger.LogWarning("Topic '{TopicName}' configuration contains a duplicate consumer group '{GroupName}'", topicName, groupName);
                     }
                     
-                    var consumerIndexes = Enumerable.Range(0, group.Last().Replicas)
+                    var consumersCount = group.Last().Replicas;
+                    var consumerIndexes = Enumerable.Range(0, consumersCount)
                         .Select(v => new ConsumerGroupId((byte)v, groupName, topicName)).ToArray();
 
                     var partitionsCount = topic.PartitionsWithSegments.Length;
-                    var consumersCount = consumerIndexes.Length;
 
                     for (byte partition = 0; partition < partitionsCount; partition++)
                     {
@@ -143,10 +143,7 @@ public sealed class FileEventLogBroker : IEventBroker
                 }
             }
         }
-
-        // var registeredTopics = _activeTopics.DistinctBy(v => v.Name).ToHashSet();
-
-
+        
         return Task.CompletedTask;
 
 
@@ -235,11 +232,11 @@ public sealed class FileEventLogBroker : IEventBroker
         // return new EventLogResult(_eventTopic.Name, partitionId, newOffset);
     }
 
-    public void Join<TEvent>(IEventConsumer<TEvent> consumer) where TEvent : class
-    {
-        _consumers.Enqueue(consumer);
-        // _consumerTopics.Enqueue(consumer);
-    }
+    // public void Join<TEvent>(IEventConsumer<TEvent> consumer) where TEvent : class
+    // {
+    //     _consumers.Enqueue(consumer);
+    //     // _consumerTopics.Enqueue(consumer);
+    // }
 
     // public void Join(EventLogTopic topic)
     // {
@@ -448,18 +445,18 @@ public sealed class FileEventLogBroker : IEventBroker
         return Task.CompletedTask;
     }
 
-    private void AssignGroupConsumers<TEvent>(IEventConsumer<TEvent>[] consumers) where TEvent : class
-    {
-        var consumersCount = consumers.Length;
-
-        for (byte partition = 0; partition < _partitionsCount; partition++)
-        {
-            var consumerIndex = partition % consumersCount;
-            var segment = _segmentsMap[partition];
-
-            consumers[consumerIndex].AssignSegment(segment);
-        }
-    }
+    // private void AssignGroupConsumers<TEvent>(IEventConsumer<TEvent>[] consumers) where TEvent : class
+    // {
+    //     var consumersCount = consumers.Length;
+    //
+    //     for (byte partition = 0; partition < _partitionsCount; partition++)
+    //     {
+    //         var consumerIndex = partition % consumersCount;
+    //         var segment = _segmentsMap[partition];
+    //
+    //         consumers[consumerIndex].AssignSegment(segment);
+    //     }
+    // }
 
     private async Task<Dictionary<byte, long>> PrepareLatestOffsets<TEvent>(Dictionary<byte, FileLogSegment> partitionsMap,
         CancellationToken cancellationToken) where TEvent : class
