@@ -13,31 +13,31 @@ public sealed class FileEventLogBroker : IEventBroker
 {
     private const uint PartitionIdSeed = 42;
     private const uint OffsetIdSeed = 63;
-    
-    
+
+
     private readonly ILogger<FileEventLogBroker> _logger;
     private readonly EventBrokerSettings _brokerSettings;
     private readonly IFileEventLogger _eventLogger;
+
     private readonly IFileEventLogger _offsetLogger;
+
     // private readonly EventLogTopic _eventTopic;
     private readonly EventLogTopic _offsetsTopic;
-    
+
     // private readonly Channel<LogRespone<TEvent>> _mainChannel;
     private readonly ConcurrentQueue<IEventConsumer> _consumers;
     // private readonly ConcurrentBag<EventLogTopic> _activeTopics;
 
-
-
     private readonly ConcurrentDictionary<ActiveTopicKey, ActiveTopicInfo> _activeTopicInfos;
     private readonly ConcurrentDictionary<ActiveSegmentKey, FileLogSegment> _activeSegments;
+    private readonly ConcurrentDictionary<ActiveTopicKey, ConcurrentQueue<ConsumerGroupReplica>> _consumerGroupReplicasInfo;
+    private readonly ConcurrentDictionary<ConsumerGroupId, ConcurrentQueue<byte>> _consumerGroupsAssignment;
     
     
-    private readonly ConcurrentQueue<ProducerBrokerConfig> _producerBrokerConfigs;
-    private readonly ConcurrentQueue<ConsumerBrokerConfig> _consumerBrokerConfigs;
-
-    private byte _partitionsCount = 0;
-    private int _tempPartition = 0;
+    // private byte _partitionsCount = 0;
+    // private int _tempPartition = 0;
     private ConcurrentDictionary<byte, long> _latestOffsets = null!;
+
     // private Dictionary<byte, FileLogSegment> _segmentsMap = null!;
     private Dictionary<byte, FileLogSegment> _offsetsMap = null!;
 
@@ -45,8 +45,9 @@ public sealed class FileEventLogBroker : IEventBroker
     // private string _offsetsRoot;
 
     private readonly ConcurrentDictionary<byte, LinkedList<FileLogSegment>> _segmentMap;
-    
-    public FileEventLogBroker(ILogger<FileEventLogBroker> logger, EventBrokerSettings brokerSettings, IFileEventLogger eventLogger, IFileEventLogger offsetLogger, params EventLogTopic[] topics)
+
+    public FileEventLogBroker(ILogger<FileEventLogBroker> logger, EventBrokerSettings brokerSettings, IFileEventLogger eventLogger,
+        IFileEventLogger offsetLogger, params EventLogTopic[] topics)
     {
         ArgumentNullException.ThrowIfNull(logger);
         ArgumentNullException.ThrowIfNull(brokerSettings);
@@ -65,9 +66,9 @@ public sealed class FileEventLogBroker : IEventBroker
         _activeSegments = [];
         _consumers = [];
         _segmentMap = [];
-        _producerBrokerConfigs = [];
-        _consumerBrokerConfigs = [];
         _activeTopicInfos = [];
+        _consumerGroupReplicasInfo = [];
+        _consumerGroupsAssignment = [];
         // var opt = new BoundedChannelOptions(1000) { SingleReader = false, SingleWriter = true, FullMode = BoundedChannelFullMode.Wait };
         // _mainChannel = Channel.CreateBounded<LogResponse<TEvent>>(opt);
     }
@@ -77,28 +78,57 @@ public sealed class FileEventLogBroker : IEventBroker
         var loggingRoot = LogSegmentDirectory.GetEventLoggingRoot();
         var knownTopics = LogSegmentDirectory.ScanLoggingRoot(loggingRoot);
         var offsetTopicResult = knownTopics.Single(v => v.Name == _brokerSettings.TopicName);
-        
-        var foundOffsetsTopic = new EventLogTopic(offsetTopicResult.Name, (byte)offsetTopicResult.PartitionSegments.Length);
+
+        var foundOffsetsTopic = new EventLogTopic(offsetTopicResult.Name, (byte)offsetTopicResult.PartitionsWithSegments.Length);
         if (foundOffsetsTopic != _offsetsTopic)
         {
             throw new InvalidDataException("Found invalid offsets topic, broker is not ready to start");
         }
 
-        while (_producerBrokerConfigs.TryDequeue(out var producerConfig))
-        {
-            var key = new ActiveTopicKey(producerConfig.TopicName);
-            var val = new ActiveTopicInfo(producerConfig.Partitions, 0);
-            _activeTopicInfos.AddOrUpdate(key,  val, (k, v) => val);
-        }
-        
         foreach (var topic in knownTopics)
         {
-            if (topic.PartitionSegments.Length == 0)
+            if (topic.PartitionsWithSegments.Length == 0)
             {
                 continue;
             }
 
-            foreach (var partitionSegment in topic.PartitionSegments)
+            var topicName = topic.Name;
+            var topicKey = new ActiveTopicKey(topicName);
+
+            if (!_consumerGroupReplicasInfo.TryGetValue(topicKey, out var consumerGroupReplicasResult))
+            {
+                _logger.LogWarning("Topic '{TopicName}' does not contain consumers", topicName);
+            }
+            else
+            {
+                var consumerGroups = consumerGroupReplicasResult.GroupBy(v => v.GroupName).ToArray();
+
+                foreach (var group in consumerGroups)
+                {
+                    var groupName = group.Key;
+                    if (group.Count() > 1)
+                    {
+                        _logger.LogWarning("Topic '{TopicName}' configuration contains a duplicate consumer group '{GroupName}'", topicName, groupName);
+                    }
+                    
+                    var consumerIndexes = Enumerable.Range(0, group.Last().Replicas)
+                        .Select(v => new ConsumerGroupId((byte)v, groupName, topicName)).ToArray();
+
+                    var partitionsCount = topic.PartitionsWithSegments.Length;
+                    var consumersCount = consumerIndexes.Length;
+
+                    for (byte partition = 0; partition < partitionsCount; partition++)
+                    {
+                        var consumerIndex = partition % consumersCount;
+                        var consumerGroupId = consumerIndexes[consumerIndex];
+
+                        var queue = _consumerGroupsAssignment.GetOrAdd(consumerGroupId, _ => new ConcurrentQueue<byte>());
+                        queue.Enqueue(partition);
+                    }
+                }
+            }
+
+            foreach (var partitionSegment in topic.PartitionsWithSegments)
             {
                 if (partitionSegment.Segments.Length == 0)
                 {
@@ -111,48 +141,45 @@ public sealed class FileEventLogBroker : IEventBroker
                 {
                     throw new InvalidDataException($"Active segment {activeSegmentKey} already exists");
                 }
-                
             }
         }
-        
+
         // var registeredTopics = _activeTopics.DistinctBy(v => v.Name).ToHashSet();
-        
-        
+
 
         return Task.CompletedTask;
-        
-        
+
+
         // ensure working directory
         // _offsetsRoot = LogSegmentDirectory.GetOrCreate(_offsetsTopic);
         // _topicRoot = LogSegmentDirectory.GetOrCreate(_eventTopic);
-        
-        
+
+
         var offsetTopicSegments = LogSegmentDirectory.ScanOffsets(_offsetsTopic.Name);
-        
+
         // TODO: add rebalance
         // NOT possible to decrease partitions count for active topic
 
         // TODO: add index file for each segment as MMF
         // start consuming from the position of the nearest found offset 
-        
-        
-        
+
+
         // var topicSegments = LogSegmentDirectory.ScanOffsets(_eventTopic.Name);
         // if (!topicSegments.Any())
         // {
         //     topicSegments = LogSegmentDirectory.Init(_topic.Name);
         // }
-        
+
         // foreach (var item in topicSegments)
         // {
         //     _segmentMap.AddOrUpdate(item.Key, item.Value, (key, oldValue) => item.Value);
         // }
-        
+
         // Consuming: TBD
         // InitOffsetTopic();
         // await InitBrokerCounters(cancellationToken);
         // await AssignConsumers(cancellationToken);
-        
+
         //_ = Task.Factory.StartNew(async () => await StartConsumePublishedEventsInternal(cancellationToken), TaskCreationOptions.LongRunning).Unwrap();
     }
 
@@ -175,13 +202,13 @@ public sealed class FileEventLogBroker : IEventBroker
     public async Task<EventLogResult> LogEvent<TEvent>(LogRequest<TEvent> request, CancellationToken cancellationToken = default) where TEvent : class
     {
         long newOffset = 0;
-        
+
         var partitionId = GetPartition(request);
 
         // var segment = _segmentsMap[partitionId];
         var segmentKey = new ActiveSegmentKey(request.TopicName, partitionId);
         var segment = _activeSegments[segmentKey];
-        
+
         while (true)
         {
             if (!_latestOffsets.TryGetValue(partitionId, out var offsetResult))
@@ -197,8 +224,9 @@ public sealed class FileEventLogBroker : IEventBroker
 
             var logMessage = LogMessage<TEvent>.Create(request, newOffset);
 
-            _logger.LogDebug("New message with Key: {Key}, PartitionId: {PartitionId}, Offset: {Offset}", logMessage.Key, segment.Partition, logMessage.Offset);
-            
+            _logger.LogDebug("New message with Key: {Key}, PartitionId: {PartitionId}, Offset: {Offset}", logMessage.Key, segment.Partition,
+                logMessage.Offset);
+
             await _eventLogger.Write(logMessage, segment, cancellationToken);
             break;
         }
@@ -212,19 +240,22 @@ public sealed class FileEventLogBroker : IEventBroker
         _consumers.Enqueue(consumer);
         // _consumerTopics.Enqueue(consumer);
     }
-    
+
     // public void Join(EventLogTopic topic)
     // {
     //     _activeTopics.Add(topic);
     // }
-    
-    public async Task<IReadOnlyCollection<LogResponse<TEvent>>> PollEvents<TEvent>(PollRequest request, LogSegment logSegment, long offset, CancellationToken cancellationToken = default) where TEvent : class
+
+    public async Task<IReadOnlyCollection<LogResponse<TEvent>>> PollEvents<TEvent>(PollRequest request, LogSegment logSegment, long offset,
+        CancellationToken cancellationToken = default) where TEvent : class
     {
         var result = new List<LogResponse<TEvent>>(request.BatchSize);
-        var segment = _segmentsMap[logSegment.Partition];
-        
+        var segmentKey = new ActiveSegmentKey(request.TopicName, logSegment.Partition);
+        var segment = _activeSegments[segmentKey];
+        // var segment = _segmentsMap[logSegment.Partition];
+
         // TODO: Convert offset to position
-        
+
         await foreach (var logMessage in _eventLogger.Poll<TEvent>(request, segment, offset, cancellationToken))
         {
             var response = new LogResponse<TEvent>
@@ -236,10 +267,10 @@ public sealed class FileEventLogBroker : IEventBroker
                 PartitionId = logSegment.Partition,
                 Metadata = logMessage.Metadata
             };
-            
+
             result.Add(response);
         }
-        
+
         return result.ToArray();
     }
 
@@ -247,11 +278,12 @@ public sealed class FileEventLogBroker : IEventBroker
     {
         var offsetPartitionId = GetPartition(request.Key);
         var offsetFileSegment = _offsetsMap[offsetPartitionId];
-        
+
         var (groupName, topicName, partitionId) = request.Key;
         _ = request.Metadata.TryGetValue("Key", out var itemKey);
 
-        _logger.LogDebug("Offset committing in progress, Key: {Key}, Topic: {TopicName}, Group: {GroupName}, Partition: {PartitionId}, Offset: {Offset}, RequestId: {RequestId}",
+        _logger.LogDebug(
+            "Offset committing in progress, Key: {Key}, Topic: {TopicName}, Group: {GroupName}, Partition: {PartitionId}, Offset: {Offset}, RequestId: {RequestId}",
             itemKey?.ToString(), topicName, groupName, partitionId, request.Value.Offset, request.RequestId);
 
         var occuredAt = DateTimeOffset.FromUnixTimeMilliseconds(request.Value.CommitTimestamp);
@@ -259,9 +291,9 @@ public sealed class FileEventLogBroker : IEventBroker
 
         // TBD
         var newOffset = 0;
-        
+
         var logMessage = LogMessage<LogOffsetMessage>.Create(request.Key.ToString(), message, newOffset);
-        
+
         var position = await _offsetLogger.Write(logMessage, offsetFileSegment, cancellationToken);
         // var position = await _eventLogger.Commit(request, offsetFileSegment, cancellationToken);
     }
@@ -313,50 +345,51 @@ public sealed class FileEventLogBroker : IEventBroker
         // // var result =  _eventLogger.ReadSavedOffset(request.Key, offsetFileSegment, cancellationToken);
         // return offsetLogMessage.Payload;
     }
-    
-    [Obsolete]
-    private byte GetPartitionObsolete<TEvent>(LogRequest<TEvent> request) where TEvent : class
-    {
-        if (request.PartitionId.HasValue)
-        {
-            return request.PartitionId.Value!;
-        }
 
-        if (!string.IsNullOrEmpty(request.Key))
-        {
-            // partition = murmur2.hash(key) % numPartitions
-            var hash = MurmurHash2.Hash32(Encoding.UTF8.GetBytes(request.Key), 42);
-            return Convert.ToByte(hash % _partitionsCount);
-        }
+    // [Obsolete]
+    // private byte GetPartitionObsolete<TEvent>(LogRequest<TEvent> request) where TEvent : class
+    // {
+    //     if (request.PartitionId.HasValue)
+    //     {
+    //         return request.PartitionId.Value!;
+    //     }
+    //
+    //     if (!string.IsNullOrEmpty(request.Key))
+    //     {
+    //         // partition = murmur2.hash(key) % numPartitions
+    //         var hash = MurmurHash2.Hash32(Encoding.UTF8.GetBytes(request.Key), 42);
+    //         return Convert.ToByte(hash % _partitionsCount);
+    //     }
+    //
+    //     Interlocked.Exchange(ref _tempPartition, (_tempPartition + 1) % _partitionsCount);
+    //
+    //     return GetRoundRobinPartition();
+    // }
 
-        Interlocked.Exchange(ref _tempPartition, (_tempPartition + 1) % _partitionsCount);
-
-        return GetRoundRobinPartition();
-    }
-    
     private byte GetPartition<TEvent>(LogRequest<TEvent> request) where TEvent : class
     {
         if (request.PartitionId.HasValue)
         {
             return request.PartitionId.Value;
         }
-        
+
+        var key = new ActiveTopicKey(request.TopicName);
+
         while (true)
         {
-            var key = new ActiveTopicKey(request.TopicName);
             if (!_activeTopicInfos.TryGetValue(key, out var topicInfo))
             {
                 throw new ApplicationException($"No active topic '{request.TopicName}' found");
             }
-            
+
             if (!string.IsNullOrEmpty(request.Key))
             {
-                // TODO: test MurmurHash3
+                // TODO: test MurmurHash3 X 
                 // partition = murmur2.hash(key) % numPartitions
                 var hash = MurmurHash2.Hash32(Encoding.UTF8.GetBytes(request.Key), PartitionIdSeed);
                 return Convert.ToByte(hash % topicInfo.PartitionsCount);
             }
-            
+
             var nextInfo = topicInfo.NextInfo();
             if (!_activeTopicInfos.TryUpdate(key, nextInfo, topicInfo))
             {
@@ -376,28 +409,28 @@ public sealed class FileEventLogBroker : IEventBroker
         return Convert.ToByte(hash % _brokerSettings.Partitions);
     }
 
-    private byte GetRoundRobinPartition()
-    {
-        Interlocked.Exchange(ref _tempPartition, (_tempPartition + 1) % _partitionsCount);
-        return Convert.ToByte(_tempPartition);
-    }
+    // private byte GetRoundRobinPartition()
+    // {
+    //     Interlocked.Exchange(ref _tempPartition, (_tempPartition + 1) % _partitionsCount);
+    //     return Convert.ToByte(_tempPartition);
+    // }
 
-    private void InitOffsetTopic()
-    {
-        // var segmentsMap = FileLogSegment.MapPartitionsWithSegments(_offsetsTopic);
+    // private void InitOffsetTopic()
+    // {
+    //     var segmentsMap = FileLogSegment.MapPartitionsWithSegments(_offsetsTopic);
+    //
+    //     _offsetsMap = segmentsMap;
+    // }
 
-        // _offsetsMap = segmentsMap;
-    }
-    
-    private async Task InitBrokerCounters(CancellationToken cancellationToken)
-    {
-        // var segmentsMap = FileLogSegment.MapPartitionsWithSegments(_topic);
-        // var latestOffsets = await PrepareLatestOffsets(segmentsMap, cancellationToken);
-        //
-        // _segmentsMap = segmentsMap;
-        // _partitionsCount = Convert.ToByte(segmentsMap.Count);
-        // _latestOffsets = new ConcurrentDictionary<byte, long>(latestOffsets);
-    }
+    // private async Task InitBrokerCounters(CancellationToken cancellationToken)
+    // {
+    //     var segmentsMap = FileLogSegment.MapPartitionsWithSegments(_topic);
+    //     var latestOffsets = await PrepareLatestOffsets(segmentsMap, cancellationToken);
+    //     
+    //     _segmentsMap = segmentsMap;
+    //     _partitionsCount = Convert.ToByte(segmentsMap.Count);
+    //     _latestOffsets = new ConcurrentDictionary<byte, long>(latestOffsets);
+    // }
 
     private Task AssignConsumers<TEvent>(CancellationToken cancellationToken) where TEvent : class
     {
@@ -428,7 +461,8 @@ public sealed class FileEventLogBroker : IEventBroker
         }
     }
 
-    private async Task<Dictionary<byte, long>> PrepareLatestOffsets<TEvent>(Dictionary<byte, FileLogSegment> partitionsMap, CancellationToken cancellationToken) where TEvent : class
+    private async Task<Dictionary<byte, long>> PrepareLatestOffsets<TEvent>(Dictionary<byte, FileLogSegment> partitionsMap,
+        CancellationToken cancellationToken) where TEvent : class
     {
         var result = new Dictionary<byte, long>();
 
@@ -449,12 +483,12 @@ public sealed class FileEventLogBroker : IEventBroker
         ScanTopic(_offsetsTopic);
         // ScanTopic(_eventTopic);
     }
-    
-    private void ScanTopic(EventLogTopic  topic)
+
+    private void ScanTopic(EventLogTopic topic)
     {
         LogSegmentDirectory.ScanOffsets(topic.Name);
     }
-    
+
     private static EventLogTopic GetOffsetTopic(EventBrokerSettings brokerSettings)
     {
         return new EventLogTopic(brokerSettings.TopicName, brokerSettings.Partitions);
@@ -466,18 +500,29 @@ public sealed class FileEventLogBroker : IEventBroker
         {
             return;
         }
-        
+
         foreach (var config in producerBrokerConfigs)
         {
-            _producerBrokerConfigs.Enqueue(config);
+            var key = new ActiveTopicKey(config.TopicName);
+            var val = new ActiveTopicInfo(config.Partitions, 0);
+            _activeTopicInfos.AddOrUpdate(key, val, (k, v) => val);
         }
     }
 
     public void Join(params ConsumerBrokerConfig[] consumerBrokerConfigs)
     {
+        if (consumerBrokerConfigs.Length == 0)
+        {
+            return;
+        }
+
         foreach (var config in consumerBrokerConfigs)
         {
-            _consumerBrokerConfigs.Enqueue(config);
+            var key = new ActiveTopicKey(config.TopicName);
+            var val = new ConsumerGroupReplica(config.GroupName, config.Replicas);
+
+            var queue = _consumerGroupReplicasInfo.GetOrAdd(key, _ => new ConcurrentQueue<ConsumerGroupReplica>());
+            queue.Enqueue(val);
         }
     }
 }
@@ -507,7 +552,6 @@ public sealed record ConsumerInfo(byte Id, string TopicName, string GroupName);
 
 public sealed record ProducerInfo(byte Id, string TopicName);
 
-
 public sealed record ActiveSegmentKey(string TopicName, byte PartitionId);
 
 public sealed record ActiveTopicKey(string TopicName);
@@ -520,4 +564,6 @@ public readonly record struct ActiveTopicInfo(byte PartitionsCount, byte TempPar
     }
 }
 
+public readonly record struct ConsumerGroupReplica(string GroupName, byte Replicas);
 
+public readonly record struct ConsumerGroupId(byte Id, string GroupName, string TopicName);

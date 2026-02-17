@@ -15,7 +15,7 @@ public interface IEventBroker: IEventLogLite, IEventProducerBroker, IEventConsum
 
 public sealed record ProducerBrokerConfig(string TopicName, byte Partitions);
 
-public sealed record ConsumerBrokerConfig(string TopicName, string GroupName, byte Partitions);
+public sealed record ConsumerBrokerConfig(string TopicName, string GroupName, byte Replicas);
 
 
 
@@ -51,9 +51,9 @@ public sealed record EventLogTopic(string Name, byte Partitions);
  *   - size
  *   - is-active
  */
-public sealed record EventLogTopicScanResult(string Name, PartitionSegments[] PartitionSegments)
+public sealed record EventLogTopicScanResult(string Name, PartitionSegments[] PartitionsWithSegments)
 {
-    private byte Partitions => Convert.ToByte(PartitionSegments.Length);
+    private byte Partitions => Convert.ToByte(PartitionsWithSegments.Length);
 }
 
 public sealed record PartitionSegments(byte PartitionId,  string Path, FileLogSegment[]  Segments);
