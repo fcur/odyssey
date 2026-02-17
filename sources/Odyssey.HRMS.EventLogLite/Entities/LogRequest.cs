@@ -2,6 +2,7 @@ namespace Odyssey.HRMS.EventLogLite.Entities;
 
 public sealed class LogRequest<TEvent> where TEvent : class
 {
+    public string TopicName { get; init; }
     public string? Key { get; init; }
     public TEvent Payload { get; init; } = null!;
     public byte? PartitionId { get; init; }

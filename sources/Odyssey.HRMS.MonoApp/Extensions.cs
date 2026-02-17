@@ -31,13 +31,12 @@ public static class Extensions
         // TODO: register broker separately 
         var eventLogger = new JsonFileEventLogger();
         
-        var brokerLogger = serviceProvider.GetRequiredService<ILogger<FileEventLogBroker<TEvent>>>();
-        var broker = new FileEventLogBroker<TEvent>(brokerLogger, brokerConfiguration, eventLogger, offsetLogger, eventTopic);
+        var brokerLogger = serviceProvider.GetRequiredService<ILogger<FileEventLogBroker>>();
+        var broker = new FileEventLogBroker(brokerLogger, brokerConfiguration, eventLogger, offsetLogger, eventTopic);
         
         var producerLogger = serviceProvider.GetRequiredService<ILogger<EventProducer<TEvent>>>();
         var producer = new EventProducer<TEvent>(producerLogger, broker, producerConfiguration);
 
-        services.AddSingleton<IEventBroker<TEvent>>(broker);
         services.AddSingleton<IEventBroker>(broker);
         services.AddSingleton<IEventProducer<TEvent>>(producer);
         services.AddSingleton<IEventProducer>(producer);

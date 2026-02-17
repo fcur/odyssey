@@ -10,7 +10,7 @@ namespace Odyssey.HRMS.EventLogLite.Consumer;
 public sealed class EventConsumer<TEvent> : IDisposable, IEventConsumer<TEvent> where TEvent : class
 {
     private readonly ILogger<EventConsumer<TEvent>> _logger;
-    private readonly IEventBroker<TEvent> _broker;
+    private readonly IEventConsumerBroker _broker;
     private readonly IEventConsumerImpl<TEvent> _handler;
     private readonly EventConsumerSettings _settings;
     private readonly Channel<LogResponse<TEvent>> _channel;
@@ -20,7 +20,7 @@ public sealed class EventConsumer<TEvent> : IDisposable, IEventConsumer<TEvent> 
     private int _logSegmentsCount = 0;
 
     public EventConsumer(ILogger<EventConsumer<TEvent>> logger,
-        IEventBroker<TEvent> broker,
+        IEventConsumerBroker broker,
         IEventConsumerImpl<TEvent> handler,
         EventConsumerSettings settings,
         byte index)
@@ -104,7 +104,7 @@ public sealed class EventConsumer<TEvent> : IDisposable, IEventConsumer<TEvent> 
                 _logger.LogDebug("Pulling is being started, RequestId: {RequestId}", requestId);
 
                 sw.Start();
-                var tasks = assignedSegments.Select(segment => _broker.PollEvents(pollRequest, segment, currentOffsets[segment.Partition], targetToken));
+                var tasks = assignedSegments.Select(segment => _broker.PollEvents<TEvent>(pollRequest, segment, currentOffsets[segment.Partition], targetToken));
                 var results = await Task.WhenAll(tasks);
                 var events = results.SelectMany(v => v).ToArray();
                 sw.Stop();
@@ -165,7 +165,7 @@ public sealed class EventConsumer<TEvent> : IDisposable, IEventConsumer<TEvent> 
             {
                 _logger.LogDebug("Offset committing is being started");
 
-                await _broker.Commit(offsetRequest, cancellationToken);
+                await _broker.Commit<TEvent>(offsetRequest, cancellationToken);
 
                 _savedOffsets.AddOrUpdate(offsetRequest.Key.PartitionId, offsetRequest.Value.NextMsgOffset,
                     (key, value) => offsetRequest.Value.NextMsgOffset);

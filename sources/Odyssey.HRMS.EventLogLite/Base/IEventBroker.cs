@@ -2,16 +2,34 @@ using Odyssey.HRMS.EventLogLite.Entities;
 
 namespace Odyssey.HRMS.EventLogLite.Base;
 
-public interface IEventBroker: IEventLogLite
+// public interface IEventBroker: IEventLogLite
+// {
+// }
+
+public interface IEventBroker: IEventLogLite, IEventProducerBroker, IEventConsumerBroker
 {
+    void Join(params ProducerBrokerConfig[] producerBrokerConfigs);
+    void Join(params ConsumerBrokerConfig[] consumerBrokerConfigs);
 }
 
-public interface IEventBroker<TEvent>: IEventBroker where TEvent : class
+
+public sealed record ProducerBrokerConfig(string TopicName, byte Partitions);
+
+public sealed record ConsumerBrokerConfig(string TopicName, string GroupName, byte Partitions);
+
+
+
+public interface IEventProducerBroker
 {
-    Task<EventLogResult> LogEvent(LogRequest<TEvent> request, CancellationToken cancellationToken = default);
-    void Join(IEventConsumer<TEvent> consumer);
-    Task<IReadOnlyCollection<LogResponse<TEvent>>> PollEvents(PollRequest request, LogSegment logSegment, long offset, CancellationToken cancellationToken = default);
-    Task Commit(LogOffsetRequest request, CancellationToken cancellationToken = default);
+    Task<EventLogResult> LogEvent<TEvent>(LogRequest<TEvent> request, CancellationToken cancellationToken = default) where TEvent : class;
+}
+
+
+public interface IEventConsumerBroker
+{
+    Task<IReadOnlyCollection<LogResponse<TEvent>>> PollEvents<TEvent>(PollRequest request, LogSegment logSegment, long offset, CancellationToken cancellationToken = default) where TEvent : class;
+    Task Commit<TEvent>(LogOffsetRequest request, CancellationToken cancellationToken = default) where TEvent : class;
+    void Join<TEvent>(IEventConsumer<TEvent> consumer) where TEvent : class;
     Task<LogOffsetMessage> ReadSavedOffset(ReadOffsetRequest request, CancellationToken cancellationToken = default);
 }
 

@@ -26,7 +26,7 @@ public sealed class TestHarness<TEvent> where TEvent : class, new()
 {
     private const string BaseDirectoryRoot = "../../../../../OneTopicWithCoupleConsumersTests";
 
-    private readonly FileEventLogBroker<TEvent> _broker;
+    private readonly FileEventLogBroker _broker;
     private readonly EventProducer<TEvent> _producer;
     private readonly IReadOnlyCollection<EventConsumer<TEvent>> _consumers;
     private readonly TestHarnessSettings  _settings;
@@ -54,13 +54,13 @@ public sealed class TestHarness<TEvent> where TEvent : class, new()
     {
         _settings = settings;
         
-        var brokerLogger = loggerFactory.CreateLogger<FileEventLogBroker<TEvent>>();
+        var brokerLogger = loggerFactory.CreateLogger<FileEventLogBroker>();
         var producerLogger = loggerFactory.CreateLogger<EventProducer<TEvent>>();
         var logger = loggerFactory.CreateLogger<EventConsumer<TEvent>>();
         
         var eventLoggerMock = PrepareEventLogger(settings.LatestOffsets);
 
-        _broker = new FileEventLogBroker<TEvent>(brokerLogger, settings.BrokerSettings, eventLoggerMock.Object, eventLoggerMock.Object, settings.Topic);
+        _broker = new FileEventLogBroker(brokerLogger, settings.BrokerSettings, eventLoggerMock.Object, eventLoggerMock.Object, settings.Topic);
         _producer = new EventProducer<TEvent>(producerLogger, _broker, settings.ProducerSettings);
         _consumers = PrepareTopicConsumers(logger, settings.ConsumerSettings);
     }

@@ -8,11 +8,11 @@ namespace Odyssey.HRMS.EventLogLite.Producer;
 public sealed class EventProducer<TEvent> : IDisposable, IEventProducer<TEvent> where TEvent : class
 {
     private readonly ILogger<EventProducer<TEvent>> _logger;
-    private readonly IEventBroker<TEvent> _broker;
+    private readonly IEventProducerBroker _broker;
     private readonly EventProducerSettings _settings;
     private readonly Channel<LogRequest<TEvent>> _channel;
 
-    public EventProducer(ILogger<EventProducer<TEvent>> logger, IEventBroker<TEvent> broker, EventProducerSettings settings)
+    public EventProducer(ILogger<EventProducer<TEvent>> logger, IEventProducerBroker broker, EventProducerSettings settings)
     {
         ArgumentNullException.ThrowIfNull(logger);
         ArgumentNullException.ThrowIfNull(broker);

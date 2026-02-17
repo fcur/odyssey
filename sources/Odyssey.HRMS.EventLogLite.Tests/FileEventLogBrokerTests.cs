@@ -129,14 +129,29 @@ public sealed class FileEventLogBrokerTests : IAsyncLifetime, IClassFixture<File
     }
 
     [Theory, AutoData]
-    public async Task TestBrokerStart(string topic1Name, string topic2Name)
+    public async Task TestBrokerStart(string topic1Name, string key1, TestEvent payload1, string key2, TestEvent payload2)
     {
-        var cts = new CancellationTokenSource();
-        var topic1 = new EventLogTopic(topic1Name, Partitions: 6);
-        var topic2 = new EventLogTopic(topic2Name, Partitions: 3);
+        using var cts = new CancellationTokenSource();
+        var topic1 = new EventLogTopic(topic1Name, Partitions: 3);
+        
+        const byte partition = 1;
+        const long baseOffset1 = 0L;
+        const long baseOffset2 = 10000234510L;
 
-        _ = LogSegmentDirectory.GetOrCreate(topic1);
-        _ = LogSegmentDirectory.GetOrCreate(topic2);
+        var now = DateTimeOffset.UtcNow;
+        long time1 = now.AddMinutes(-8.0).ToUnixTimeMilliseconds(), time2 = now.AddMinutes(-2.0).ToUnixTimeMilliseconds(), time3 = now.AddMinutes(1.0).ToUnixTimeMilliseconds();
+        
+        var workingDirectory1 = LogSegmentDirectory.GetOrCreate(topic1);
+        var logSegment1 = FileLogSegment.New(partition, workingDirectory1) with { BaseOffset = baseOffset1, BaseTime = time1 };
+        var logSegment2 = FileLogSegment.New(partition, workingDirectory1) with { BaseOffset = baseOffset2, BaseTime =  time2, IsActive = true };
+        
+        var logMessage1 = LogMessage<TestEvent>.Create(key1, payload1, baseOffset1) with { Timestamp = time1 };
+        var logMessage2 = LogMessage<TestEvent>.Create(key1, payload1, baseOffset2) with { Timestamp = time2 };
+        var logMessage3 = LogMessage<TestEvent>.Create(key2, payload2, baseOffset2 + 1) with { Timestamp = time3 };
+
+        // await _fixture.CreateEmptyLogSegments([logSegment1, logSegment2], cts.Token);
+        _ = await _fixture.Write(logSegment1, [logMessage1], cts.Token);
+        _ = await _fixture.Write(logSegment2, [logMessage2, logMessage3], cts.Token);
         
         var broker = _fixture.GetBroker();
         

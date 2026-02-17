@@ -8,6 +8,8 @@ public interface IEventConsumer<TEvent> : IEventConsumer where TEvent : class
     Task Broadcast(LogResponse<TEvent> response, CancellationToken cancellationToken = default);
 }
 
+
+
 public interface IEventConsumer : IEventLogLite
 {
     void AssignSegment(LogSegment segment);

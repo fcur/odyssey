@@ -15,10 +15,10 @@ public sealed class FileLogBrokerFixture : IAsyncLifetime
 {
     private const string BaseDirectoryRoot = "../../../../../FileEventLogBrokerTests";
     private const string EventTopicName = "test_event";
-    private const byte EventTopicPartitions = 5;
-    private const byte OffsetPartitions = 50;
+    private const byte EventTopicPartitions = 3;
+    private const byte OffsetPartitions = 5;
     private const string OffsetsTopicName = "__consumer_offsets";
-    private readonly FileEventLogBroker<TestEvent> _broker;
+    private readonly FileEventLogBroker _broker;
     private readonly EventLogTopic _topic;
     private readonly EventLogTopic _offsetsTopic;
     private const byte EventLogDivider = 10;
@@ -32,7 +32,7 @@ public sealed class FileLogBrokerFixture : IAsyncLifetime
 
     public FileLogBrokerFixture()
     {
-        var brokerLoggerMock = new Mock<ILogger<FileEventLogBroker<TestEvent>>>();
+        var brokerLoggerMock = new Mock<ILogger<FileEventLogBroker>>();
 
         var eventTopic = new EventLogTopic(EventTopicName, EventTopicPartitions);
         var offsetsTopic = new EventLogTopic(OffsetsTopicName, OffsetPartitions);
@@ -40,7 +40,7 @@ public sealed class FileLogBrokerFixture : IAsyncLifetime
         var brokerSettings = new EventBrokerSettings { TopicName = offsetsTopic.Name, Partitions = offsetsTopic.Partitions };
 
         var eventLoggerMock = new Mock<IFileEventLogger>();
-        var broker = new FileEventLogBroker<TestEvent>(brokerLoggerMock.Object, brokerSettings, 
+        var broker = new FileEventLogBroker(brokerLoggerMock.Object, brokerSettings, 
             eventLogger: eventLoggerMock.Object, offsetLogger:eventLoggerMock.Object, eventTopic);
 
         _topic = eventTopic;
@@ -49,7 +49,7 @@ public sealed class FileLogBrokerFixture : IAsyncLifetime
         _broker = broker;
     }
 
-    public FileEventLogBroker<TestEvent> GetBroker() => _broker;
+    public FileEventLogBroker GetBroker() => _broker;
     public EventLogTopic GetTopic() => _topic;
     public EventLogTopic GetOffsetsTopic() => _offsetsTopic;
 
@@ -134,7 +134,7 @@ public sealed class FileLogBrokerFixture : IAsyncLifetime
                 Size = logSegmentWriter.Length,
                 BaseOffset = segment.IsEmpty() ? item.Offset : segment.BaseOffset,
                 BaseTime = segment.IsEmpty() ? item.Timestamp : segment.BaseTime,
-                IsActive = false, // can't determine in tests
+                IsActive = segment.IsActive // can't determine in tests
             };
         }
 
@@ -148,8 +148,8 @@ public sealed class FileLogBrokerFixture : IAsyncLifetime
 
     public Task InitializeAsync()
     {
-        LogSegmentDirectory.GetOrCreate(OffsetsTopicName, OffsetPartitions);
-        LogSegmentDirectory.GetOrCreate(EventTopicName, OffsetPartitions);
+        _ = LogSegmentDirectory.GetOrCreate(_topic.Name, _topic.Partitions);
+        _ = LogSegmentDirectory.GetOrCreate(_offsetsTopic.Name, _offsetsTopic.Partitions);
 
         // await _broker.Start(CancellationToken.None);
         return Task.CompletedTask;
@@ -159,8 +159,8 @@ public sealed class FileLogBrokerFixture : IAsyncLifetime
     {
         // await _broker.Stop(CancellationToken.None);
 
-        LogSegmentDirectory.Cleanup(EventTopicName);
-        LogSegmentDirectory.Cleanup(OffsetsTopicName);
+        LogSegmentDirectory.Cleanup(_topic.Name);
+        LogSegmentDirectory.Cleanup(_offsetsTopic.Name);
 
         Directory.Delete(BaseDirectoryRoot, true);
 
