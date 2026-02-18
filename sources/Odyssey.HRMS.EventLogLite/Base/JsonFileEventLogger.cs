@@ -168,6 +168,11 @@ public sealed class JsonFileEventLogger : IFileEventLogger
         return LogOffsetMessage.CreateNew(key);
     }
 
+    public LogIndex ReadLastIndex(FileLogSegment segment)
+    {
+        return segment.IsEmpty() ? new LogIndex(0, 0) : ReadIndexInternal(EventFileType.IndexFile, segment);
+    }
+    
     private async Task<PositionPair> WriteInternal<TPayload>(TPayload payload, FileLogSegment segment, CancellationToken cancellationToken)
         where TPayload : class
     {
@@ -193,6 +198,23 @@ public sealed class JsonFileEventLogger : IFileEventLogger
         using var accessor = mmf.CreateViewAccessor(offset, 16);
         accessor.Write(0, payload.Index);
         accessor.Write(8, payload.Position);
+    }
+
+    private LogIndex ReadIndexInternal(EventFileType fileType, FileLogSegment segment)
+    {
+        var path = segment.GetPath(fileType);
+        var offset = Path.Exists(path) ? new FileInfo(path).Length : 0;
+        if (offset == 0)
+        {
+            return new LogIndex(0, 0);
+        }
+
+        using var mmf = MemoryMappedFile.CreateFromFile(path, FileMode.OpenOrCreate, null, 0, MemoryMappedFileAccess.Read);
+        using var accessor = mmf.CreateViewAccessor(offset - 16, 16, MemoryMappedFileAccess.Read);
+
+        var index = accessor.ReadInt64(accessor.Capacity - 16);
+        var position = accessor.ReadInt64(accessor.Capacity - 8);
+        return new LogIndex(index, position);
     }
 }
 

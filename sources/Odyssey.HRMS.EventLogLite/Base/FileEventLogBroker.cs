@@ -13,12 +13,10 @@ public sealed class FileEventLogBroker : IEventBroker
 {
     private const uint PartitionIdSeed = 42;
     private const uint OffsetIdSeed = 63;
-
-
+    
     private readonly ILogger<FileEventLogBroker> _logger;
     private readonly EventBrokerSettings _brokerSettings;
     private readonly IFileEventLogger _eventLogger;
-
     private readonly IFileEventLogger _offsetLogger;
 
     // private readonly EventLogTopic _eventTopic;
@@ -29,14 +27,14 @@ public sealed class FileEventLogBroker : IEventBroker
     // private readonly ConcurrentBag<EventLogTopic> _activeTopics;
 
     private readonly ConcurrentDictionary<ActiveTopicKey, ActiveTopicInfo> _activeTopicInfos;
-    private readonly ConcurrentDictionary<ActiveSegmentKey, FileLogSegment> _activeSegments;
+    private readonly ConcurrentDictionary<PartitionKey, FileLogSegment> _activeSegments;
     private readonly ConcurrentDictionary<ActiveTopicKey, ConcurrentQueue<ConsumerGroupReplica>> _consumerGroupReplicasInfo;
     private readonly ConcurrentDictionary<ConsumerGroupId, ConcurrentQueue<byte>> _consumerGroupsAssignment;
+    private readonly ConcurrentDictionary<PartitionKey, long> _latestOffsets;
     
     
     // private byte _partitionsCount = 0;
     // private int _tempPartition = 0;
-    private ConcurrentDictionary<byte, long> _latestOffsets = null!;
 
     // private Dictionary<byte, FileLogSegment> _segmentsMap = null!;
     private Dictionary<byte, FileLogSegment> _offsetsMap = null!;
@@ -62,7 +60,7 @@ public sealed class FileEventLogBroker : IEventBroker
 
         _offsetsTopic = GetOffsetTopic(brokerSettings);
         // _activeTopics = new ConcurrentBag<EventLogTopic>(topics.DistinctBy(v=>v.Name));
-
+        _latestOffsets = [];
         _activeSegments = [];
         _consumers = [];
         _segmentMap = [];
@@ -130,17 +128,26 @@ public sealed class FileEventLogBroker : IEventBroker
 
             foreach (var partitionSegment in topic.PartitionsWithSegments)
             {
-                if (partitionSegment.Segments.Length == 0)
+                // if (partitionSegment.Segments.Length == 0)
+                // {
+                //     continue;
+                // }
+
+                var activeSegment = partitionSegment.Segments.SingleOrDefault(v => v.IsActive) ??
+                                    FileLogSegment.New2(partitionSegment.PartitionId, topic.Name);
+                
+                var partitionKey = new PartitionKey(topic.Name, partitionSegment.PartitionId);
+                if (!_activeSegments.TryAdd(partitionKey, activeSegment))
                 {
-                    continue;
+                    throw new InvalidDataException($"Active segment {partitionKey} already exists");
                 }
 
-                var activeSegment = partitionSegment.Segments.Single(v => v.IsActive);
-                var activeSegmentKey = new ActiveSegmentKey(topic.Name, partitionSegment.PartitionId);
-                if (!_activeSegments.TryAdd(activeSegmentKey, activeSegment))
+                var logIndex = _eventLogger.ReadLastIndex(activeSegment);
+                if (!_latestOffsets.TryAdd(partitionKey, logIndex.Index))
                 {
-                    throw new InvalidDataException($"Active segment {activeSegmentKey} already exists");
+                    throw new InvalidOperationException($"Can't save offset for partition: '{partitionKey}'");
                 }
+
             }
         }
         
@@ -198,23 +205,20 @@ public sealed class FileEventLogBroker : IEventBroker
 
     public async Task<EventLogResult> LogEvent<TEvent>(LogRequest<TEvent> request, CancellationToken cancellationToken = default) where TEvent : class
     {
-        long newOffset = 0;
-
         var partitionId = GetPartition(request);
-
-        // var segment = _segmentsMap[partitionId];
-        var segmentKey = new ActiveSegmentKey(request.TopicName, partitionId);
-        var segment = _activeSegments[segmentKey];
+        var partitionKey = new PartitionKey(request.TopicName, partitionId);
+        long newOffset;
+        var segment = _activeSegments[partitionKey];
 
         while (true)
         {
-            if (!_latestOffsets.TryGetValue(partitionId, out var offsetResult))
+            if (!_latestOffsets.TryGetValue(partitionKey, out var offsetResult))
             {
                 throw new ApplicationException($"No offset found for partition: '{partitionId}'");
             }
 
             newOffset = offsetResult + 1;
-            if (!_latestOffsets.TryUpdate(partitionId, newOffset, offsetResult))
+            if (!_latestOffsets.TryUpdate(partitionKey, newOffset, offsetResult))
             {
                 continue;
             }
@@ -228,8 +232,7 @@ public sealed class FileEventLogBroker : IEventBroker
             break;
         }
 
-        throw new NotImplementedException();
-        // return new EventLogResult(_eventTopic.Name, partitionId, newOffset);
+        return new EventLogResult(request.TopicName, partitionId, newOffset);
     }
 
     // public void Join<TEvent>(IEventConsumer<TEvent> consumer) where TEvent : class
@@ -247,7 +250,7 @@ public sealed class FileEventLogBroker : IEventBroker
         CancellationToken cancellationToken = default) where TEvent : class
     {
         var result = new List<LogResponse<TEvent>>(request.BatchSize);
-        var segmentKey = new ActiveSegmentKey(request.TopicName, logSegment.Partition);
+        var segmentKey = new PartitionKey(request.TopicName, logSegment.Partition);
         var segment = _activeSegments[segmentKey];
         // var segment = _segmentsMap[logSegment.Partition];
 
@@ -370,6 +373,7 @@ public sealed class FileEventLogBroker : IEventBroker
             return request.PartitionId.Value;
         }
 
+        byte result;
         var key = new ActiveTopicKey(request.TopicName);
 
         while (true)
@@ -384,20 +388,22 @@ public sealed class FileEventLogBroker : IEventBroker
                 // TODO: test MurmurHash3 X 
                 // partition = murmur2.hash(key) % numPartitions
                 var hash = MurmurHash2.Hash32(Encoding.UTF8.GetBytes(request.Key), PartitionIdSeed);
-                return Convert.ToByte(hash % topicInfo.PartitionsCount);
-            }
-
-            var nextInfo = topicInfo.NextInfo();
-            if (!_activeTopicInfos.TryUpdate(key, nextInfo, topicInfo))
-            {
-                // another thread was ahead
+                result = Convert.ToByte(hash % topicInfo.PartitionsCount);
                 break;
             }
 
-            return nextInfo.TempPartition;
+            var nextInfo = topicInfo.NextRoundRobinInfo();
+            if (!_activeTopicInfos.TryUpdate(key, nextInfo, topicInfo))
+            {
+                // another thread was ahead
+                continue;
+            }
+
+            result = nextInfo.TempPartition;
+            break;
         }
 
-        throw new NotImplementedException();
+        return result;
     }
 
     private byte GetPartition(LogOffsetKey key)
@@ -475,16 +481,16 @@ public sealed class FileEventLogBroker : IEventBroker
         return result;
     }
 
-    private void Scan()
-    {
-        ScanTopic(_offsetsTopic);
-        // ScanTopic(_eventTopic);
-    }
+    // private void Scan()
+    // {
+    //     ScanTopic(_offsetsTopic);
+    //     ScanTopic(_eventTopic);
+    // }
 
-    private void ScanTopic(EventLogTopic topic)
-    {
-        LogSegmentDirectory.ScanOffsets(topic.Name);
-    }
+    // private void ScanTopic(EventLogTopic topic)
+    // {
+    //     LogSegmentDirectory.ScanOffsets(topic.Name);
+    // }
 
     private static EventLogTopic GetOffsetTopic(EventBrokerSettings brokerSettings)
     {
@@ -549,13 +555,13 @@ public sealed record ConsumerInfo(byte Id, string TopicName, string GroupName);
 
 public sealed record ProducerInfo(byte Id, string TopicName);
 
-public sealed record ActiveSegmentKey(string TopicName, byte PartitionId);
+public readonly record struct PartitionKey(string TopicName, byte PartitionId);
 
 public sealed record ActiveTopicKey(string TopicName);
 
 public readonly record struct ActiveTopicInfo(byte PartitionsCount, byte TempPartition)
 {
-    public ActiveTopicInfo NextInfo()
+    public ActiveTopicInfo NextRoundRobinInfo()
     {
         return this with { TempPartition = (byte)(TempPartition + 1 % PartitionsCount) };
     }

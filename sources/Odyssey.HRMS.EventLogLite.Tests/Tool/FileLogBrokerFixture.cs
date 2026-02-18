@@ -40,8 +40,12 @@ public sealed class FileLogBrokerFixture : IAsyncLifetime
         var brokerSettings = new EventBrokerSettings { TopicName = offsetsTopic.Name, Partitions = offsetsTopic.Partitions };
 
         var eventLoggerMock = new Mock<IFileEventLogger>();
+
+        eventLoggerMock.Setup(v => v.Write<TestEvent>(It.IsAny<LogMessage<TestEvent>>(), It.IsAny<FileLogSegment>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((LogMessage<TestEvent> msg, FileLogSegment segment, CancellationToken _) => new PositionPair(0, 0));     
+        
         var broker = new FileEventLogBroker(brokerLoggerMock.Object, brokerSettings, 
-            eventLogger: eventLoggerMock.Object, offsetLogger:eventLoggerMock.Object, eventTopic);
+            eventLogger: eventLoggerMock.Object, offsetLogger:eventLoggerMock.Object);
 
         _topic = eventTopic;
         _offsetsTopic = offsetsTopic;

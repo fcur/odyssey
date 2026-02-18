@@ -449,6 +449,12 @@ public sealed record FileLogSegment(byte Partition, string TopicRoot, long BaseO
         return new FileLogSegment(partition, topicRoot, 0, 0, 0, true);
     }
 
+    public static FileLogSegment New2(byte partition, string topicName)
+    {
+        var topicRoot = LogSegmentDirectory.GetWorkingDirectory(topicName);
+        return  FileLogSegment.New(partition, topicRoot);
+    }
+
     public static string GetFilePath(string topicRoot, byte partition, long baseOffset, string extension)
     {
         return Path.Combine(topicRoot, partition.ToString(), $"{baseOffset:0000000000000000000}{extension}");

@@ -56,6 +56,11 @@ public sealed class BinaryFileEventLogger: IFileEventLogger
         throw new NotImplementedException();
     }
 
+    public LogIndex ReadLastIndex(FileLogSegment segment)
+    {
+        throw new NotImplementedException();
+    }
+
     public Task<PositionPair> Commit(LogOffsetRequest request, FileLogSegment segment, CancellationToken cancellationToken = default)
     {
         throw new NotImplementedException();

@@ -162,17 +162,20 @@ public sealed class FileEventLogBrokerTests : IAsyncLifetime, IClassFixture<File
     [Theory, AutoData]
     public async Task TestLogFirstEventWithoutConsumer(string key, TestEvent payload)
     {
-        var timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         const byte partition = 1;
+
+        using var cts = new CancellationTokenSource();
+        var now = DateTimeOffset.UtcNow;
         // var logIndex1 = new LogIndex(0L, 0);
         // var timeIndex1 = new LogIndex(timestamp, 0);
         
-        var cts = new CancellationTokenSource();
-        var request = new LogRequest<TestEvent> { Key = key, Payload = payload, PartitionId = partition };
-    
-        // missing segments throws exception
         var broker = _fixture.GetBroker();
         var topic = _fixture.GetTopic();
+        
+        var request = new LogRequest<TestEvent> { Key = key, Payload = payload, PartitionId = partition, TopicName =  topic.Name };
+        broker.Join(new ProducerBrokerConfig(topic.Name, topic.Partitions));
+
+        // missing segments throws exception
         // var workingDirectory = LogSegmentDirectory.Init(topic);
         // var logSegment1 = FileLogSegment.New(partition, workingDirectory) with { BaseOffset = logIndex1.Index, BaseTime = timeIndex1.Index };
 
