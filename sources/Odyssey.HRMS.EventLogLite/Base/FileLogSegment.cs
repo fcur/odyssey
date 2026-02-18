@@ -215,6 +215,7 @@ public static class LogSegmentDirectory
         {
             if (!byte.TryParse(directory.Name, out var partitionIdResult))
             {
+                // continue;
                 throw new InvalidDataException($"Found invalid partition: '{directory.Name}' in directory: '{directory.FullName}'.");
             }
             

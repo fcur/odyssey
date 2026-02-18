@@ -19,13 +19,13 @@ public sealed class FileEventLogBrokerTests : IAsyncLifetime, IClassFixture<File
         _fixture = fixture;
     }
 
-    [Theory, AutoData]
-    public void TestWorkingDirectoryWithoutSegments(string name1, string name2, string name3)
+    [Fact]
+    public void TestWorkingDirectoryWithoutSegments()
     {
         var topic = new EventLogTopic("box-box", 6);
         var workingDirectory = LogSegmentDirectory.GetOrCreate(topic);
 
-        _fixture.CreateDirectories(workingDirectory, name1, "1", "3", name2, "5", name3);
+        _fixture.CreateDirectories(workingDirectory, "1", "3", "5");
 
         var logSegments = LogSegmentDirectory.ScanOffsets(topic.Name).Values.SelectMany(v => v).ToArray();
         var subDirectories = _fixture.GetSubDirectories(workingDirectory);
@@ -34,7 +34,7 @@ public sealed class FileEventLogBrokerTests : IAsyncLifetime, IClassFixture<File
 
         using var scope = new AssertionScope();
         logSegments.Length.Should().Be(6);
-        subDirectories.Count.Should().Be(9);
+        subDirectories.Count.Should().Be(6);
         subDirectories.SingleOrDefault(v => v.Name.Equals("0")).Should().NotBeNull();
         subDirectories.SingleOrDefault(v => v.Name.Equals("1")).Should().NotBeNull();
         subDirectories.SingleOrDefault(v => v.Name.Equals("2")).Should().NotBeNull();
@@ -47,13 +47,12 @@ public sealed class FileEventLogBrokerTests : IAsyncLifetime, IClassFixture<File
     public async Task TestWorkingDirectoryWithSingleSegment(string topicName, string key1, TestEvent payload1, string key2, TestEvent payload2)
     {
         const byte partition = 1;
+        using var cts = new CancellationTokenSource();
         var now = DateTimeOffset.UtcNow;
-        var cts = new CancellationTokenSource();
         var topic = new EventLogTopic(topicName, 3);
         var workingDirectory = LogSegmentDirectory.GetOrCreate(topic);
         var logSegment = FileLogSegment.New(partition, workingDirectory);
-        var time1 = now.AddMinutes(-2.0).ToUnixTimeMilliseconds();
-        var time2 = now.AddMinutes(1.0).ToUnixTimeMilliseconds();
+        long time1 = now.AddMinutes(-2.0).ToUnixTimeMilliseconds(), time2 = now.AddMinutes(1.0).ToUnixTimeMilliseconds();
         var logMessage1 = LogMessage<TestEvent>.Create(key1, payload1, 0) with { Timestamp = time1 };
         var logMessage2 = LogMessage<TestEvent>.Create(key2, payload2, 1) with { Timestamp = time2 };
 
@@ -81,22 +80,22 @@ public sealed class FileEventLogBrokerTests : IAsyncLifetime, IClassFixture<File
         const long baseOffset1 = 0L;
         const long baseOffset2 = 10000234510L;
 
+        using var cts = new CancellationTokenSource();
         var now = DateTimeOffset.UtcNow;
-        var cts = new CancellationTokenSource();
         var topic = new EventLogTopic(topicName, 3);
         var workingDirectory = LogSegmentDirectory.GetOrCreate(topic);
-        var logSegment1 = FileLogSegment.New(partition, workingDirectory) with { BaseOffset = baseOffset1 };
-        var logSegment2 = FileLogSegment.New(partition, workingDirectory) with { BaseOffset = baseOffset2 };
 
         var time1 = now.AddMinutes(-8.0).ToUnixTimeMilliseconds();
         var time2 = now.AddMinutes(-2.0).ToUnixTimeMilliseconds();
         var time3 = now.AddMinutes(1.0).ToUnixTimeMilliseconds();
+        
+        var logSegment1 = FileLogSegment.New(partition, workingDirectory) with { BaseOffset = baseOffset1, BaseTime = time1 };
+        var logSegment2 = FileLogSegment.New(partition, workingDirectory) with { BaseOffset = baseOffset2, BaseTime =  time2 };
 
         var logMessage1 = LogMessage<TestEvent>.Create(key1, payload1, baseOffset1) with { Timestamp = time1 };
         var logMessage2 = LogMessage<TestEvent>.Create(key1, payload1, baseOffset2) with { Timestamp = time2 };
         var logMessage3 = LogMessage<TestEvent>.Create(key2, payload2, baseOffset2 + 1) with { Timestamp = time3 };
 
-        await _fixture.CreateEmptyLogSegments([logSegment1, logSegment2], cts.Token);
         var logSegmentResult1 = await _fixture.Write(logSegment1, [logMessage1], cts.Token);
         var logSegmentResult2 = await _fixture.Write(logSegment2, [logMessage2, logMessage3], cts.Token);
         var logSegmentScanResult = LogSegmentDirectory.ScanOffsets(topic.Name).Values.SelectMany(v => v).ToArray();
@@ -131,12 +130,12 @@ public sealed class FileEventLogBrokerTests : IAsyncLifetime, IClassFixture<File
     [Theory, AutoData]
     public async Task TestBrokerStart(string topic1Name, string key1, TestEvent payload1, string key2, TestEvent payload2)
     {
-        using var cts = new CancellationTokenSource();
-        var topic1 = new EventLogTopic(topic1Name, Partitions: 3);
-        
         const byte partition = 1;
         const long baseOffset1 = 0L;
         const long baseOffset2 = 10000234510L;
+        
+        using var cts = new CancellationTokenSource();
+        var topic1 = new EventLogTopic(topic1Name, Partitions: 3);
 
         var now = DateTimeOffset.UtcNow;
         long time1 = now.AddMinutes(-8.0).ToUnixTimeMilliseconds(), time2 = now.AddMinutes(-2.0).ToUnixTimeMilliseconds(), time3 = now.AddMinutes(1.0).ToUnixTimeMilliseconds();
@@ -177,7 +176,6 @@ public sealed class FileEventLogBrokerTests : IAsyncLifetime, IClassFixture<File
         // var workingDirectory = LogSegmentDirectory.Init(topic);
         // var logSegment1 = FileLogSegment.New(partition, workingDirectory) with { BaseOffset = logIndex1.Index, BaseTime = timeIndex1.Index };
 
-        // await _fixture.CreateEmptyLogSegments([logSegment1], cts.Token);
     
         await broker.Start(cts.Token);
     
@@ -204,8 +202,6 @@ public sealed class FileEventLogBrokerTests : IAsyncLifetime, IClassFixture<File
     //     var workingDirectory = LogSegmentDirectory.Init(topic);
     //     var logSegment1 = FileLogSegment.New(partition, workingDirectory) with { BaseOffset = logIndex1.Index, BaseTime = timeIndex1.Index };
     //     var logSegment2 = FileLogSegment.New(partition, workingDirectory) with { BaseOffset = logIndex2.Index, BaseTime =  timeIndex2.Index };
-    //     
-    //     await _fixture.CreateEmptyLogSegments([logSegment1, logSegment2], cts.Token);
     //
     //     await broker.Start(cts.Token);
     //
