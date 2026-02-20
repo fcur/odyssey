@@ -207,23 +207,22 @@ public sealed class FileEventLogBroker : IEventBroker
     {
         var partitionId = GetPartition(request);
         var partitionKey = new PartitionKey(request.TopicName, partitionId);
-        long newOffset;
+        long offsetResult;
         var segment = _activeSegments[partitionKey];
 
         while (true)
         {
-            if (!_latestOffsets.TryGetValue(partitionKey, out var offsetResult))
+            if (!_latestOffsets.TryGetValue(partitionKey, out offsetResult))
             {
                 throw new ApplicationException($"No offset found for partition: '{partitionId}'");
             }
 
-            newOffset = offsetResult + 1;
-            if (!_latestOffsets.TryUpdate(partitionKey, newOffset, offsetResult))
+            if (!_latestOffsets.TryUpdate(partitionKey, offsetResult + 1, offsetResult))
             {
                 continue;
             }
 
-            var logMessage = LogMessage<TEvent>.Create(request, newOffset);
+            var logMessage = LogMessage<TEvent>.Create(request, offsetResult);
 
             _logger.LogDebug("New message with Key: {Key}, PartitionId: {PartitionId}, Offset: {Offset}", logMessage.Key, segment.Partition,
                 logMessage.Offset);
@@ -232,7 +231,7 @@ public sealed class FileEventLogBroker : IEventBroker
             break;
         }
 
-        return new EventLogResult(request.TopicName, partitionId, newOffset);
+        return new EventLogResult(request.TopicName, partitionId, offsetResult);
     }
 
     // public void Join<TEvent>(IEventConsumer<TEvent> consumer) where TEvent : class
