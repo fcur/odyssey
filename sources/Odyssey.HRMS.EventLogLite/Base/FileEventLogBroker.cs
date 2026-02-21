@@ -23,13 +23,13 @@ public sealed class FileEventLogBroker : IEventBroker
     private readonly EventLogTopic _offsetsTopic;
 
     // private readonly Channel<LogRespone<TEvent>> _mainChannel;
-    private readonly ConcurrentQueue<IEventConsumer> _consumers;
+    // private readonly ConcurrentQueue<IEventConsumer> _consumers;
     // private readonly ConcurrentBag<EventLogTopic> _activeTopics;
 
     private readonly ConcurrentDictionary<ActiveTopicKey, ActiveTopicInfo> _activeTopicInfos;
     private readonly ConcurrentDictionary<PartitionKey, FileLogSegment> _activeSegments;
     private readonly ConcurrentDictionary<ActiveTopicKey, ConcurrentQueue<ConsumerGroupReplica>> _consumerGroupReplicasInfo;
-    private readonly ConcurrentDictionary<ConsumerGroupId, ConcurrentQueue<byte>> _consumerGroupsAssignment;
+    private readonly ConcurrentDictionary<ConsumerGroupId, ConcurrentQueue<PartitionId>> _consumerGroupsAssignment;
     private readonly ConcurrentDictionary<PartitionKey, long> _latestOffsets;
     
     
@@ -42,7 +42,7 @@ public sealed class FileEventLogBroker : IEventBroker
     // private string _topicRoot;
     // private string _offsetsRoot;
 
-    private readonly ConcurrentDictionary<byte, LinkedList<FileLogSegment>> _segmentMap;
+    // private readonly ConcurrentDictionary<byte, LinkedList<FileLogSegment>> _segmentMap;
 
     public FileEventLogBroker(ILogger<FileEventLogBroker> logger, EventBrokerSettings brokerSettings, IFileEventLogger eventLogger,
         IFileEventLogger offsetLogger, params EventLogTopic[] topics)
@@ -62,8 +62,8 @@ public sealed class FileEventLogBroker : IEventBroker
         // _activeTopics = new ConcurrentBag<EventLogTopic>(topics.DistinctBy(v=>v.Name));
         _latestOffsets = [];
         _activeSegments = [];
-        _consumers = [];
-        _segmentMap = [];
+        // _consumers = [];
+        // _segmentMap = [];
         _activeTopicInfos = [];
         _consumerGroupReplicasInfo = [];
         _consumerGroupsAssignment = [];
@@ -110,6 +110,8 @@ public sealed class FileEventLogBroker : IEventBroker
                     }
                     
                     var consumersCount = group.Last().Replicas;
+                    
+                    // reuse memberId
                     var consumerIndexes = Enumerable.Range(0, consumersCount)
                         .Select(v => new ConsumerGroupId((byte)v, groupName, topicName)).ToArray();
 
@@ -120,8 +122,8 @@ public sealed class FileEventLogBroker : IEventBroker
                         var consumerIndex = partition % consumersCount;
                         var consumerGroupId = consumerIndexes[consumerIndex];
 
-                        var queue = _consumerGroupsAssignment.GetOrAdd(consumerGroupId, _ => new ConcurrentQueue<byte>());
-                        queue.Enqueue(partition);
+                        var queue = _consumerGroupsAssignment.GetOrAdd(consumerGroupId, _ => new ConcurrentQueue<PartitionId>());
+                        queue.Enqueue(new PartitionId(partition));
                     }
                 }
             }
@@ -245,6 +247,12 @@ public sealed class FileEventLogBroker : IEventBroker
     //     _activeTopics.Add(topic);
     // }
 
+    public Task<IReadOnlyCollection<LogResponse<TEvent>>> PollEventsBatch<TEvent>(BatchPoolRequest batchPoolRequest, CancellationToken cancellationToken = default) where TEvent : class
+    {
+        throw new NotImplementedException();
+    }
+
+    [Obsolete]
     public async Task<IReadOnlyCollection<LogResponse<TEvent>>> PollEvents<TEvent>(PollRequest request, LogSegment logSegment, long offset,
         CancellationToken cancellationToken = default) where TEvent : class
     {
@@ -434,21 +442,21 @@ public sealed class FileEventLogBroker : IEventBroker
     //     _latestOffsets = new ConcurrentDictionary<byte, long>(latestOffsets);
     // }
 
-    private Task AssignConsumers<TEvent>(CancellationToken cancellationToken) where TEvent : class
-    {
-        var groupedConsumers = _consumers.GroupBy(v => v.GetConsumerAssigmentState().GroupName).ToArray();
-        if (groupedConsumers.Length == 0)
-        {
-            return Task.CompletedTask;
-        }
-
-        // foreach (var consumers in groupedConsumers)
-        // {
-        //     AssignGroupConsumers(consumers.ToArray());
-        // }
-
-        return Task.CompletedTask;
-    }
+    // private Task AssignConsumers<TEvent>(CancellationToken cancellationToken) where TEvent : class
+    // {
+    //     var groupedConsumers = _consumers.GroupBy(v => v.GetConsumerAssigmentState().GroupName).ToArray();
+    //     if (groupedConsumers.Length == 0)
+    //     {
+    //         return Task.CompletedTask;
+    //     }
+    //
+    //     foreach (var consumers in groupedConsumers)
+    //     {
+    //         AssignGroupConsumers(consumers.ToArray());
+    //     }
+    //
+    //     return Task.CompletedTask;
+    // }
 
     // private void AssignGroupConsumers<TEvent>(IEventConsumer<TEvent>[] consumers) where TEvent : class
     // {
@@ -511,21 +519,26 @@ public sealed class FileEventLogBroker : IEventBroker
         }
     }
 
-    public void Join(params ConsumerBrokerConfig[] consumerBrokerConfigs)
+    // public void Join(params ConsumerBrokerConfig[] consumerBrokerConfigs)
+    // {
+    //     if (consumerBrokerConfigs.Length == 0)
+    //     {
+    //         return;
+    //     }
+    //
+    //     foreach (var config in consumerBrokerConfigs)
+    //     {
+    //         var key = new ActiveTopicKey(config.TopicName);
+    //         var val = new ConsumerGroupReplica(config.GroupName, config.Replicas);
+    //
+    //         var queue = _consumerGroupReplicasInfo.GetOrAdd(key, _ => new ConcurrentQueue<ConsumerGroupReplica>());
+    //         queue.Enqueue(val);
+    //     }
+    // }
+
+    public Task<HeartBeatResponse> HeartBeat(HeartBeatRequest request, CancellationToken cancellationToken = default)
     {
-        if (consumerBrokerConfigs.Length == 0)
-        {
-            return;
-        }
-
-        foreach (var config in consumerBrokerConfigs)
-        {
-            var key = new ActiveTopicKey(config.TopicName);
-            var val = new ConsumerGroupReplica(config.GroupName, config.Replicas);
-
-            var queue = _consumerGroupReplicasInfo.GetOrAdd(key, _ => new ConcurrentQueue<ConsumerGroupReplica>());
-            queue.Enqueue(val);
-        }
+        throw new NotImplementedException();
     }
 }
 
@@ -568,4 +581,6 @@ public readonly record struct ActiveTopicInfo(byte PartitionsCount, byte TempPar
 
 public readonly record struct ConsumerGroupReplica(string GroupName, byte Replicas);
 
-public readonly record struct ConsumerGroupId(byte Id, string GroupName, string TopicName);
+public readonly record struct ConsumerGroupId(string MemberId, string GroupName, string TopicName);
+
+public readonly record struct PartitionId(byte Value);

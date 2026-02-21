@@ -195,3 +195,4 @@ public sealed class EventConsumer<TEvent> : IDisposable, IEventConsumer<TEvent> 
 }
 
 public readonly record struct ConsumerAssigmentState(byte Index, string GroupName, int SegmentsCount);
+
