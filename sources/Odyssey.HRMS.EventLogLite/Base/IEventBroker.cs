@@ -42,19 +42,46 @@ public interface IEventConsumerBroker
 }
 
 
-public sealed record HeartBeatRequest(ConsumerMemberId MemberId, ConsumerGroupName GroupName);
+public sealed record HeartBeatRequest(ConsumerMemberId MemberId, ConsumerGroupId GroupId);
 
 public sealed record HeartBeatResponse(string Status, int Code)
 {
     public static HeartBeatResponse Alive => new ("alive", 0);
 }
 
-public readonly record struct ConsumerMemberId(string Value);
+public readonly record struct ConsumerMemberId(string Value)
+{
+    public static implicit operator string (ConsumerMemberId memberId) => memberId.Value;
+    public override string ToString() => Value;
+    
+    public bool IsEmpty => string.IsNullOrEmpty(Value);
 
-public readonly record struct ConsumerGroupName(string Value);
+    public static ConsumerMemberId NotSet => new (string.Empty);
+    
+    public static ConsumerMemberId CreateNew()
+    {
+        var id = Guid.CreateVersion7().ToString("D");
+        return new ConsumerMemberId(id);
+    }
+}
 
-public sealed record JoinGroupRequest(int HeartBeatInterval, string GroupName, string TopicName);
-public sealed record JoinGroupResponse();
+public readonly record struct ConsumerGroupId(string Value)
+{
+    public static implicit operator string (ConsumerGroupId groupId) => groupId.Value;
+    public static explicit operator ConsumerGroupId (string groupId) => new (groupId);
+    public override string ToString() => Value;
+}
+
+public readonly record struct TopicName(string Value)
+{
+    public static implicit operator string (TopicName topicName) => topicName.Value;
+    public static explicit operator TopicName (string topicName) => new (topicName);
+    public override string ToString() => Value;
+}
+
+
+public sealed record JoinGroupRequest(int HeartBeatInterval, ConsumerGroupId GroupId, TopicName TopicName, ConsumerMemberId MemberId);
+public sealed record JoinGroupResponse(ConsumerGroupId GroupId, ConsumerMemberId MemberId);
 
 public sealed record SyncGroupRequest();
 public sealed record SyncGroupResponse();

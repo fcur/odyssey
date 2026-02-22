@@ -88,9 +88,9 @@ public sealed class FileEventLogBrokerTests : IAsyncLifetime, IClassFixture<File
         var time1 = now.AddMinutes(-8.0).ToUnixTimeMilliseconds();
         var time2 = now.AddMinutes(-2.0).ToUnixTimeMilliseconds();
         var time3 = now.AddMinutes(1.0).ToUnixTimeMilliseconds();
-        
+
         var logSegment1 = FileLogSegment.New(partition, workingDirectory) with { BaseOffset = baseOffset1, BaseTime = time1 };
-        var logSegment2 = FileLogSegment.New(partition, workingDirectory) with { BaseOffset = baseOffset2, BaseTime =  time2 };
+        var logSegment2 = FileLogSegment.New(partition, workingDirectory) with { BaseOffset = baseOffset2, BaseTime = time2 };
 
         var logMessage1 = LogMessage<TestEvent>.Create(key1, payload1, baseOffset1) with { Timestamp = time1 };
         var logMessage2 = LogMessage<TestEvent>.Create(key1, payload1, baseOffset2) with { Timestamp = time2 };
@@ -133,17 +133,20 @@ public sealed class FileEventLogBrokerTests : IAsyncLifetime, IClassFixture<File
         const byte partition = 1;
         const long baseOffset1 = 0L;
         const long baseOffset2 = 10000234510L;
-        
+        const int heartBeatInterval = 30_000;
+
         using var cts = new CancellationTokenSource();
         var topic1 = new EventLogTopic(topic1Name, Partitions: 3);
 
         var now = DateTimeOffset.UtcNow;
-        long time1 = now.AddMinutes(-8.0).ToUnixTimeMilliseconds(), time2 = now.AddMinutes(-2.0).ToUnixTimeMilliseconds(), time3 = now.AddMinutes(1.0).ToUnixTimeMilliseconds();
-        
+        long time1 = now.AddMinutes(-8.0).ToUnixTimeMilliseconds(),
+            time2 = now.AddMinutes(-2.0).ToUnixTimeMilliseconds(),
+            time3 = now.AddMinutes(1.0).ToUnixTimeMilliseconds();
+
         var workingDirectory1 = LogSegmentDirectory.GetOrCreate(topic1);
         var logSegment1 = FileLogSegment.New(partition, workingDirectory1) with { BaseOffset = baseOffset1, BaseTime = time1 };
-        var logSegment2 = FileLogSegment.New(partition, workingDirectory1) with { BaseOffset = baseOffset2, BaseTime =  time2, IsActive = true };
-        
+        var logSegment2 = FileLogSegment.New(partition, workingDirectory1) with { BaseOffset = baseOffset2, BaseTime = time2, IsActive = true };
+
         var logMessage1 = LogMessage<TestEvent>.Create(key1, payload1, baseOffset1) with { Timestamp = time1 };
         var logMessage2 = LogMessage<TestEvent>.Create(key1, payload1, baseOffset2) with { Timestamp = time2 };
         var logMessage3 = LogMessage<TestEvent>.Create(key2, payload2, baseOffset2 + 1) with { Timestamp = time3 };
@@ -153,12 +156,14 @@ public sealed class FileEventLogBrokerTests : IAsyncLifetime, IClassFixture<File
 
         var broker = _fixture.GetBroker();
         broker.Join(new ProducerBrokerConfig(topic1.Name, topic1.Partitions));
-        broker.Join(new ConsumerBrokerConfig(topic1.Name, Guid.NewGuid().ToString("D"), Replicas: 2));
+
+        // broker.Join(new ConsumerBrokerConfig(topic1.Name, Guid.NewGuid().ToString("D"), Replicas: 2));
+        _ = broker.JoinGroup(new JoinGroupRequest(heartBeatInterval, (ConsumerGroupId)"test", (TopicName)topic1.Name, ConsumerMemberId.NotSet));
 
         var exception = await Record.ExceptionAsync(async () => await broker.Start(cts.Token));
         exception.Should().BeNull();
     }
-    
+
     [Theory, AutoData]
     public async Task TestLogFirstEventWithoutConsumer(string key, TestEvent payload)
     {
@@ -167,12 +172,12 @@ public sealed class FileEventLogBrokerTests : IAsyncLifetime, IClassFixture<File
         using var cts = new CancellationTokenSource();
         var broker = _fixture.GetBroker();
         var topic = _fixture.GetTopic();
-        
-        var request = new LogRequest<TestEvent> { Key = key, Payload = payload, PartitionId = partition, TopicName =  topic.Name };
+
+        var request = new LogRequest<TestEvent> { Key = key, Payload = payload, PartitionId = partition, TopicName = topic.Name };
         broker.Join(new ProducerBrokerConfig(topic.Name, topic.Partitions));
-    
+
         await broker.Start(cts.Token);
-    
+
         var logResult = await broker.LogEvent(request, cts.Token);
 
         using var scope = new AssertionScope();
@@ -180,7 +185,7 @@ public sealed class FileEventLogBrokerTests : IAsyncLifetime, IClassFixture<File
         logResult.TopicName.Should().Be(topic.Name);
         logResult.PartitionId.Should().Be(partition);
     }
-    
+
     // [Theory, AutoData]
     // public async Task TestLogEventInPartition(string key, TestEvent payload)
     // {

@@ -28,8 +28,12 @@ public sealed class FileEventLogBroker : IEventBroker
 
     private readonly ConcurrentDictionary<ActiveTopicKey, ActiveTopicInfo> _activeTopicInfos;
     private readonly ConcurrentDictionary<PartitionKey, FileLogSegment> _activeSegments;
-    private readonly ConcurrentDictionary<ActiveTopicKey, ConcurrentQueue<ConsumerGroupReplica>> _consumerGroupReplicasInfo;
-    private readonly ConcurrentDictionary<ConsumerGroupId, ConcurrentQueue<PartitionId>> _consumerGroupsAssignment;
+    // private readonly ConcurrentDictionary<ActiveTopicKey, ConcurrentQueue<ConsumerGroupReplica>> _consumerGroupReplicasInfo;
+    
+    
+    private readonly ConcurrentDictionary<ActiveTopicKey, ConcurrentDictionary<ConsumerGroupMemberKey, long>> _consumerGroups;
+    
+    private readonly ConcurrentDictionary<ConsumerGroupIdKey, ConcurrentQueue<PartitionId>> _consumerGroupsAssignment;
     private readonly ConcurrentDictionary<PartitionKey, long> _latestOffsets;
     
     
@@ -65,7 +69,7 @@ public sealed class FileEventLogBroker : IEventBroker
         // _consumers = [];
         // _segmentMap = [];
         _activeTopicInfos = [];
-        _consumerGroupReplicasInfo = [];
+        _consumerGroups = [];
         _consumerGroupsAssignment = [];
         // var opt = new BoundedChannelOptions(1000) { SingleReader = false, SingleWriter = true, FullMode = BoundedChannelFullMode.Wait };
         // _mainChannel = Channel.CreateBounded<LogResponse<TEvent>>(opt);
@@ -93,27 +97,25 @@ public sealed class FileEventLogBroker : IEventBroker
             var topicName = topic.Name;
             var topicKey = new ActiveTopicKey(topicName);
 
-            if (!_consumerGroupReplicasInfo.TryGetValue(topicKey, out var consumerGroupReplicasResult))
+            if (!_consumerGroups.TryGetValue(topicKey, out var consumerGroupReplicasResult))
             {
                 _logger.LogWarning("Topic '{TopicName}' does not contain consumers", topicName);
             }
             else
             {
-                var consumerGroups = consumerGroupReplicasResult.GroupBy(v => v.GroupName).ToArray();
-
-                foreach (var group in consumerGroups)
+                var consumerGroups = consumerGroupReplicasResult.Keys.GroupBy(v => v.GroupId).ToArray();
+                foreach (var groupMembers in consumerGroups)
                 {
-                    var groupName = group.Key;
-                    if (group.Count() > 1)
+                    var groupName = groupMembers.Key;
+                    if (groupMembers.Count() > 1)
                     {
                         _logger.LogWarning("Topic '{TopicName}' configuration contains a duplicate consumer group '{GroupName}'", topicName, groupName);
                     }
                     
-                    var consumersCount = group.Last().Replicas;
+                    var consumersCount = groupMembers.Count();
                     
-                    // reuse memberId
-                    var consumerIndexes = Enumerable.Range(0, consumersCount)
-                        .Select(v => new ConsumerGroupId((byte)v, groupName, topicName)).ToArray();
+                    var consumerIndexes = groupMembers.Select(v => 
+                        new ConsumerGroupIdKey(v.MemberId, v.GroupId, topicName)).ToArray();
 
                     var partitionsCount = topic.PartitionsWithSegments.Length;
 
@@ -540,6 +542,36 @@ public sealed class FileEventLogBroker : IEventBroker
     {
         throw new NotImplementedException();
     }
+
+    public JoinGroupResponse JoinGroup(JoinGroupRequest request)
+    {
+        var topicKey = new ActiveTopicKey(request.TopicName);
+        var memberId = request.MemberId.IsEmpty? ConsumerMemberId.CreateNew() : request.MemberId;
+        
+        while (true)
+        {
+            var topicGroups = _consumerGroups.GetOrAdd(topicKey, _ => new ConcurrentDictionary<ConsumerGroupMemberKey, long>());
+            var memberKey = new ConsumerGroupMemberKey(request.GroupId, memberId);
+            var time = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+
+            if (!topicGroups.TryGetValue(memberKey, out var joiningTime) && topicGroups.TryAdd(memberKey, time))
+            {
+                break;
+            }
+
+            if (topicGroups.TryUpdate(memberKey, time, joiningTime))
+            {
+                break;
+            }
+        }
+
+        return new JoinGroupResponse(request.GroupId, memberId);
+    }
+
+    public SyncGroupResponse SyncGroup(SyncGroupRequest request)
+    {
+        throw new NotImplementedException();
+    }
 }
 
 public interface IFileLogCleaner : IEventLogLite
@@ -569,7 +601,7 @@ public sealed record ProducerInfo(byte Id, string TopicName);
 
 public readonly record struct PartitionKey(string TopicName, byte PartitionId);
 
-public sealed record ActiveTopicKey(string TopicName);
+public readonly record struct ActiveTopicKey(string TopicName);
 
 public readonly record struct ActiveTopicInfo(byte PartitionsCount, byte TempPartition)
 {
@@ -581,6 +613,8 @@ public readonly record struct ActiveTopicInfo(byte PartitionsCount, byte TempPar
 
 public readonly record struct ConsumerGroupReplica(string GroupName, byte Replicas);
 
-public readonly record struct ConsumerGroupId(string MemberId, string GroupName, string TopicName);
+public readonly record struct ConsumerGroupMemberKey(ConsumerGroupId GroupId, ConsumerMemberId MemberId);
+
+public readonly record struct ConsumerGroupIdKey(string MemberId, string GroupName, string TopicName);
 
 public readonly record struct PartitionId(byte Value);
