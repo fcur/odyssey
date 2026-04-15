@@ -251,6 +251,8 @@ public sealed class FileEventLogBroker : IEventBroker
 
     public Task<IReadOnlyCollection<LogResponse<TEvent>>> PollEventsBatch<TEvent>(BatchPoolRequest batchPoolRequest, CancellationToken cancellationToken = default) where TEvent : class
     {
+        var result = new List<LogResponse<TEvent>>(batchPoolRequest.BatchSize);
+        
         throw new NotImplementedException();
     }
 

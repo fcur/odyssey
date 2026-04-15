@@ -62,7 +62,14 @@ public class EventLogBuilder
             
             var consumer = new EventConsumer<TEvent>(logger, broker, handler, consumerConfiguration, i);
             _consumers.Add(consumer);
-            broker.Join(new ConsumerBrokerConfig(consumerConfiguration.TopicName, consumerConfiguration.GroupName, consumerConfiguration.ReplicaCount));
+
+            const int heartBeatInterval = 30_000;
+            var consumerGroupId = (ConsumerGroupId)consumerConfiguration.GroupName;
+            var topicName = (TopicName)consumerConfiguration.TopicName;
+            var joinGroupRequest = new JoinGroupRequest(heartBeatInterval, consumerGroupId, topicName, ConsumerMemberId.NotSet);
+            
+            broker.JoinGroup(joinGroupRequest);
+            // broker.Join(new ConsumerBrokerConfig(consumerConfiguration.TopicName, consumerConfiguration.GroupName, consumerConfiguration.ReplicaCount));
         }
 
         return this;

@@ -120,7 +120,14 @@ public sealed class TestHarness<TEvent> where TEvent : class, new()
                     .Returns(Task.CompletedTask);
 
                 var consumer = new EventConsumer<TEvent>(logger, _broker, consumerImplMock.Object, consumerSettings, i);
-                _broker.Join(new ConsumerBrokerConfig(consumerSettings.TopicName, consumerSettings.GroupName, consumerSettings.ReplicaCount));
+                
+                const int heartBeatInterval = 30_000;
+                var consumerGroupId = (ConsumerGroupId)consumerSettings.GroupName;
+                var topicName = (TopicName)consumerSettings.TopicName;
+                var joinGroupRequest = new JoinGroupRequest(heartBeatInterval, consumerGroupId, topicName, ConsumerMemberId.NotSet);
+
+                _broker.JoinGroup(joinGroupRequest);
+                // _broker.Join(new ConsumerBrokerConfig(consumerSettings.TopicName, consumerSettings.GroupName, consumerSettings.ReplicaCount));
                 consumers.Add(consumer);
             }
         }
