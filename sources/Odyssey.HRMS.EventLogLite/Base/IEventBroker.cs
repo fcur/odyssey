@@ -54,7 +54,7 @@ public readonly record struct ConsumerMemberId(string Value)
     public static implicit operator string (ConsumerMemberId memberId) => memberId.Value;
     public override string ToString() => Value;
     
-    public bool IsEmpty => string.IsNullOrEmpty(Value);
+    public bool IsNotSet => string.IsNullOrEmpty(Value);
 
     public static ConsumerMemberId NotSet => new (string.Empty);
     
@@ -81,7 +81,7 @@ public readonly record struct TopicName(string Value)
 
 
 public sealed record JoinGroupRequest(int HeartBeatInterval, ConsumerGroupId GroupId, TopicName TopicName, ConsumerMemberId MemberId);
-public sealed record JoinGroupResponse(ConsumerGroupId GroupId, ConsumerMemberId MemberId);
+public sealed record JoinGroupResponse(ConsumerGroupId GroupId, ConsumerMemberId MemberId, long Timestamp);
 
 public sealed record SyncGroupRequest();
 public sealed record SyncGroupResponse();

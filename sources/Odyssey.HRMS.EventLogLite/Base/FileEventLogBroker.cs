@@ -231,7 +231,7 @@ public sealed class FileEventLogBroker : IEventBroker
             _logger.LogDebug("New message with Key: {Key}, PartitionId: {PartitionId}, Offset: {Offset}", logMessage.Key, segment.Partition,
                 logMessage.Offset);
 
-            await _eventLogger.Write(logMessage, segment, cancellationToken);
+            var positionPair = await _eventLogger.Write(logMessage, segment, cancellationToken);
             break;
         }
 
@@ -548,13 +548,14 @@ public sealed class FileEventLogBroker : IEventBroker
     public JoinGroupResponse JoinGroup(JoinGroupRequest request)
     {
         var topicKey = new ActiveTopicKey(request.TopicName);
-        var memberId = request.MemberId.IsEmpty? ConsumerMemberId.CreateNew() : request.MemberId;
+        var memberId = request.MemberId.IsNotSet? ConsumerMemberId.CreateNew() : request.MemberId;
+        long time;
         
         while (true)
         {
             var topicGroups = _consumerGroups.GetOrAdd(topicKey, _ => new ConcurrentDictionary<ConsumerGroupMemberKey, long>());
             var memberKey = new ConsumerGroupMemberKey(request.GroupId, memberId);
-            var time = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            time = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
             if (!topicGroups.TryGetValue(memberKey, out var joiningTime) && topicGroups.TryAdd(memberKey, time))
             {
@@ -567,7 +568,7 @@ public sealed class FileEventLogBroker : IEventBroker
             }
         }
 
-        return new JoinGroupResponse(request.GroupId, memberId);
+        return new JoinGroupResponse(request.GroupId, memberId, time);
     }
 
     public SyncGroupResponse SyncGroup(SyncGroupRequest request)

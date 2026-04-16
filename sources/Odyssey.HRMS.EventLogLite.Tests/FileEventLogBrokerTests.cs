@@ -185,33 +185,33 @@ public sealed class FileEventLogBrokerTests : IAsyncLifetime, IClassFixture<File
         logResult.TopicName.Should().Be(topic.Name);
         logResult.PartitionId.Should().Be(partition);
     }
+    
+    [Theory, AutoData]
+    public async Task TestLogFirstEventWithConsumers(string key, TestEvent payload)
+    {
+        const byte partition = 1;
+        const int heartBeatInterval = 30_000;
 
-    // [Theory, AutoData]
-    // public async Task TestLogEventInPartition(string key, TestEvent payload)
-    // {
-    //     var timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-    //     const byte partition = 1;
-    //     var logIndex1 = new LogIndex(0L, 0);
-    //     var timeIndex1 = new LogIndex(timestamp, 0);
-    //     var logIndex2 = new LogIndex(10000234510L, 0);
-    //     var timeIndex2 = new LogIndex(timestamp + 10010L, 0);
-    //     
-    //     var cts = new CancellationTokenSource();
-    //     var request = new LogRequest<TestEvent> { Key = key, Payload = payload, PartitionId = partition };
-    //
-    //     // missing segments throws exception
-    //     var broker = _fixture.GetBroker();
-    //     var topic = _fixture.GetTopic();
-    //     var workingDirectory = LogSegmentDirectory.Init(topic);
-    //     var logSegment1 = FileLogSegment.New(partition, workingDirectory) with { BaseOffset = logIndex1.Index, BaseTime = timeIndex1.Index };
-    //     var logSegment2 = FileLogSegment.New(partition, workingDirectory) with { BaseOffset = logIndex2.Index, BaseTime =  timeIndex2.Index };
-    //
-    //     await broker.Start(cts.Token);
-    //
-    //     var logResult = await broker.LogEvent(request, cts.Token);
-    //     LogSegmentDirectory.Cleanup(topic.Name);
-    // }
+        using var cts = new CancellationTokenSource();
+        var broker = _fixture.GetBroker();
+        var topic = _fixture.GetTopic();
+        var consumerGroupId = new ConsumerGroupId("test");
+        var topicName = new TopicName(topic.Name);
 
+        var request = new LogRequest<TestEvent> { Key = key, Payload = payload, PartitionId = partition, TopicName = topic.Name };
+        broker.Join(new ProducerBrokerConfig(topic.Name, topic.Partitions));
+        _ = broker.JoinGroup(new JoinGroupRequest(heartBeatInterval, consumerGroupId, topicName, ConsumerMemberId.CreateNew()));
+        _ = broker.JoinGroup(new JoinGroupRequest(heartBeatInterval, consumerGroupId, topicName, ConsumerMemberId.CreateNew()));
+
+        await broker.Start(cts.Token);
+
+        var logResult = await broker.LogEvent(request, cts.Token);
+
+        using var scope = new AssertionScope();
+        logResult.Offset.Should().Be(0);
+        logResult.TopicName.Should().Be(topic.Name);
+        logResult.PartitionId.Should().Be(partition);
+    }
 
     public Task InitializeAsync()
     {

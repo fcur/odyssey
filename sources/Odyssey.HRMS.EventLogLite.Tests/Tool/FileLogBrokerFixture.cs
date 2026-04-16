@@ -3,6 +3,7 @@ using Moq;
 using Odyssey.HRMS.EventLogLite.Base;
 using Odyssey.HRMS.EventLogLite.Entities;
 using Odyssey.HRMS.EventLogLite.Producer;
+using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.InteropServices;
 using System.Text.Json;
@@ -18,11 +19,18 @@ public sealed class FileLogBrokerFixture : IAsyncLifetime
     private const byte EventTopicPartitions = 3;
     private const byte OffsetPartitions = 5;
     private const string OffsetsTopicName = "__consumer_offsets";
+    private const byte EventLogDivider = 10;
+    
     private readonly FileEventLogBroker _broker;
     private readonly EventLogTopic _topic;
     private readonly EventLogTopic _offsetsTopic;
-    private const byte EventLogDivider = 10;
+    private readonly ConcurrentQueue<LogMessage<TestEvent>> _logMessages = new();
+    private readonly ConcurrentQueue<LogMessage<LogOffsetMessage>> _offsets = new();
 
+    private long _logMessageNextPosition = 0;
+    private long _logOffsetNextPosition = 0;
+    
+    
     private static readonly JsonSerializerOptions SerializerOptions = new() { WriteIndented = false };
 
     static FileLogBrokerFixture()
@@ -40,17 +48,33 @@ public sealed class FileLogBrokerFixture : IAsyncLifetime
         var brokerSettings = new EventBrokerSettings { TopicName = offsetsTopic.Name, Partitions = offsetsTopic.Partitions };
 
         var eventLoggerMock = new Mock<IFileEventLogger>();
+        var offsetLoggerMock = new Mock<IFileEventLogger>();
 
-        eventLoggerMock.Setup(v => v.Write<TestEvent>(It.IsAny<LogMessage<TestEvent>>(), It.IsAny<FileLogSegment>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((LogMessage<TestEvent> msg, FileLogSegment segment, CancellationToken _) => new PositionPair(0, 0));     
+        eventLoggerMock.Setup(v => v.Write(It.IsAny<LogMessage<TestEvent>>(), It.IsAny<FileLogSegment>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((LogMessage<TestEvent> msg, FileLogSegment segment, CancellationToken _) =>
+            {
+                _logMessages.Enqueue(msg);
+                
+                var objBytes = JsonSerializer.SerializeToUtf8Bytes(msg);
+                var position = Interlocked.Add(ref _logMessageNextPosition, objBytes.Length);
+
+                return new PositionPair(position - objBytes.Length, position + 1);
+            });     
         
-        
-        var broker = new FileEventLogBroker(brokerLoggerMock.Object, brokerSettings, 
-            eventLogger: eventLoggerMock.Object, offsetLogger:eventLoggerMock.Object);
+        offsetLoggerMock.Setup(v => v.Write(It.IsAny<LogMessage<LogOffsetMessage>>(), It.IsAny<FileLogSegment>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((LogMessage<LogOffsetMessage> msg, FileLogSegment segment, CancellationToken _) =>
+            {
+                _offsets.Enqueue(msg);
+                var objBytes = JsonSerializer.SerializeToUtf8Bytes(msg);
+                var position = Interlocked.Add(ref _logOffsetNextPosition, objBytes.Length);
+
+                return new PositionPair(position - objBytes.Length, position + 1);
+            });     
+
+        var broker = new FileEventLogBroker(brokerLoggerMock.Object, brokerSettings, eventLoggerMock.Object, offsetLoggerMock.Object);
 
         _topic = eventTopic;
         _offsetsTopic = offsetsTopic;
-        
         _broker = broker;
     }
 
