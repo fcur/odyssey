@@ -53,13 +53,20 @@ public sealed class PollRequest
 
 public sealed class BatchPoolRequest
 {
-    public int BatchSize { get; init; }
     public string TopicName { get; init; } = null!;
     public string GroupName { get; init; } = null!;
+    public string ConsumerId { get; init; } = null!;
+    public int ConsumerGenerationId { get; init; }
+    public long Offset { get; init; }
+    public int MaxBytes { get; init; }
     public Guid RequestId { get; init; }
     public DateTimeOffset OccuredAt { get; init; }
-    public long Offset { get; init; }
-    public byte ConsumerId { get; init; }
+}
+
+public sealed class BatchPoolResult<TEvent> where TEvent : class
+{
+    public string TopicName { get; init; } = null!;
+    public IReadOnlyCollection<LogResponse<TEvent>> Items { get; init; } = Array.Empty<LogResponse<TEvent>>();
 }
 
 public sealed class StreamPoolRequest

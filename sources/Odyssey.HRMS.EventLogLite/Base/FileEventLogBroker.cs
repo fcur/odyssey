@@ -249,10 +249,10 @@ public sealed class FileEventLogBroker : IEventBroker
     //     _activeTopics.Add(topic);
     // }
 
-    public Task<IReadOnlyCollection<LogResponse<TEvent>>> PollEventsBatch<TEvent>(BatchPoolRequest batchPoolRequest, CancellationToken cancellationToken = default) where TEvent : class
+    public Task<BatchPoolResult<TEvent>> PollEventsBatch<TEvent>(BatchPoolRequest batchPoolRequest, CancellationToken cancellationToken = default) where TEvent : class
     {
-        var result = new List<LogResponse<TEvent>>(batchPoolRequest.BatchSize);
-        
+        var result = new List<LogResponse<TEvent>>(batchPoolRequest.MaxBytes);
+
         throw new NotImplementedException();
     }
 

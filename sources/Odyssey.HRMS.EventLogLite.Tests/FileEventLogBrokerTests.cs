@@ -185,7 +185,7 @@ public sealed class FileEventLogBrokerTests : IAsyncLifetime, IClassFixture<File
         logResult.TopicName.Should().Be(topic.Name);
         logResult.PartitionId.Should().Be(partition);
     }
-    
+
     [Theory, AutoData]
     public async Task TestLogFirstEventWithConsumers(string key, TestEvent payload)
     {
@@ -197,15 +197,29 @@ public sealed class FileEventLogBrokerTests : IAsyncLifetime, IClassFixture<File
         var topic = _fixture.GetTopic();
         var consumerGroupId = new ConsumerGroupId("test");
         var topicName = new TopicName(topic.Name);
+        var consumer1MemberId = ConsumerMemberId.CreateNew();
 
-        var request = new LogRequest<TestEvent> { Key = key, Payload = payload, PartitionId = partition, TopicName = topic.Name };
+        var logRequest = new LogRequest<TestEvent> { Key = key, Payload = payload, PartitionId = partition, TopicName = topic.Name };
+        var pollRequest = new BatchPoolRequest
+        {
+            TopicName = topicName.Value,
+            GroupName = consumerGroupId.Value,
+            ConsumerId = consumer1MemberId.Value,
+            ConsumerGenerationId = 0,
+            Offset = 0,
+            MaxBytes = 50000,
+            RequestId = Guid.NewGuid(),
+            OccuredAt = DateTimeOffset.UtcNow
+        };
+        
         broker.Join(new ProducerBrokerConfig(topic.Name, topic.Partitions));
-        _ = broker.JoinGroup(new JoinGroupRequest(heartBeatInterval, consumerGroupId, topicName, ConsumerMemberId.CreateNew()));
+        _ = broker.JoinGroup(new JoinGroupRequest(heartBeatInterval, consumerGroupId, topicName, consumer1MemberId));
         _ = broker.JoinGroup(new JoinGroupRequest(heartBeatInterval, consumerGroupId, topicName, ConsumerMemberId.CreateNew()));
 
         await broker.Start(cts.Token);
 
-        var logResult = await broker.LogEvent(request, cts.Token);
+        var logResult = await broker.LogEvent(logRequest, cts.Token);
+        var batchResult = await broker.PollEventsBatch<TestEvent>(pollRequest, cts.Token);
 
         using var scope = new AssertionScope();
         logResult.Offset.Should().Be(0);

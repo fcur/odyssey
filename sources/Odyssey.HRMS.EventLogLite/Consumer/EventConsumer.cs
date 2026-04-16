@@ -18,6 +18,8 @@ public sealed class EventConsumer<TEvent> : IDisposable, IEventConsumer<TEvent> 
     private readonly ConcurrentDictionary<byte, LogSegment> _logSegments;
     private ConcurrentDictionary<byte, long> _savedOffsets = null!;
     private int _logSegmentsCount = 0;
+    
+    // TODO: save consumer assigments
 
     public EventConsumer(ILogger<EventConsumer<TEvent>> logger,
         IEventConsumerBroker broker,

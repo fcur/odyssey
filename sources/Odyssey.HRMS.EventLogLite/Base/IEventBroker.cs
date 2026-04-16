@@ -26,7 +26,7 @@ public interface IEventProducerBroker
 
 public interface IEventConsumerBroker
 {
-    Task<IReadOnlyCollection<LogResponse<TEvent>>> PollEventsBatch<TEvent>(BatchPoolRequest batchPoolRequest, CancellationToken cancellationToken = default) where TEvent : class;
+    Task<BatchPoolResult<TEvent>> PollEventsBatch<TEvent>(BatchPoolRequest batchPoolRequest, CancellationToken cancellationToken = default) where TEvent : class;
     [Obsolete]
     Task<IReadOnlyCollection<LogResponse<TEvent>>> PollEvents<TEvent>(PollRequest request, LogSegment logSegment, long offset, CancellationToken cancellationToken = default) where TEvent : class;
     Task Commit<TEvent>(LogOffsetRequest request, CancellationToken cancellationToken = default) where TEvent : class;
@@ -52,6 +52,9 @@ public sealed record HeartBeatResponse(string Status, int Code)
 public readonly record struct ConsumerMemberId(string Value)
 {
     public static implicit operator string (ConsumerMemberId memberId) => memberId.Value;
+    public static explicit operator ConsumerMemberId (string memberId) => new (memberId);
+    
+    
     public override string ToString() => Value;
     
     public bool IsNotSet => string.IsNullOrEmpty(Value);
