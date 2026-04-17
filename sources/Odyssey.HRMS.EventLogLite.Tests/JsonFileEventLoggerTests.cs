@@ -112,14 +112,15 @@ public sealed class JsonFileEventLoggerTests : IAsyncLifetime, IClassFixture<Fil
         
         var pollRequest = new PollRequest
         {
-            BatchSize = 100,
+            // BatchSize = 100,
             TopicName = nameof(PollRequest.TopicName),
             GroupName = nameof(PollRequest.GroupName),
             RequestId = Guid.NewGuid(),
-            OccuredAt = now
+            OccuredAt = now,
+            StartPosition = position1
         };
         
-        var messages =  await _logger.Poll<TestEvent>(pollRequest, logSegment, position1, cts.Token).ToArrayAsync(cts.Token);
+        var messages =  await _logger.Poll<TestEvent>(pollRequest, logSegment, cts.Token).ToArrayAsync(cts.Token);
 
         using var scope = new AssertionScope();
         

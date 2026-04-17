@@ -124,7 +124,7 @@ public sealed class TestHarness<TEvent> where TEvent : class, new()
                 const int heartBeatInterval = 30_000;
                 var consumerGroupId = (ConsumerGroupId)consumerSettings.GroupName;
                 var topicName = (TopicName)consumerSettings.TopicName;
-                var joinGroupRequest = new JoinGroupRequest(heartBeatInterval, consumerGroupId, topicName, ConsumerMemberId.NotSet);
+                var joinGroupRequest = new JoinGroupRequest(heartBeatInterval, consumerGroupId, topicName, ConsumerMemberId.NotSet, 0);
 
                 _broker.JoinGroup(joinGroupRequest);
                 // _broker.Join(new ConsumerBrokerConfig(consumerSettings.TopicName, consumerSettings.GroupName, consumerSettings.ReplicaCount));
@@ -151,7 +151,7 @@ public sealed class TestHarness<TEvent> where TEvent : class, new()
             .Callback<LogMessage<TEvent>, FileLogSegment, CancellationToken>((logMessage, segment, _) => SaveLoggedEvent(logMessage, segment));
 
         eventLoggerMock.Setup(v =>
-                v.Poll<TEvent>(It.IsAny<PollRequest>(), It.IsAny<FileLogSegment>(), It.IsAny<long>(), It.IsAny<CancellationToken>()))
+                v.Poll<TEvent>(It.IsAny<PollRequest>(), It.IsAny<FileLogSegment>(), It.IsAny<CancellationToken>()))
             .Returns((PollRequest request, FileLogSegment segment, long offset, CancellationToken _) => PreparePollResults(request, segment, offset))
             .Callback<PollRequest, FileLogSegment, long, CancellationToken>((request, segment, offset, _) =>
                 HandlePollRequest(request, segment, offset));
@@ -189,7 +189,8 @@ public sealed class TestHarness<TEvent> where TEvent : class, new()
             return Array.Empty<LogMessage<TEvent>>().ToAsyncEnumerable();
         }
 
-        var batchSize = request.BatchSize + offset > _settings.MaxOffset ? _settings.MaxOffset - offset : request.BatchSize;
+        // var batchSize = request.BatchSize + offset > _settings.MaxOffset ? _settings.MaxOffset - offset : request.BatchSize;
+        var batchSize = 1000;
 
         // var fixture = new Fixture();
         // fixture.Create<TEvent>() with { Skipped = true };

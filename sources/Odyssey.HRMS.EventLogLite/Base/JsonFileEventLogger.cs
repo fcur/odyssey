@@ -89,7 +89,7 @@ public sealed class JsonFileEventLogger : IFileEventLogger
         return message;
     }
 
-    public async IAsyncEnumerable<LogMessage<TEvent>> Poll<TEvent>(PollRequest request, FileLogSegment segment, long startPosition,
+    public async IAsyncEnumerable<LogMessage<TEvent>> Poll<TEvent>(PollRequest request, FileLogSegment segment,
         [EnumeratorCancellation] CancellationToken cancellationToken = default) where TEvent : class
     {
         await using var fs = new FileStream(segment.GetLogFilePath(), FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
@@ -99,13 +99,13 @@ public sealed class JsonFileEventLogger : IFileEventLogger
         }
 
         // var lastPosition = _lastPosition.GetValueOrDefault(segment.PartitionId, 0);
-        var counter = 0;
+        // var counter = 0;
 
         // fs.Seek(lastPosition, SeekOrigin.Begin);
-        fs.Seek(startPosition, SeekOrigin.Begin);
+        fs.Seek(request.StartPosition, SeekOrigin.Begin);
 
         using var reader = new StreamReader(fs);
-        while (await reader.ReadLineAsync(cancellationToken) is { } line && counter < request.BatchSize)
+        while (await reader.ReadLineAsync(cancellationToken) is { } line /*&& counter < request.BatchSize*/)
         {
             var position = fs.Position;
             _lastPosition.AddOrUpdate(segment.Partition, position, (key, value) => position);
@@ -114,7 +114,7 @@ public sealed class JsonFileEventLogger : IFileEventLogger
 
             ArgumentNullException.ThrowIfNull(message);
 
-            counter++;
+            // counter++;
 
             yield return message;
         }

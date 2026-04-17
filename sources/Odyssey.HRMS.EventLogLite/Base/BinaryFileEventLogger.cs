@@ -51,7 +51,7 @@ public sealed class BinaryFileEventLogger: IFileEventLogger
         throw new NotImplementedException();
     }
 
-    public IAsyncEnumerable<LogMessage<TEvent>> Poll<TEvent>(PollRequest request, FileLogSegment segment, long startPosition, CancellationToken cancellationToken = default)  where TEvent : class
+    public IAsyncEnumerable<LogMessage<TEvent>> Poll<TEvent>(PollRequest request, FileLogSegment segment, CancellationToken cancellationToken = default)  where TEvent : class
     {
         throw new NotImplementedException();
     }

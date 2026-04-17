@@ -35,7 +35,7 @@ public sealed class FileEventLogBroker : IEventBroker
     
     private readonly ConcurrentDictionary<ConsumerGroupIdKey, ConcurrentQueue<PartitionId>> _consumerGroupsAssignment;
     private readonly ConcurrentDictionary<PartitionKey, long> _latestOffsets;
-    
+    private readonly ConcurrentDictionary<string, int> _consumerGenerations;
     
     // private byte _partitionsCount = 0;
     // private int _tempPartition = 0;
@@ -71,6 +71,7 @@ public sealed class FileEventLogBroker : IEventBroker
         _activeTopicInfos = [];
         _consumerGroups = [];
         _consumerGroupsAssignment = [];
+        _consumerGenerations = [];
         // var opt = new BoundedChannelOptions(1000) { SingleReader = false, SingleWriter = true, FullMode = BoundedChannelFullMode.Wait };
         // _mainChannel = Channel.CreateBounded<LogResponse<TEvent>>(opt);
     }
@@ -249,25 +250,86 @@ public sealed class FileEventLogBroker : IEventBroker
     //     _activeTopics.Add(topic);
     // }
 
-    public Task<BatchPoolResult<TEvent>> PollEventsBatch<TEvent>(BatchPoolRequest batchPoolRequest, CancellationToken cancellationToken = default) where TEvent : class
+    public async Task<BatchPoolResponse<TEvent>> PollEventsBatch<TEvent>(BatchPoolRequest request, CancellationToken cancellationToken = default) where TEvent : class
     {
-        var result = new List<LogResponse<TEvent>>(batchPoolRequest.MaxBytes);
+        // var result = new List<LogResponse<TEvent>>(batchPoolRequest.MaxBytes);
+        
+        var partitionKey = new PartitionKey(request.TopicName, request.PartitionId);
+        if (!_activeSegments.TryGetValue(partitionKey, out var activeSegment))
+        {
+            return new BatchPoolResponse<TEvent> { Error = BatchPoolResponseError.UnknownPartition(partitionKey)};
+        }
 
-        throw new NotImplementedException();
+        var startPosition = 0;
+        // request.Offset + IndexFile = startPosition
+        
+        
+        var pollRequest = new PollRequest
+        {
+            TopicName =  request.TopicName,
+            GroupName =   request.GroupName,
+            RequestId = request.RequestId,
+            OccuredAt = request.OccuredAt,
+            StartPosition = startPosition
+        };
+
+        var sizeLimit = request.MaxBytes;
+        
+        var batchItems = new  List<LogResponse<TEvent>>();
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        cts.CancelAfter(request.MaxWaitTimeMs);
+
+        try
+        {
+            await foreach (var logMessage in _eventLogger.Poll<TEvent>(pollRequest, activeSegment, cts.Token).ConfigureAwait(false))
+            {
+                sizeLimit -= logMessage.PayloadLength;
+            
+                if (sizeLimit <= 0)
+                {
+                    await cts.CancelAsync().ConfigureAwait(false);
+                    break;
+                }
+            
+                var logResponse = new LogResponse<TEvent>
+                {
+                    Key = logMessage.Key,
+                    Payload = logMessage.Payload,
+                    Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(logMessage.Timestamp),
+                    Offset = logMessage.Offset,
+                    PartitionId = activeSegment.Partition,
+                    Metadata = logMessage.Metadata
+                };
+
+                batchItems.Add(logResponse);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            var cancellationReason = cancellationToken.IsCancellationRequested? "Cancelled from client's code":
+                cts.Token.IsCancellationRequested? "Cancelled by broker": $"Timeout {request.MaxWaitTimeMs}ms has expired";
+                
+            _logger.LogDebug("Polling cancelled, Reason: {Reason}",cancellationReason);
+        }
+        
+        var result = new BatchPoolResponse<TEvent> { Items = batchItems, TopicName = request.TopicName, ResponseId = request.RequestId };
+        
+        return result;
     }
 
     [Obsolete]
     public async Task<IReadOnlyCollection<LogResponse<TEvent>>> PollEvents<TEvent>(PollRequest request, LogSegment logSegment, long offset,
         CancellationToken cancellationToken = default) where TEvent : class
     {
-        var result = new List<LogResponse<TEvent>>(request.BatchSize);
+        // var result = new List<LogResponse<TEvent>>(request.BatchSize);
+        var result = new List<LogResponse<TEvent>>(1000);
         var segmentKey = new PartitionKey(request.TopicName, logSegment.Partition);
         var segment = _activeSegments[segmentKey];
         // var segment = _segmentsMap[logSegment.Partition];
 
         // TODO: Convert offset to position
 
-        await foreach (var logMessage in _eventLogger.Poll<TEvent>(request, segment, offset, cancellationToken))
+        await foreach (var logMessage in _eventLogger.Poll<TEvent>(request, segment, cancellationToken))
         {
             var response = new LogResponse<TEvent>
             {
@@ -549,26 +611,33 @@ public sealed class FileEventLogBroker : IEventBroker
     {
         var topicKey = new ActiveTopicKey(request.TopicName);
         var memberId = request.MemberId.IsNotSet? ConsumerMemberId.CreateNew() : request.MemberId;
-        long time;
+
+        if (request.GroupId.IsSet && _consumerGenerations.TryGetValue(request.GroupId, out var generation) && generation > request.ConsumerGeneration)
+        {
+            return JoinGroupResponse.IllegalGeneration();
+        }
         
         while (true)
         {
             var topicGroups = _consumerGroups.GetOrAdd(topicKey, _ => new ConcurrentDictionary<ConsumerGroupMemberKey, long>());
             var memberKey = new ConsumerGroupMemberKey(request.GroupId, memberId);
-            time = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            var time = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
+            // add new member and rebalance
             if (!topicGroups.TryGetValue(memberKey, out var joiningTime) && topicGroups.TryAdd(memberKey, time))
-            {
-                break;
+            {        
+                // TODO: rebalance and update consumerGenerationId
+                var generation1 = _consumerGenerations.AddOrUpdate(request.GroupId, 1, (key, old) => old + 1);
+        
+                return new JoinGroupResponse(request.GroupId, memberId, generation1, time, JoinGroupResponseError.NotSet);
             }
 
+            // just update time
             if (topicGroups.TryUpdate(memberKey, time, joiningTime))
             {
-                break;
+                return new JoinGroupResponse(request.GroupId, memberId, _consumerGenerations[request.GroupId], time, JoinGroupResponseError.NotSet);
             }
         }
-
-        return new JoinGroupResponse(request.GroupId, memberId, time);
     }
 
     public SyncGroupResponse SyncGroup(SyncGroupRequest request)
@@ -621,3 +690,4 @@ public readonly record struct ConsumerGroupMemberKey(ConsumerGroupId GroupId, Co
 public readonly record struct ConsumerGroupIdKey(string MemberId, string GroupName, string TopicName);
 
 public readonly record struct PartitionId(byte Value);
+

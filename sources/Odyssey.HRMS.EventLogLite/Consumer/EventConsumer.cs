@@ -96,7 +96,7 @@ public sealed class EventConsumer<TEvent> : IDisposable, IEventConsumer<TEvent> 
 
                 var pollRequest = new PollRequest
                 {
-                    BatchSize = _settings.BatchSize,
+                    // BatchSize = _settings.BatchSize,
                     TopicName = _settings.TopicName,
                     GroupName = _settings.GroupName,
                     RequestId = requestId,
@@ -106,6 +106,9 @@ public sealed class EventConsumer<TEvent> : IDisposable, IEventConsumer<TEvent> 
                 _logger.LogDebug("Pulling is being started, RequestId: {RequestId}", requestId);
 
                 sw.Start();
+                // var tasks = assignedSegments.Select(segment => _broker.PollEvents<TEvent>(
+                // pollRequest with{ StartPosition = currentOffsets[segment.Partition]}, segment, targetToken)});
+                
                 var tasks = assignedSegments.Select(segment => _broker.PollEvents<TEvent>(pollRequest, segment, currentOffsets[segment.Partition], targetToken));
                 var results = await Task.WhenAll(tasks);
                 var events = results.SelectMany(v => v).ToArray();

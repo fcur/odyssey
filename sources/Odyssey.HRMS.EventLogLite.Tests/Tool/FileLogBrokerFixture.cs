@@ -5,6 +5,7 @@ using Odyssey.HRMS.EventLogLite.Entities;
 using Odyssey.HRMS.EventLogLite.Producer;
 using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 
@@ -24,8 +25,9 @@ public sealed class FileLogBrokerFixture : IAsyncLifetime
     private readonly FileEventLogBroker _broker;
     private readonly EventLogTopic _topic;
     private readonly EventLogTopic _offsetsTopic;
-    private readonly ConcurrentQueue<LogMessage<TestEvent>> _logMessages = new();
-    private readonly ConcurrentQueue<LogMessage<LogOffsetMessage>> _offsets = new();
+    private readonly ConcurrentDictionary<FileLogSegment, ConcurrentQueue<LogMessage<TestEvent>>> _logMessages = new();
+    private readonly ConcurrentDictionary<FileLogSegment,ConcurrentQueue<LogMessage<LogOffsetMessage>>> _offsets = new();
+    private readonly ConcurrentDictionary<FileLogSegment, ConcurrentDictionary<long, long> > _offsetsMap = new();
 
     private long _logMessageNextPosition = 0;
     private long _logOffsetNextPosition = 0;
@@ -37,7 +39,7 @@ public sealed class FileLogBrokerFixture : IAsyncLifetime
     {
         LogSegmentDirectory.SetEventLoggingRoot(BaseDirectoryRoot);
     }
-
+    
     public FileLogBrokerFixture()
     {
         var brokerLoggerMock = new Mock<ILogger<FileEventLogBroker>>();
@@ -53,18 +55,51 @@ public sealed class FileLogBrokerFixture : IAsyncLifetime
         eventLoggerMock.Setup(v => v.Write(It.IsAny<LogMessage<TestEvent>>(), It.IsAny<FileLogSegment>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((LogMessage<TestEvent> msg, FileLogSegment segment, CancellationToken _) =>
             {
-                _logMessages.Enqueue(msg);
+                var queue = _logMessages.GetOrAdd(segment, _ => new ConcurrentQueue<LogMessage<TestEvent>>());
+                
+                msg.KeyLength = JsonSerializer.SerializeToUtf8Bytes(msg.Key).Length;
+                msg.PayloadLength = JsonSerializer.SerializeToUtf8Bytes(msg.Payload).Length;
                 
                 var objBytes = JsonSerializer.SerializeToUtf8Bytes(msg);
                 var position = Interlocked.Add(ref _logMessageNextPosition, objBytes.Length);
+                
+                queue.Enqueue(msg);
+                
+                var index = _offsetsMap.GetOrAdd(segment, _ => new ConcurrentDictionary<long, long>());
+                var startPosition = position - objBytes.Length;
+                index[msg.Offset] = startPosition;
 
-                return new PositionPair(position - objBytes.Length, position + 1);
-            });     
+                return new PositionPair(startPosition, position + 1);
+            });
+
+        eventLoggerMock.Setup(v =>
+                v.Poll<EventLogLite.TestEvent>(It.IsAny<PollRequest>(), It.IsAny<FileLogSegment>(), It.IsAny<CancellationToken>()))
+            .Returns((PollRequest request, FileLogSegment segment, long offset, CancellationToken ct) =>
+                ConvertQueueToAsyncEnumerable(_logMessages.TryGetValue(segment, out var queue)
+                    ? queue
+                    : new ConcurrentQueue<LogMessage<TestEvent>>(), v => v.Offset >= 0, ct));
+            // {
+            //     if(!_logMessages.TryGetValue(segment, out ConcurrentQueue<LogMessage<TestEvent>> queue))
+            //     {
+            //         return Array.Empty<LogMessage<TestEvent>>().ToAsyncEnumerable();
+            //     }
+            //
+            //
+            //     
+            //     while (queue.TryDequeue(out var item))
+            //     {
+            //         yield return item;
+            //         
+            //     }
+            //
+            // });
+        
         
         offsetLoggerMock.Setup(v => v.Write(It.IsAny<LogMessage<LogOffsetMessage>>(), It.IsAny<FileLogSegment>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((LogMessage<LogOffsetMessage> msg, FileLogSegment segment, CancellationToken _) =>
             {
-                _offsets.Enqueue(msg);
+                var queue = _offsets.GetOrAdd(segment, _ => new ConcurrentQueue<LogMessage<LogOffsetMessage>>());
+                queue.Enqueue(msg);
                 var objBytes = JsonSerializer.SerializeToUtf8Bytes(msg);
                 var position = Interlocked.Add(ref _logOffsetNextPosition, objBytes.Length);
 
@@ -194,5 +229,20 @@ public sealed class FileLogBrokerFixture : IAsyncLifetime
         Directory.Delete(BaseDirectoryRoot, true);
 
         return Task.CompletedTask;
+    }
+    
+
+    private static async IAsyncEnumerable<T> ConvertQueueToAsyncEnumerable<T>(ConcurrentQueue<T> queue, Predicate<T>? filter= null,  [EnumeratorCancellation] CancellationToken ct = default)
+    {
+        while (queue.TryDequeue(out var item) )
+        {
+            ct.ThrowIfCancellationRequested();
+            if (filter != null && filter(item))
+            {
+                yield return item;
+            }
+            
+            await Task.Yield(); 
+        }
     }
 }

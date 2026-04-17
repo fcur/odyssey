@@ -26,7 +26,7 @@ public interface IEventProducerBroker
 
 public interface IEventConsumerBroker
 {
-    Task<BatchPoolResult<TEvent>> PollEventsBatch<TEvent>(BatchPoolRequest batchPoolRequest, CancellationToken cancellationToken = default) where TEvent : class;
+    Task<BatchPoolResponse<TEvent>> PollEventsBatch<TEvent>(BatchPoolRequest request, CancellationToken cancellationToken = default) where TEvent : class;
     [Obsolete]
     Task<IReadOnlyCollection<LogResponse<TEvent>>> PollEvents<TEvent>(PollRequest request, LogSegment logSegment, long offset, CancellationToken cancellationToken = default) where TEvent : class;
     Task Commit<TEvent>(LogOffsetRequest request, CancellationToken cancellationToken = default) where TEvent : class;
@@ -73,6 +73,9 @@ public readonly record struct ConsumerGroupId(string Value)
     public static implicit operator string (ConsumerGroupId groupId) => groupId.Value;
     public static explicit operator ConsumerGroupId (string groupId) => new (groupId);
     public override string ToString() => Value;
+    public static ConsumerGroupId NotSet => new (string.Empty);
+    public bool IsNotSet => string.IsNullOrEmpty(Value);
+    public bool IsSet => !IsNotSet;
 }
 
 public readonly record struct TopicName(string Value)
@@ -83,11 +86,27 @@ public readonly record struct TopicName(string Value)
 }
 
 
-public sealed record JoinGroupRequest(int HeartBeatInterval, ConsumerGroupId GroupId, TopicName TopicName, ConsumerMemberId MemberId);
-public sealed record JoinGroupResponse(ConsumerGroupId GroupId, ConsumerMemberId MemberId, long Timestamp);
+public sealed record JoinGroupRequest(int HeartBeatInterval, ConsumerGroupId GroupId, TopicName TopicName, ConsumerMemberId MemberId, int ConsumerGeneration);
 
-public sealed record SyncGroupRequest();
-public sealed record SyncGroupResponse();
+public sealed class JoinGroupResponse(ConsumerGroupId GroupId, ConsumerMemberId MemberId, int ConsumerGeneration, long Timestamp, JoinGroupResponseError? Error)
+{
+    public static JoinGroupResponse IllegalGeneration() => new(ConsumerGroupId.NotSet, ConsumerMemberId.NotSet, 0,0, JoinGroupResponseError.IllegalGeneration());
+}
+
+public sealed class JoinGroupResponseError(string ErrorMessage, string ErrorCode)
+{
+    public static string IllegalGenerationCode = "ILLEGAL_GENERATION";
+
+    public static JoinGroupResponseError IllegalGeneration() => new ("Outdated generation, rejoin required", IllegalGenerationCode);
+
+    public static JoinGroupResponseError? NotSet => null;
+
+}
+
+
+
+public sealed record SyncGroupRequest(ConsumerGroupId GroupId, ConsumerMemberId MemberId, int ConsumerGeneration, long Timestamp);
+public sealed record SyncGroupResponse(ConsumerGroupId GroupId, ConsumerMemberId MemberId, int ConsumerGeneration, long Timestamp);
 
 
 

@@ -158,7 +158,7 @@ public sealed class FileEventLogBrokerTests : IAsyncLifetime, IClassFixture<File
         broker.Join(new ProducerBrokerConfig(topic1.Name, topic1.Partitions));
 
         // broker.Join(new ConsumerBrokerConfig(topic1.Name, Guid.NewGuid().ToString("D"), Replicas: 2));
-        _ = broker.JoinGroup(new JoinGroupRequest(heartBeatInterval, (ConsumerGroupId)"test", (TopicName)topic1.Name, ConsumerMemberId.NotSet));
+        _ = broker.JoinGroup(new JoinGroupRequest(heartBeatInterval, (ConsumerGroupId)"test", (TopicName)topic1.Name, ConsumerMemberId.NotSet, 0));
 
         var exception = await Record.ExceptionAsync(async () => await broker.Start(cts.Token));
         exception.Should().BeNull();
@@ -207,14 +207,16 @@ public sealed class FileEventLogBrokerTests : IAsyncLifetime, IClassFixture<File
             ConsumerId = consumer1MemberId.Value,
             ConsumerGenerationId = 0,
             Offset = 0,
+            PartitionId = partition,
             MaxBytes = 50000,
+            MaxWaitTimeMs = 500,
             RequestId = Guid.NewGuid(),
             OccuredAt = DateTimeOffset.UtcNow
         };
-        
+
         broker.Join(new ProducerBrokerConfig(topic.Name, topic.Partitions));
-        _ = broker.JoinGroup(new JoinGroupRequest(heartBeatInterval, consumerGroupId, topicName, consumer1MemberId));
-        _ = broker.JoinGroup(new JoinGroupRequest(heartBeatInterval, consumerGroupId, topicName, ConsumerMemberId.CreateNew()));
+        _ = broker.JoinGroup(new JoinGroupRequest(heartBeatInterval, consumerGroupId, topicName, consumer1MemberId, 0));
+        _ = broker.JoinGroup(new JoinGroupRequest(heartBeatInterval, consumerGroupId, topicName, ConsumerMemberId.CreateNew(), 1));
 
         await broker.Start(cts.Token);
 

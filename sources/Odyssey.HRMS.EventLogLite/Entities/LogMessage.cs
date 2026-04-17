@@ -1,17 +1,23 @@
+using Odyssey.HRMS.EventLogLite.Base;
+
 namespace Odyssey.HRMS.EventLogLite.Entities;
 
 public sealed record LogMessage<TEvent> where TEvent : class
 {
     public string Key { get; set; }
+    public int KeyLength { get; set; }
     public TEvent Payload { get; set; }
-    public long Timestamp { get; set; }
+    public int PayloadLength { get; set; }
+    
+    public long Timestamp { get; set; } // => Timestamp delta
     public Dictionary<string, object> Metadata { get; set; }
 
     /// <summary>
     /// Unique number inside partition 
     /// </summary>
-    public long Offset { get; set; }
+    public long Offset { get; set; } // => Offset delta
 
+    
     public static LogMessage<TEvent> Create(LogRequest<TEvent> request, long offset)
     {
         var timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
@@ -42,13 +48,15 @@ public sealed record LogMessage<TEvent> where TEvent : class
     
 }
 
-public sealed class PollRequest
+public sealed record PollRequest
 {
-    public int BatchSize { get; init; }
+    // public int BatchSize { get; init; }
     public string TopicName { get; init; } = null!;
     public string GroupName { get; init; } = null!;
     public Guid RequestId { get; init; }
     public DateTimeOffset OccuredAt { get; init; }
+    public long StartPosition { get; set; }
+    
 }
 
 public sealed class BatchPoolRequest
@@ -58,15 +66,29 @@ public sealed class BatchPoolRequest
     public string ConsumerId { get; init; } = null!;
     public int ConsumerGenerationId { get; init; }
     public long Offset { get; init; }
+    public byte PartitionId { get; init; }
     public int MaxBytes { get; init; }
+    public int MaxWaitTimeMs { get; init; }
     public Guid RequestId { get; init; }
     public DateTimeOffset OccuredAt { get; init; }
 }
 
-public sealed class BatchPoolResult<TEvent> where TEvent : class
+public sealed class BatchPoolResponse<TEvent> where TEvent : class
 {
     public string TopicName { get; init; } = null!;
     public IReadOnlyCollection<LogResponse<TEvent>> Items { get; init; } = Array.Empty<LogResponse<TEvent>>();
+    
+    public Guid ResponseId { get; init; }
+    
+    public BatchPoolResponseError? Error { get; init; } 
+}
+
+public sealed record BatchPoolResponseError(string ErrorMessage, string ErrorCode)
+{
+    private const string UnknownPartitionKey = "UNKNOWN_TOPIC_OR_PARTITION";
+
+    public static BatchPoolResponseError UnknownPartition(PartitionKey partitionKey)
+        => new ($"Partition {partitionKey.TopicName}-{partitionKey.PartitionId} doesn't exist", UnknownPartitionKey);
 }
 
 public sealed class StreamPoolRequest
