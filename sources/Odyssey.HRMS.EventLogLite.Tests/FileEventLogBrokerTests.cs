@@ -227,6 +227,7 @@ public sealed class FileEventLogBrokerTests : IAsyncLifetime, IClassFixture<File
         logResult.Offset.Should().Be(0);
         logResult.TopicName.Should().Be(topic.Name);
         logResult.PartitionId.Should().Be(partition);
+        batchResult.Items.Should().ContainSingle(v => v.Key == key);
     }
 
     public Task InitializeAsync()

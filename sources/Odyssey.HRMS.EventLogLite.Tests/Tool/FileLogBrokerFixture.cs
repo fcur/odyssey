@@ -5,7 +5,6 @@ using Odyssey.HRMS.EventLogLite.Entities;
 using Odyssey.HRMS.EventLogLite.Producer;
 using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
-using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 
@@ -72,28 +71,17 @@ public sealed class FileLogBrokerFixture : IAsyncLifetime
                 return new PositionPair(startPosition, position + 1);
             });
 
-        eventLoggerMock.Setup(v =>
-                v.Poll<EventLogLite.TestEvent>(It.IsAny<PollRequest>(), It.IsAny<FileLogSegment>(), It.IsAny<CancellationToken>()))
-            .Returns((PollRequest request, FileLogSegment segment, long offset, CancellationToken ct) =>
-                ConvertQueueToAsyncEnumerable(_logMessages.TryGetValue(segment, out var queue)
-                    ? queue
-                    : new ConcurrentQueue<LogMessage<TestEvent>>(), v => v.Offset >= 0, ct));
-            // {
-            //     if(!_logMessages.TryGetValue(segment, out ConcurrentQueue<LogMessage<TestEvent>> queue))
-            //     {
-            //         return Array.Empty<LogMessage<TestEvent>>().ToAsyncEnumerable();
-            //     }
-            //
-            //
-            //     
-            //     while (queue.TryDequeue(out var item))
-            //     {
-            //         yield return item;
-            //         
-            //     }
-            //
-            // });
-        
+        eventLoggerMock.Setup(v => v.Poll<TestEvent>(It.IsAny<PollRequest>(), It.IsAny<FileLogSegment>(), It.IsAny<CancellationToken>()))
+            .Returns((PollRequest request, FileLogSegment segment, CancellationToken ct) =>
+            {
+                if (!_offsetsMap.TryGetValue(segment, out var map) || !_logMessages.TryGetValue(segment, out var queue))
+                {
+                    return Array.Empty<LogMessage<TestEvent>>().ToAsyncEnumerable();
+                }
+
+                return ConvertQueueToAsyncEnumerable(queue, v => map[v.Offset] >= request.StartPosition, ct);
+            })
+            .Callback<PollRequest, FileLogSegment, CancellationToken>((request, segment, _) => { });
         
         offsetLoggerMock.Setup(v => v.Write(It.IsAny<LogMessage<LogOffsetMessage>>(), It.IsAny<FileLogSegment>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((LogMessage<LogOffsetMessage> msg, FileLogSegment segment, CancellationToken _) =>
@@ -230,9 +218,8 @@ public sealed class FileLogBrokerFixture : IAsyncLifetime
 
         return Task.CompletedTask;
     }
-    
 
-    private static async IAsyncEnumerable<T> ConvertQueueToAsyncEnumerable<T>(ConcurrentQueue<T> queue, Predicate<T>? filter= null,  [EnumeratorCancellation] CancellationToken ct = default)
+    private async IAsyncEnumerable<T> ConvertQueueToAsyncEnumerable<T>(ConcurrentQueue<T> queue, Predicate<T>? filter= null, CancellationToken ct = default)
     {
         while (queue.TryDequeue(out var item) )
         {

@@ -34,7 +34,7 @@ public sealed class FileEventLogBroker : IEventBroker
     private readonly ConcurrentDictionary<ActiveTopicKey, ConcurrentDictionary<ConsumerGroupMemberKey, long>> _consumerGroups;
     
     private readonly ConcurrentDictionary<ConsumerGroupIdKey, ConcurrentQueue<PartitionId>> _consumerGroupsAssignment;
-    private readonly ConcurrentDictionary<PartitionKey, long> _latestOffsets;
+    private readonly ConcurrentDictionary<PartitionKey, long> _latestOffsets; // latest active segment 
     private readonly ConcurrentDictionary<string, int> _consumerGenerations;
     
     // private byte _partitionsCount = 0;
@@ -277,7 +277,7 @@ public sealed class FileEventLogBroker : IEventBroker
         
         var batchItems = new  List<LogResponse<TEvent>>();
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        cts.CancelAfter(request.MaxWaitTimeMs);
+        // cts.CancelAfter(request.MaxWaitTimeMs);
 
         try
         {
