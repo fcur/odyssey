@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.IO.MemoryMappedFiles;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Odyssey.HRMS.EventLogLite.Base;
 
@@ -12,7 +13,7 @@ public sealed class JsonFileEventLogger : IFileEventLogger
 {
     // log divider symbol, equals to '\n'
     private const byte EventLogDivider = 10;
-    private static readonly JsonSerializerOptions SerializerOptions = new() { WriteIndented = false };
+    public static readonly JsonSerializerOptions SerializerOptions = new() { WriteIndented = false };
     private readonly ConcurrentDictionary<byte, long> _lastPosition = new();
 
     public async Task<PositionPair> WriteBatch<TEvent>(IReadOnlyCollection<LogMessage<TEvent>> logMessages, FileLogSegment segment,
@@ -46,9 +47,13 @@ public sealed class JsonFileEventLogger : IFileEventLogger
         {
             segment = segment with { Size = position.Next };
         }
-        
-        WriteIndexInternal(new LogIndex(logMessage.Offset, position.Start), EventFileType.IndexFile, segment, cancellationToken);
-        WriteIndexInternal(new LogIndex(logMessage.Timestamp, position.Start), EventFileType.TimeIndexFile, segment, cancellationToken);
+
+        if (logMessage.Offset % 10 == 0)
+        {
+            WriteIndexInternal(new LogIndex(logMessage.Offset, position.Start), EventFileType.IndexFile, segment, cancellationToken);
+            WriteIndexInternal(new LogIndex(logMessage.Timestamp, position.Start), EventFileType.TimeIndexFile, segment, cancellationToken);
+        }
+       
         return position;
     }
 
@@ -173,6 +178,55 @@ public sealed class JsonFileEventLogger : IFileEventLogger
         return segment.IsEmpty() ? new LogIndex(0, 0) : ReadIndexInternal(EventFileType.IndexFile, segment);
     }
     
+    
+    public  (long Offset, long Position) FindNearestPosition(long offset, FileLogSegment segment)
+    {
+        var filePath = segment.GetIndexFilePath();
+        using var mmf = MemoryMappedFile.CreateFromFile(filePath, FileMode.Open);
+        using var accessor = mmf.CreateViewAccessor();
+        long recordSize = 16;
+        var fileSize = new FileInfo(filePath).Length;
+        long count = fileSize / recordSize;
+        
+        long left = 0;
+        long right = count - 1;
+        long mid = 0;
+        
+        while (left <= right)
+        {
+            mid = left + (right - left) / 2;
+            long currentKey = accessor.ReadInt64(mid * recordSize);
+
+            if (currentKey == offset)
+            {
+                return new ValueTuple<long, long>(currentKey, accessor.ReadInt64(mid * recordSize + 8));
+            }
+
+            if (currentKey < offset)
+            {
+                left = mid + 1;
+            }
+            else
+            {
+                right = mid - 1;
+            }
+        }
+        
+        left = Math.Clamp(left, 0, count - 1);
+        right = Math.Clamp(right, 0, count - 1);
+        
+        var keyLeft = accessor.ReadInt64(left * recordSize);
+        var keyRight = accessor.ReadInt64(right * recordSize);
+        
+        if (Math.Abs(offset - keyLeft) < Math.Abs(offset - keyRight))
+        {
+            return new ValueTuple<long, long>(keyLeft, accessor.ReadInt64(left * recordSize + 8));
+        }
+       
+        return new ValueTuple<long, long>(keyRight, accessor.ReadInt64(right * recordSize + 8));
+    }
+    
+    
     private async Task<PositionPair> WriteInternal<TPayload>(TPayload payload, FileLogSegment segment, CancellationToken cancellationToken)
         where TPayload : class
     {
@@ -222,3 +276,51 @@ public sealed class JsonFileEventLogger : IFileEventLogger
 /// <param name="Index">time or offset</param>
 /// <param name="Position">position in bytes</param>
 public record struct LogIndex(long Index, long Position);
+
+
+
+public sealed class Int32CustomConverter : JsonConverter<int>
+{
+    public override int Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        if (reader.TokenType == JsonTokenType.Number)
+        {
+            return reader.GetInt32();
+        }
+
+        if (reader.TokenType == JsonTokenType.String)
+        {
+            return int.Parse(reader.GetString()!);
+        }
+        
+        throw new JsonException();
+    }
+
+    public override void Write(Utf8JsonWriter writer, int value, JsonSerializerOptions options)
+    {
+        writer.WriteStringValue(value.ToString("D10"));
+    }
+}
+
+public sealed class Int64CustomConverter : JsonConverter<long>
+{
+    public override long Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        if (reader.TokenType == JsonTokenType.Number)
+        {
+            return reader.GetInt64();
+        }
+
+        if (reader.TokenType == JsonTokenType.String)
+        {
+            return long.Parse(reader.GetString()!);
+        }
+        
+        throw new JsonException();
+    }
+
+    public override void Write(Utf8JsonWriter writer, long value, JsonSerializerOptions options)
+    {
+        writer.WriteStringValue(value.ToString("D20"));
+    }
+}

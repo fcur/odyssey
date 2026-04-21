@@ -11,4 +11,5 @@ public interface IEventLogger<in TSegment> where TSegment : LogSegment
     //Task<PositionPair> Commit(LogOffsetRequest request, TSegment segment, CancellationToken cancellationToken = default);
     //Task<LogOffsetMessage> ReadSavedOffset(LogOffsetKey key, TSegment segment, CancellationToken cancellationToken = default);
     LogIndex ReadLastIndex(TSegment segment);
+    (long Offset, long Position) FindNearestPosition(long offset, FileLogSegment segment);
 }

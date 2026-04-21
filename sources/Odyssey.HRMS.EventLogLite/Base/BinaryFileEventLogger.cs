@@ -61,6 +61,11 @@ public sealed class BinaryFileEventLogger: IFileEventLogger
         throw new NotImplementedException();
     }
 
+    public (long Offset, long Position) FindNearestPosition(long offset, FileLogSegment segment)
+    {
+        throw new NotImplementedException();
+    }
+
     public Task<PositionPair> Commit(LogOffsetRequest request, FileLogSegment segment, CancellationToken cancellationToken = default)
     {
         throw new NotImplementedException();

@@ -246,6 +246,82 @@ public sealed class JsonFileEventLoggerTests : IAsyncLifetime, IClassFixture<Fil
         linesCount1.Should().Be(linesCount + 1);
         linesCount2.Should().Be(linesCount + 3);
     }
+
+    [Theory, AutoData]
+    public async Task WriteIndexes(string key, TestEvent payload, int randomNumber)
+    {
+        // Arrange
+        const byte partition = 127;
+        var itemsCount = randomNumber + 124 % 42;
+        long wantedItemOffset = itemsCount % 3 + itemsCount % 4;
+        var wantedItemsCount = 22;
+        
+        var cts = new CancellationTokenSource();
+        var request = new LogRequest<TestEvent> { Key = key, Payload = payload };
+        var logSegment = FileLogSegment.New(partition, _fixture.CreateSegmentRoot(partition));
+        var logMessages = Enumerable.Range(0, itemsCount).Select(v => LogMessage<TestEvent>.CreateForJson(request, v)).ToArray();
+        
+        // Act
+        foreach (var item in logMessages)
+        {
+            _= await _logger.Write(item, logSegment, cts.Token);
+        }
+        var linesCount = _fixture.GetLinesCount(logSegment.GetLogFilePath());
+        var wantedItemsSize = _fixture.GetBytesCount(logMessages[0]) * wantedItemsCount;
+        var nearestStartPositionResult = _logger.FindNearestPosition(wantedItemOffset, logSegment);
+        var batchItems = new  List<LogResponse<TestEvent>>();
+        var sizeLimit = wantedItemsSize;
+        var pollRequest = new PollRequest
+        {
+            TopicName =  request.TopicName,
+            GroupName =   nameof(PollRequest.GroupName),
+            RequestId = Guid.NewGuid(),
+            OccuredAt = DateTimeOffset.UtcNow,
+            StartPosition = nearestStartPositionResult.Position
+        };
+        
+        await foreach (var logMessage in _logger.Poll<TestEvent>(pollRequest, logSegment, cts.Token).ConfigureAwait(false))
+        {
+            sizeLimit -= logMessage.RecordLength;
+            if (sizeLimit <= 0)
+            {
+                break;
+            }
+
+            // skip prev msg 
+            if (logMessage.Offset < wantedItemOffset)
+            {
+                continue;
+            }
+            
+            var logResponse = new LogResponse<TestEvent>
+            {
+                Key = logMessage.Key,
+                Payload = logMessage.Payload,
+                Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(logMessage.Timestamp),
+                Offset = logMessage.Offset,
+                PartitionId = logSegment.Partition,
+                Metadata = logMessage.Metadata
+            };
+
+            batchItems.Add(logResponse);
+        }
+
+
+        // Assert
+        using var scope = new AssertionScope();
+        linesCount.Should().Be(itemsCount + 1);
+        batchItems.Should().NotBeEmpty();
+        batchItems.Should().ContainSingle(v=>v.Offset == wantedItemOffset);
+        batchItems.Count.Should().BeLessOrEqualTo(wantedItemsCount);
+        // startPosition.Value.Should().BeGreaterThan(wantedItemsSize);
+        // position.Start.Should().Be(0);
+        // position.Next.Should().Be(size + 1);
+        // linesCount.Should().Be(2);
+
+    }
+    
+    
     
     public Task InitializeAsync()
     {

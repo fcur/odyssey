@@ -260,7 +260,7 @@ public sealed class FileEventLogBroker : IEventBroker
             return new BatchPoolResponse<TEvent> { Error = BatchPoolResponseError.UnknownPartition(partitionKey)};
         }
 
-        var startPosition = 0;
+        var startPositionResult = _eventLogger.FindNearestPosition(request.Offset, activeSegment);
         // request.Offset + IndexFile = startPosition
         
         
@@ -270,7 +270,7 @@ public sealed class FileEventLogBroker : IEventBroker
             GroupName =   request.GroupName,
             RequestId = request.RequestId,
             OccuredAt = request.OccuredAt,
-            StartPosition = startPosition
+            StartPosition = startPositionResult.Position
         };
 
         var sizeLimit = request.MaxBytes;
@@ -289,6 +289,10 @@ public sealed class FileEventLogBroker : IEventBroker
                 {
                     await cts.CancelAsync().ConfigureAwait(false);
                     break;
+                }
+                if (logMessage.Offset < request.Offset)
+                {
+                    continue;
                 }
             
                 var logResponse = new LogResponse<TEvent>
