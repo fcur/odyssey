@@ -94,29 +94,46 @@ public sealed class EventConsumer<TEvent> : IDisposable, IEventConsumer<TEvent> 
                 var time = DateTimeOffset.UtcNow;
                 var requestId = Guid.CreateVersion7(time);
 
-                var pollRequest = new PollRequest
-                {
-                    // BatchSize = _settings.BatchSize,
-                    TopicName = _settings.TopicName,
-                    GroupName = _settings.GroupName,
-                    RequestId = requestId,
-                    OccuredAt = time
-                };
+                // var pollRequest = new PollRequest
+                // {
+                //     BatchSize = _settings.BatchSize,
+                //     TopicName = _settings.TopicName,
+                //     GroupName = _settings.GroupName,
+                //     RequestId = requestId,
+                //     OccuredAt = time
+                // };
 
                 _logger.LogDebug("Pulling is being started, RequestId: {RequestId}", requestId);
 
                 sw.Start();
                 // var tasks = assignedSegments.Select(segment => _broker.PollEvents<TEvent>(
                 // pollRequest with{ StartPosition = currentOffsets[segment.Partition]}, segment, targetToken)});
+
+                // TODO: rework the whole consuming flow
+                var tasks2 = assignedSegments.Select(v => _broker.PollEventsBatch<TEvent>(new BatchPoolRequest()
+                {
+                    TopicName =  _settings.TopicName,
+                    GroupName =  _settings.GroupName,
+                    ConsumerGenerationId = default, // leads to error
+                    Offset = currentOffsets[v.Partition],
+                    PartitionId =  v.Partition,
+                    MaxBytes = _settings.MaxBytes,
+                    MaxWaitTimeMs =  _settings.MaxWaitTimeMs,
+                    RequestId = requestId,
+                    OccuredAt = time
+                    
+                }, targetToken));
+                var results2 = await Task.WhenAll(tasks2);
+                var events2 = results2.SelectMany(v => v.Items).ToArray();
                 
-                var tasks = assignedSegments.Select(segment => _broker.PollEvents<TEvent>(pollRequest, segment, currentOffsets[segment.Partition], targetToken));
-                var results = await Task.WhenAll(tasks);
-                var events = results.SelectMany(v => v).ToArray();
+                // var tasks = assignedSegments.Select(segment => _broker.PollEvents<TEvent>(pollRequest, segment, currentOffsets[segment.Partition], targetToken));
+                // var results = await Task.WhenAll(tasks);
+                // var events = results.SelectMany(v => v).ToArray();
                 sw.Stop();
 
-                _logger.LogDebug("Pulling completed, results: {Count}, RequestId: {RequestId}, Elapsed: {Elapsed} ms", events.Length, requestId, sw.ElapsedMilliseconds);
+                _logger.LogDebug("Pulling completed, results: {Count}, RequestId: {RequestId}, Elapsed: {Elapsed} ms", events2.Length, requestId, sw.ElapsedMilliseconds);
 
-                foreach (var item in events)
+                foreach (var item in events2)
                 {
                     // TODO: to const
                     item.Metadata["TopicName"] = _settings.TopicName;
@@ -129,7 +146,7 @@ public sealed class EventConsumer<TEvent> : IDisposable, IEventConsumer<TEvent> 
                 }
 
                 var pullingPause = _settings.PullDuration - sw.Elapsed;
-                if (events.Length == 0 && pullingPause > TimeSpan.Zero && !targetToken.IsCancellationRequested)
+                if (events2.Length == 0 && pullingPause > TimeSpan.Zero && !targetToken.IsCancellationRequested)
                 {
                     _logger.LogDebug("Pause pulling for {PullingPause}", pullingPause);
                     // ReSharper disable once PossiblyMistakenUseOfCancellationToken

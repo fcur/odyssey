@@ -119,10 +119,10 @@ public sealed record LogMessage<TEvent> where TEvent : class
 public sealed record PollRequest
 {
     // public int BatchSize { get; init; }
-    public string TopicName { get; init; } = null!;
-    public string GroupName { get; init; } = null!;
-    public Guid RequestId { get; init; }
-    public DateTimeOffset OccuredAt { get; init; }
+    // public string TopicName { get; init; } = null!;
+    // public string GroupName { get; init; } = null!;
+    // public Guid RequestId { get; init; }
+    // public DateTimeOffset OccuredAt { get; init; }
     public long StartPosition { get; set; }
     
 }

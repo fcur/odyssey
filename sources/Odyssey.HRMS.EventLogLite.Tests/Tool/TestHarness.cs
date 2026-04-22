@@ -209,25 +209,26 @@ public sealed class TestHarness<TEvent> where TEvent : class, new()
         var minOffset = offset;
         var maxOffset = offset + batchSize;
 
-        if (_unhandledEvents.TryGetValue(request.GroupName, out var unhandledEvents)
-            && !unhandledEvents.IsEmpty)
-        {
-            var foundEvents = unhandledEvents.Where(v => v.PartitionId == segment.Partition
-                                                         && v.Offset >= minOffset
-                                                         && v.Offset <= maxOffset).ToArray();
-
-            foreach (var item in foundEvents)
-            {
-                result[item.Offset] = new LogMessage<TEvent>
-                {
-                    Payload = item.Payload,
-                    Key = item.Key!,
-                    Offset = item.Offset,
-                    Timestamp = item.Timestamp.ToUnixTimeMilliseconds(),
-                    Metadata = item.Metadata
-                };
-            }
-        }
+        throw new NotImplementedException();
+        // if (_unhandledEvents.TryGetValue(request.GroupName, out var unhandledEvents)
+        //     && !unhandledEvents.IsEmpty)
+        // {
+        //     var foundEvents = unhandledEvents.Where(v => v.PartitionId == segment.Partition
+        //                                                  && v.Offset >= minOffset
+        //                                                  && v.Offset <= maxOffset).ToArray();
+        //
+        //     foreach (var item in foundEvents)
+        //     {
+        //         result[item.Offset] = new LogMessage<TEvent>
+        //         {
+        //             Payload = item.Payload,
+        //             Key = item.Key!,
+        //             Offset = item.Offset,
+        //             Timestamp = item.Timestamp.ToUnixTimeMilliseconds(),
+        //             Metadata = item.Metadata
+        //         };
+        //     }
+        // }
 
         Interlocked.Add(ref _polledEventsCountCounter, result.Count);
         return result.Values.ToAsyncEnumerable();

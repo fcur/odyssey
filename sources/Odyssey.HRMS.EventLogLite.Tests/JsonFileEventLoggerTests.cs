@@ -113,10 +113,10 @@ public sealed class JsonFileEventLoggerTests : IAsyncLifetime, IClassFixture<Fil
         var pollRequest = new PollRequest
         {
             // BatchSize = 100,
-            TopicName = nameof(PollRequest.TopicName),
-            GroupName = nameof(PollRequest.GroupName),
-            RequestId = Guid.NewGuid(),
-            OccuredAt = now,
+            // TopicName = nameof(PollRequest.TopicName),
+            // GroupName = nameof(PollRequest.GroupName),
+            // RequestId = Guid.NewGuid(),
+            // OccuredAt = now,
             StartPosition = position1
         };
         
@@ -273,10 +273,10 @@ public sealed class JsonFileEventLoggerTests : IAsyncLifetime, IClassFixture<Fil
         var sizeLimit = wantedItemsSize;
         var pollRequest = new PollRequest
         {
-            TopicName =  request.TopicName,
-            GroupName =   nameof(PollRequest.GroupName),
-            RequestId = Guid.NewGuid(),
-            OccuredAt = DateTimeOffset.UtcNow,
+
+            // GroupName =   nameof(PollRequest.GroupName),
+            // RequestId = Guid.NewGuid(),
+            // OccuredAt = DateTimeOffset.UtcNow,
             StartPosition = nearestStartPositionResult.Position
         };
         
@@ -320,8 +320,6 @@ public sealed class JsonFileEventLoggerTests : IAsyncLifetime, IClassFixture<Fil
         // linesCount.Should().Be(2);
 
     }
-    
-    
     
     public Task InitializeAsync()
     {

@@ -261,15 +261,13 @@ public sealed class FileEventLogBroker : IEventBroker
         }
 
         var startPositionResult = _eventLogger.FindNearestPosition(request.Offset, activeSegment);
-        // request.Offset + IndexFile = startPosition
-        
         
         var pollRequest = new PollRequest
         {
-            TopicName =  request.TopicName,
-            GroupName =   request.GroupName,
-            RequestId = request.RequestId,
-            OccuredAt = request.OccuredAt,
+            // TopicName =  request.TopicName,
+            // GroupName =   request.GroupName,
+            // RequestId = request.RequestId,
+            // OccuredAt = request.OccuredAt,
             StartPosition = startPositionResult.Position
         };
 
@@ -321,35 +319,35 @@ public sealed class FileEventLogBroker : IEventBroker
         return result;
     }
 
-    [Obsolete]
-    public async Task<IReadOnlyCollection<LogResponse<TEvent>>> PollEvents<TEvent>(PollRequest request, LogSegment logSegment, long offset,
-        CancellationToken cancellationToken = default) where TEvent : class
-    {
-        // var result = new List<LogResponse<TEvent>>(request.BatchSize);
-        var result = new List<LogResponse<TEvent>>(1000);
-        var segmentKey = new PartitionKey(request.TopicName, logSegment.Partition);
-        var segment = _activeSegments[segmentKey];
-        // var segment = _segmentsMap[logSegment.Partition];
-
-        // TODO: Convert offset to position
-
-        await foreach (var logMessage in _eventLogger.Poll<TEvent>(request, segment, cancellationToken))
-        {
-            var response = new LogResponse<TEvent>
-            {
-                Key = logMessage.Key,
-                Payload = logMessage.Payload,
-                Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(logMessage.Timestamp),
-                Offset = logMessage.Offset,
-                PartitionId = logSegment.Partition,
-                Metadata = logMessage.Metadata
-            };
-
-            result.Add(response);
-        }
-
-        return result.ToArray();
-    }
+    // [Obsolete]
+    // public async Task<IReadOnlyCollection<LogResponse<TEvent>>> PollEvents<TEvent>(PollRequest request, LogSegment logSegment, long offset,
+    //     CancellationToken cancellationToken = default) where TEvent : class
+    // {
+    //     // var result = new List<LogResponse<TEvent>>(request.BatchSize);
+    //     var result = new List<LogResponse<TEvent>>(1000);
+    //     var segmentKey = new PartitionKey(request.TopicName, logSegment.Partition);
+    //     var segment = _activeSegments[segmentKey];
+    //     // var segment = _segmentsMap[logSegment.Partition];
+    //
+    //     // TODO: Convert offset to position
+    //
+    //     await foreach (var logMessage in _eventLogger.Poll<TEvent>(request, segment, cancellationToken))
+    //     {
+    //         var response = new LogResponse<TEvent>
+    //         {
+    //             Key = logMessage.Key,
+    //             Payload = logMessage.Payload,
+    //             Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(logMessage.Timestamp),
+    //             Offset = logMessage.Offset,
+    //             PartitionId = logSegment.Partition,
+    //             Metadata = logMessage.Metadata
+    //         };
+    //
+    //         result.Add(response);
+    //     }
+    //
+    //     return result.ToArray();
+    // }
 
     public async Task Commit<TEvent>(LogOffsetRequest request, CancellationToken cancellationToken = default) where TEvent : class
     {

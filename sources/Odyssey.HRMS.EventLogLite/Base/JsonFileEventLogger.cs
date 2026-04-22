@@ -118,7 +118,6 @@ public sealed class JsonFileEventLogger : IFileEventLogger
             var message = JsonSerializer.Deserialize<LogMessage<TEvent>>(line);
 
             ArgumentNullException.ThrowIfNull(message);
-
             // counter++;
 
             yield return message;
