@@ -208,3 +208,97 @@ public sealed class LogOffsetMessage
     
     public static LogOffsetMessage CreateNew(LogOffsetKey key) => new LogOffsetMessage() { Key = key, Value = LogOffsetValue.New };
 }
+
+
+// public sealed class LogOffsetRecordBatch
+// {
+//     public long BaseOffset{ get; init; }
+//     public long LastOffsetDelta{ get; init; }
+//     public LogOffsetRecordBatchItem[] Items { get; init; } =[];
+// }
+//
+// public sealed class LogOffsetRecordBatchItem
+// {
+//     // key
+//     public string Topic { get; init; } = null!;
+//     public string GroupId { get; init; } = null!;
+//     public byte PartitionId { get; init; }
+//     
+//     // value
+//     public long OffsetDelta { get; init; }
+//     public long CommitTimestamp { get; init; }
+//     
+//     // metadata
+//     public Dictionary<string, object> Metadata { get; init; } = new();
+// }
+
+public sealed record LogCommitKey(string Topic, string GroupId, byte PartitionId);
+
+public sealed record LogCommitValue(long Offset, long Timestamp);
+
+
+public sealed record LogMessageBatch<TKey, TData> where TKey : class where TData: class
+{
+    /// <summary>
+    /// Total batch size in bytes.
+    /// </summary>
+    [JsonConverter(typeof(Int32CustomConverter))]
+    public int BatchLength { get; set; }
+    
+    /// <summary>
+    /// Base offset for whole batch. Equals to the 1st item's offset.
+    /// </summary>
+    [JsonConverter(typeof(Int64CustomConverter))]
+    public long BaseOffset{ get; init; }
+    
+    /// <summary>
+    /// Relative offset of the last item in batch.
+    /// </summary>
+    [JsonConverter(typeof(Int64CustomConverter))]
+    public long LastOffsetDelta{ get; init; }
+    
+    /// <summary>
+    /// Batch items.
+    /// </summary>
+    public LogMessageBatchItem<TKey, TData>[] Payload { get; init; } = [];
+}
+
+
+public sealed record LogMessageBatchItem<TKey, TData> where TKey : class where TData: class
+{
+    /// <summary>
+    /// Batch item size in bytes.
+    /// </summary>
+    [JsonConverter(typeof(Int32CustomConverter))]
+    public int RecordLength { get; set; }
+    
+    [JsonConverter(typeof(Int64CustomConverter))]
+    public long OffsetDelta { get; set; }
+    
+    [JsonConverter(typeof(Int64CustomConverter))]
+    public long Timestamp { get; set; }
+    
+    /// <summary>
+    /// Key size in bytes.
+    /// </summary>
+    [JsonConverter(typeof(Int32CustomConverter))]
+    public int KeyLength { get; set; }
+    /// <summary>
+    /// Key data.
+    /// </summary>
+    public TKey Key { get; init; } = null!;
+
+    /// <summary>
+    /// Payload size in bytes.
+    /// </summary>
+    [JsonConverter(typeof(Int32CustomConverter))]
+    public int PayloadLength { get; set; }
+    /// <summary>
+    /// Payload data.
+    /// </summary>
+    public TData Payload { get; set; } = null!;
+
+    [JsonConverter(typeof(Int32CustomConverter))]
+    public int MetadataLength { get; set; }
+    public Dictionary<string, object>? Metadata { get; set; }
+}

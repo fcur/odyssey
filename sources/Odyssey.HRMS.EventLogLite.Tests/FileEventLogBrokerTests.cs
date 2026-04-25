@@ -203,11 +203,11 @@ public sealed class FileEventLogBrokerTests : IAsyncLifetime, IClassFixture<File
         var pollRequest = new BatchPoolRequest
         {
             TopicName = topicName.Value,
+            PartitionId = partition,
             GroupName = consumerGroupId.Value,
             ConsumerId = consumer1MemberId.Value,
             ConsumerGenerationId = 0,
             Offset = 0,
-            PartitionId = partition,
             MaxBytes = 50000,
             MaxWaitTimeMs = 500,
             RequestId = Guid.NewGuid(),
@@ -229,6 +229,35 @@ public sealed class FileEventLogBrokerTests : IAsyncLifetime, IClassFixture<File
         logResult.PartitionId.Should().Be(partition);
         batchResult.Items.Should().ContainSingle(v => v.Key == key);
     }
+
+    [Theory, AutoData]
+    public async Task CommitOffset_WithSuccess(ConsumerGroupId groupId, ConsumerMemberId memberId, DateTimeOffset baseTime, string topic2Name)
+    {
+        const int consumerGeneration = 1;
+
+        using var cts = new CancellationTokenSource();
+
+        var broker = _fixture.GetBroker();
+        var topic = _fixture.GetTopic();
+        var commit1Time = baseTime.AddMilliseconds(-1234).ToUnixTimeMilliseconds();
+        var commit2Time = baseTime.AddMilliseconds(-1343).ToUnixTimeMilliseconds();
+        var commit3Time = baseTime.AddMilliseconds(-1313).ToUnixTimeMilliseconds();
+        var topic1Name = topic.Name;
+        
+        var offsets = new[]
+        {
+            new CommitOffsetItem(topic1Name, 0, 100, commit1Time), 
+            new CommitOffsetItem(topic1Name, 1, 102,commit2Time), 
+            new CommitOffsetItem(topic2Name, 2, 93,commit3Time)
+        };
+        var commitRequest = new CommitOffsetRequest(groupId, memberId, consumerGeneration, offsets);
+
+        var result = await broker.CommitOffset(commitRequest, cts.Token);
+
+        using var scope = new AssertionScope();
+        result.Error.Should().BeNull();
+    }
+
 
     public Task InitializeAsync()
     {

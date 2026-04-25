@@ -319,6 +319,19 @@ public sealed class FileEventLogBroker : IEventBroker
         return result;
     }
 
+    public Task<CommitOffsetResponse> CommitOffset(CommitOffsetRequest request, CancellationToken cancellationToken = default)
+    {
+        var batchItems = request.OffsetItems.Select(v => new LogMessageBatchItem<LogCommitKey, LogCommitValue> { })
+            .ToArray();
+        
+        var batch = new LogMessageBatch<LogCommitKey, LogCommitValue>
+        {
+            Payload = batchItems
+        };
+        
+        throw new NotImplementedException();
+    }
+
     // [Obsolete]
     // public async Task<IReadOnlyCollection<LogResponse<TEvent>>> PollEvents<TEvent>(PollRequest request, LogSegment logSegment, long offset,
     //     CancellationToken cancellationToken = default) where TEvent : class

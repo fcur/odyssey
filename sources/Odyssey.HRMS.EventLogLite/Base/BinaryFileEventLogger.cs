@@ -63,7 +63,9 @@ public sealed class BinaryFileEventLogger: IFileEventLogger
 
     public (long Offset, long Position) FindNearestPosition(long offset, FileLogSegment segment)
     {
-        throw new NotImplementedException();
+        var filePath = segment.GetIndexFilePath();
+        using var indexAccessor = new LogIndexAccessor(filePath);
+        return indexAccessor.FindNearest(offset);
     }
 
     public Task<PositionPair> Commit(LogOffsetRequest request, FileLogSegment segment, CancellationToken cancellationToken = default)

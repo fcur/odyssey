@@ -181,8 +181,6 @@ public sealed class JsonFileEventLogger : IFileEventLogger
     public  (long Offset, long Position) FindNearestPosition(long offset, FileLogSegment segment)
     {
         var filePath = segment.GetIndexFilePath();
-        // using var indexAccessor = new LogIndexAccessor(filePath);
-        // return indexAccessor.FindNearest(offset);
         
         using var mmf = MemoryMappedFile.CreateFromFile(filePath, FileMode.Open);
         using var accessor = mmf.CreateViewAccessor();

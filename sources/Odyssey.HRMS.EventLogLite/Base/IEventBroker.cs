@@ -26,8 +26,11 @@ public interface IEventProducerBroker
 
 public interface IEventConsumerBroker
 {
+    JoinGroupResponse JoinGroup(JoinGroupRequest request);
     Task<BatchPoolResponse<TEvent>> PollEventsBatch<TEvent>(BatchPoolRequest request, CancellationToken cancellationToken = default) where TEvent : class;
-    [Obsolete]
+    Task<CommitOffsetResponse> CommitOffset(CommitOffsetRequest request, CancellationToken cancellationToken = default);
+    
+    // [Obsolete]
     // Task<IReadOnlyCollection<LogResponse<TEvent>>> PollEvents<TEvent>(PollRequest request, LogSegment logSegment, long offset, CancellationToken cancellationToken = default) where TEvent : class;
     Task Commit<TEvent>(LogOffsetRequest request, CancellationToken cancellationToken = default) where TEvent : class;
     // void Join<TEvent>(IEventConsumer<TEvent> consumer) where TEvent : class;
@@ -36,9 +39,10 @@ public interface IEventConsumerBroker
     
     Task<HeartBeatResponse> HeartBeat(HeartBeatRequest  request, CancellationToken cancellationToken = default);
 
-    JoinGroupResponse JoinGroup(JoinGroupRequest request);
     
     SyncGroupResponse SyncGroup(SyncGroupRequest request);
+    
+    
 }
 
 
@@ -100,8 +104,16 @@ public sealed class JoinGroupResponseError(string ErrorMessage, string ErrorCode
     public static JoinGroupResponseError IllegalGeneration() => new ("Outdated generation, rejoin required", IllegalGenerationCode);
 
     public static JoinGroupResponseError? NotSet => null;
-
 }
+
+public sealed record CommitOffsetRequest(ConsumerGroupId GroupId, ConsumerMemberId MemberId,  int ConsumerGeneration, CommitOffsetItem[] OffsetItems);
+
+public sealed record CommitOffsetItem(string Topic, byte Partition, long Offset, long Timestamp);
+
+
+public sealed record CommitOffsetResponse(CommitOffsetError? Error);
+
+public sealed class CommitOffsetError(string ErrorMessage, string ErrorCode);
 
 
 
