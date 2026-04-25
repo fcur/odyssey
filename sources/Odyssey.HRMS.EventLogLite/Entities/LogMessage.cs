@@ -257,6 +257,9 @@ public sealed record LogMessageBatch<TKey, TData> where TKey : class where TData
     [JsonConverter(typeof(Int64CustomConverter))]
     public long LastOffsetDelta{ get; init; }
     
+    [JsonConverter(typeof(Int64CustomConverter))]
+    public long Timestamp { get; set; }
+    
     /// <summary>
     /// Batch items.
     /// </summary>
@@ -274,9 +277,6 @@ public sealed record LogMessageBatchItem<TKey, TData> where TKey : class where T
     
     [JsonConverter(typeof(Int64CustomConverter))]
     public long OffsetDelta { get; set; }
-    
-    [JsonConverter(typeof(Int64CustomConverter))]
-    public long Timestamp { get; set; }
     
     /// <summary>
     /// Key size in bytes.

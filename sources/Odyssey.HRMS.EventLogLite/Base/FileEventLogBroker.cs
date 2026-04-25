@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging;
 using Odyssey.HRMS.EventLogLite.Entities;
 using Odyssey.HRMS.EventLogLite.Producer;
 using System.Collections.Concurrent;
+using System.IO.Pipes;
 using System.Text;
 
 namespace Odyssey.HRMS.EventLogLite.Base;
@@ -321,15 +322,47 @@ public sealed class FileEventLogBroker : IEventBroker
 
     public Task<CommitOffsetResponse> CommitOffset(CommitOffsetRequest request, CancellationToken cancellationToken = default)
     {
-        var batchItems = request.OffsetItems.Select(v => new LogMessageBatchItem<LogCommitKey, LogCommitValue> { })
-            .ToArray();
+        var partitionId = GetPartition(request);
+        var partitionKey = new PartitionKey(_offsetsTopic.Name, partitionId);
         
+        var segment = _activeSegments[partitionKey]; // throws exception
+        
+        var batchItems = new LogMessageBatchItem<LogCommitKey, LogCommitValue>[request.OffsetItems.Length];
+        
+        for (var i = 0; i < request.OffsetItems.Length; i++)
+        {
+            batchItems[i] = BuildItem(request.OffsetItems[i], request.GroupId, i);
+        }
+
         var batch = new LogMessageBatch<LogCommitKey, LogCommitValue>
         {
-            Payload = batchItems
+            BatchLength = 0, // TBD
+            BaseOffset = 0, // TBD
+            LastOffsetDelta = batchItems[^1].OffsetDelta,
+            Payload = batchItems,
+            Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
         };
         
         throw new NotImplementedException();
+
+        static LogMessageBatchItem<LogCommitKey, LogCommitValue> BuildItem(CommitOffsetItem offsetItem, string groupId, int index)
+        {
+            var commitKey = new LogCommitKey(offsetItem.Topic, groupId, offsetItem.Partition);
+            var commitValue = new LogCommitValue(offsetItem.Offset, offsetItem.Timestamp);
+            
+            return new LogMessageBatchItem<LogCommitKey, LogCommitValue>
+            {
+                RecordLength = 0, // TBD
+                OffsetDelta = index,
+                KeyLength = 0, // TBD
+                Key = commitKey,
+                PayloadLength = 0,// TBD
+                Payload = commitValue,
+                MetadataLength = 0, // TBD
+                Metadata = null,
+                
+            };
+        }
     }
 
     // [Obsolete]
@@ -493,6 +526,15 @@ public sealed class FileEventLogBroker : IEventBroker
 
         return result;
     }
+
+    private byte GetPartition(CommitOffsetRequest request)
+    {
+        // partition = murmur2.hash(groupId) % numPartitions
+        var hash = MurmurHash2.Hash32(Encoding.UTF8.GetBytes(request.GroupId), OffsetIdSeed);
+        var result = Convert.ToByte(hash % _offsetsTopic.Partitions);
+        return result;
+    }
+    
 
     private byte GetPartition(LogOffsetKey key)
     {
