@@ -245,6 +245,9 @@ public sealed record LogMessageBatch<TKey, TData> where TKey : class where TData
     [JsonConverter(typeof(Int32CustomConverter))]
     public int BatchLength { get; set; }
     
+    [JsonConverter(typeof(ByteCustomConverter))]
+    public byte Attributes { get; set; }
+    
     /// <summary>
     /// Base offset for whole batch. Equals to the 1st item's offset.
     /// </summary>
@@ -258,7 +261,16 @@ public sealed record LogMessageBatch<TKey, TData> where TKey : class where TData
     public long LastOffsetDelta{ get; init; }
     
     [JsonConverter(typeof(Int64CustomConverter))]
-    public long Timestamp { get; set; }
+    public long MinTimestamp { get; set; }
+    
+    [JsonConverter(typeof(Int64CustomConverter))]
+    public long MaxTimestamp { get; set; }
+    
+    [JsonConverter(typeof(Int32CustomConverter))]
+    public int Checksum { get; set; }
+    
+    [JsonConverter(typeof(ByteCustomConverter))]
+    public byte Version { get; set; }
     
     /// <summary>
     /// Batch items.
@@ -275,8 +287,14 @@ public sealed record LogMessageBatchItem<TKey, TData> where TKey : class where T
     [JsonConverter(typeof(Int32CustomConverter))]
     public int RecordLength { get; set; }
     
+    [JsonConverter(typeof(ByteCustomConverter))]
+    public byte Attributes { get; set; }
+    
     [JsonConverter(typeof(Int64CustomConverter))]
     public long OffsetDelta { get; set; }
+    
+    [JsonConverter(typeof(Int64CustomConverter))]
+    public long TimestampDelta { get; set; }
     
     /// <summary>
     /// Key size in bytes.

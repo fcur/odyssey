@@ -326,41 +326,49 @@ public sealed class FileEventLogBroker : IEventBroker
         var partitionKey = new PartitionKey(_offsetsTopic.Name, partitionId);
         
         var segment = _activeSegments[partitionKey]; // throws exception
-        
         var batchItems = new LogMessageBatchItem<LogCommitKey, LogCommitValue>[request.OffsetItems.Length];
+        
+        var minTimestamp = request.OffsetItems.Min(o => o.Timestamp);
+        var maxTimestamp = request.OffsetItems.Max(o => o.Timestamp);
+        var baseOffset = request.OffsetItems.Min(o => o.Offset);
         
         for (var i = 0; i < request.OffsetItems.Length; i++)
         {
-            batchItems[i] = BuildItem(request.OffsetItems[i], request.GroupId, i);
+            batchItems[i] = BuildItem(request.OffsetItems[i], request.GroupId, baseOffset, minTimestamp);
         }
 
         var batch = new LogMessageBatch<LogCommitKey, LogCommitValue>
         {
             BatchLength = 0, // TBD
-            BaseOffset = 0, // TBD
+            Attributes = 0, // TBD
+            BaseOffset = baseOffset,
             LastOffsetDelta = batchItems[^1].OffsetDelta,
+            MinTimestamp = minTimestamp,
+            MaxTimestamp = maxTimestamp,
+            Version = 0, // TBD
+            Checksum = 0, // TBD
             Payload = batchItems,
-            Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
         };
         
         throw new NotImplementedException();
 
-        static LogMessageBatchItem<LogCommitKey, LogCommitValue> BuildItem(CommitOffsetItem offsetItem, string groupId, int index)
+        static LogMessageBatchItem<LogCommitKey, LogCommitValue> BuildItem(CommitOffsetItem offsetItem, string groupId, long baseOffset, long minTimestamp)
         {
             var commitKey = new LogCommitKey(offsetItem.Topic, groupId, offsetItem.Partition);
             var commitValue = new LogCommitValue(offsetItem.Offset, offsetItem.Timestamp);
-            
+
             return new LogMessageBatchItem<LogCommitKey, LogCommitValue>
             {
                 RecordLength = 0, // TBD
-                OffsetDelta = index,
+                Attributes = 0, // TBD
+                OffsetDelta = offsetItem.Offset - baseOffset,
+                TimestampDelta = offsetItem.Timestamp - minTimestamp,
                 KeyLength = 0, // TBD
                 Key = commitKey,
-                PayloadLength = 0,// TBD
+                PayloadLength = 0, // TBD
                 Payload = commitValue,
                 MetadataLength = 0, // TBD
-                Metadata = null,
-                
+                Metadata = null // TBD
             };
         }
     }

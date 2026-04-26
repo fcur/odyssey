@@ -324,3 +324,26 @@ public sealed class Int64CustomConverter : JsonConverter<long>
         writer.WriteStringValue(value.ToString("D20"));
     }
 }
+
+public sealed class ByteCustomConverter : JsonConverter<byte>
+{
+    public override byte Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        if (reader.TokenType == JsonTokenType.Number)
+        {
+            return reader.GetByte();
+        }
+
+        if (reader.TokenType == JsonTokenType.String)
+        {
+            return byte.Parse(reader.GetString()!);
+        }
+        
+        throw new JsonException();
+    }
+
+    public override void Write(Utf8JsonWriter writer, byte value, JsonSerializerOptions options)
+    {
+        writer.WriteStringValue(value.ToString("D3"));
+    }
+}
