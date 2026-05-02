@@ -9,6 +9,7 @@ namespace Odyssey.HRMS.EventLogLite;
 public static class LogSerializer
 {
     public static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = false };
+    private static readonly StandardFormat LengthPropertyFormat = new ('D', 10);
     private static readonly int RecordLengthLogMessageOffset;
     private const string EmptyRecordLength = "0000000000";
     private const byte JsonLineDivider = 10;
@@ -98,12 +99,14 @@ public static class LogSerializer
         return recordLength;
     }
     
-    
+    /// <summary>
+    /// In-place update
+    /// </summary>
     private static void UpdatePropertyLength(Span<byte> data, int offset, int value)
     {
         var  destination = data.Slice(offset, 10);
 
-        if (!Utf8Formatter.TryFormat(value, destination, out _, new StandardFormat('D', 10)))
+        if (!Utf8Formatter.TryFormat(value, destination, out _, LengthPropertyFormat))
         {
             throw new InvalidOperationException($"Could not format value {value} into the span at offset {offset}");
         }

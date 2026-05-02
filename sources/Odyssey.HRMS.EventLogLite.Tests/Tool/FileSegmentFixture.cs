@@ -1,4 +1,5 @@
 using Odyssey.HRMS.EventLogLite.Base;
+using System.Buffers;
 using System.Diagnostics.CodeAnalysis;
 using System.IO.MemoryMappedFiles;
 using System.Text;
@@ -79,5 +80,47 @@ public sealed class FileSegmentFixture : IAsyncLifetime
         var sizeInBytes = Encoding.UTF8.GetByteCount(jsonString);
         
         return sizeInBytes;
+    }
+
+    public int SaveBuffer(string path, ArrayBufferWriter<byte> sharedBuffer)
+    {
+        const int capacity = 1 * 1024 * 1024; // 1Mb
+        
+        var currentFileOffset = 0;
+        var dataToWrite = sharedBuffer.WrittenSpan;
+        var length = dataToWrite.Length;
+        
+        using var mmf = MemoryMappedFile.CreateFromFile(path, FileMode.Create, null, capacity);
+        using var accessor = mmf.CreateViewAccessor(offset:0, size: length, access: MemoryMappedFileAccess.ReadWrite);
+        
+        unsafe
+        {
+            byte* ptr = null;
+            accessor.SafeMemoryMappedViewHandle.AcquirePointer(ref ptr);
+            try
+            {
+                var destSpan = new Span<byte>(ptr + accessor.PointerOffset + currentFileOffset, length);
+                dataToWrite.CopyTo(destSpan);
+            }
+            finally
+            {
+                accessor.SafeMemoryMappedViewHandle.ReleasePointer();
+                sharedBuffer.Clear();
+            }
+        }
+
+        currentFileOffset += length;
+        return length;
+    }
+
+    public void CutAndCloseSegment(string path, int length)
+    {
+        // release mmf
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        
+        // close segment
+        using var fs = new FileStream(path, FileMode.Open, FileAccess.Write, FileShare.None);
+        fs.SetLength(length);
     }
 }
