@@ -1,4 +1,5 @@
 using Odyssey.HRMS.EventLogLite.Entities;
+using System.Threading.Tasks.Sources;
 
 namespace Odyssey.HRMS.EventLogLite.Base;
 
@@ -106,7 +107,28 @@ public sealed class JoinGroupResponseError(string ErrorMessage, string ErrorCode
     public static JoinGroupResponseError? NotSet => null;
 }
 
-public sealed record CommitOffsetRequest(ConsumerGroupId GroupId, ConsumerMemberId MemberId,  int ConsumerGeneration, CommitOffsetItem[] OffsetItems);
+public sealed class CommitOffsetRequest : IValueTaskSource<bool>
+{
+    private ManualResetValueTaskSourceCore<bool> _completionEvent = new();
+
+    public ConsumerGroupId GroupId { get; init; }
+    public ConsumerMemberId MemberId { get; init; }
+    public int ConsumerGeneration { get; init; }
+    public CommitOffsetItem[] OffsetItems { get; init; } = null!;
+        
+    public ValueTask<bool> WaitForCompletion() => new ValueTask<bool>(this, _completionEvent.Version);
+    public bool GetResult(short token)=>_completionEvent.GetResult(token);
+
+    public ValueTaskSourceStatus GetStatus(short token) =>_completionEvent.GetStatus(token);
+
+    public void OnCompleted(Action<object?> continuation, object? state, short token, ValueTaskSourceOnCompletedFlags flags)
+    {
+        _completionEvent.OnCompleted(continuation, state, token, flags);
+    }
+    public void Complete() => _completionEvent.SetResult(true);
+
+    public void Reset() => _completionEvent.Reset();
+}
 
 public sealed record CommitOffsetItem(string Topic, byte Partition, long Offset, long Timestamp);
 

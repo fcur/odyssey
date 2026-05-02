@@ -2,14 +2,14 @@ using Microsoft.Extensions.Logging;
 using Odyssey.HRMS.EventLogLite.Entities;
 using Odyssey.HRMS.EventLogLite.Producer;
 using System.Collections.Concurrent;
-using System.IO.Pipes;
 using System.Text;
+using System.Threading.Channels;
 
 namespace Odyssey.HRMS.EventLogLite.Base;
 
 // TODO: add compression
 // https://github.com/cocowalla/serilog-sinks-file-gzip
-public sealed class FileEventLogBroker : IEventBroker
+public sealed class FileEventLogBroker : IEventBroker, IAsyncDisposable
 //<TEvent> where TEvent : class
 {
     private const uint PartitionIdSeed = 42;
@@ -49,6 +49,11 @@ public sealed class FileEventLogBroker : IEventBroker
 
     // private readonly ConcurrentDictionary<byte, LinkedList<FileLogSegment>> _segmentMap;
 
+
+    private readonly Channel<CommitOffsetRequest> _offsetsChannel;
+    private readonly CancellationTokenSource _offsetsCts = new();
+    private readonly Task _processOffsetsCompletionTask;
+    
     public FileEventLogBroker(ILogger<FileEventLogBroker> logger, EventBrokerSettings brokerSettings, IFileEventLogger eventLogger,
         IFileEventLogger offsetLogger, params EventLogTopic[] topics)
     {
@@ -75,6 +80,9 @@ public sealed class FileEventLogBroker : IEventBroker
         _consumerGenerations = [];
         // var opt = new BoundedChannelOptions(1000) { SingleReader = false, SingleWriter = true, FullMode = BoundedChannelFullMode.Wait };
         // _mainChannel = Channel.CreateBounded<LogResponse<TEvent>>(opt);
+
+        _offsetsChannel = Channel.CreateUnbounded<CommitOffsetRequest>(new UnboundedChannelOptions { SingleReader = true, SingleWriter = false });
+        _processOffsetsCompletionTask = Task.Run(() => ProcessOffsets(_offsetsCts.Token));
     }
 
     public Task Start(CancellationToken cancellationToken = default)
@@ -320,57 +328,14 @@ public sealed class FileEventLogBroker : IEventBroker
         return result;
     }
 
-    public Task<CommitOffsetResponse> CommitOffset(CommitOffsetRequest request, CancellationToken cancellationToken = default)
+    public async Task<CommitOffsetResponse> CommitOffset(CommitOffsetRequest request, CancellationToken cancellationToken = default)
     {
-        var partitionId = GetPartition(request);
-        var partitionKey = new PartitionKey(_offsetsTopic.Name, partitionId);
-        
-        var segment = _activeSegments[partitionKey]; // throws exception
-        var batchItems = new LogMessageBatchItem<LogCommitKey, LogCommitValue>[request.OffsetItems.Length];
-        
-        var minTimestamp = request.OffsetItems.Min(o => o.Timestamp);
-        var maxTimestamp = request.OffsetItems.Max(o => o.Timestamp);
-        var baseOffset = request.OffsetItems.Min(o => o.Offset);
-        
-        for (var i = 0; i < request.OffsetItems.Length; i++)
-        {
-            batchItems[i] = BuildItem(request.OffsetItems[i], request.GroupId, baseOffset, minTimestamp);
-        }
+        await _offsetsChannel.Writer.WriteAsync(request, cancellationToken);
+        // throw new NotImplementedException();
 
-        var batch = new LogMessageBatch<LogCommitKey, LogCommitValue>
-        {
-            BatchLength = 0, // TBD
-            Attributes = 0, // TBD
-            BaseOffset = baseOffset,
-            LastOffsetDelta = batchItems[^1].OffsetDelta,
-            MinTimestamp = minTimestamp,
-            MaxTimestamp = maxTimestamp,
-            Version = 0, // TBD
-            Checksum = 0, // TBD
-            Payload = batchItems,
-        };
-        
-        throw new NotImplementedException();
+        await request.WaitForCompletion();
 
-        static LogMessageBatchItem<LogCommitKey, LogCommitValue> BuildItem(CommitOffsetItem offsetItem, string groupId, long baseOffset, long minTimestamp)
-        {
-            var commitKey = new LogCommitKey(offsetItem.Topic, groupId, offsetItem.Partition);
-            var commitValue = new LogCommitValue(offsetItem.Offset, offsetItem.Timestamp);
-
-            return new LogMessageBatchItem<LogCommitKey, LogCommitValue>
-            {
-                RecordLength = 0, // TBD
-                Attributes = 0, // TBD
-                OffsetDelta = offsetItem.Offset - baseOffset,
-                TimestampDelta = offsetItem.Timestamp - minTimestamp,
-                KeyLength = 0, // TBD
-                Key = commitKey,
-                PayloadLength = 0, // TBD
-                Payload = commitValue,
-                MetadataLength = 0, // TBD
-                Metadata = null // TBD
-            };
-        }
+        return new CommitOffsetResponse(null);
     }
 
     // [Obsolete]
@@ -709,6 +674,87 @@ public sealed class FileEventLogBroker : IEventBroker
     {
         throw new NotImplementedException();
     }
+
+    private async Task ProcessOffsets(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await foreach (var request in _offsetsChannel.Reader.ReadAllAsync(cancellationToken))
+            {
+                var partitionId = GetPartition(request);
+                var partitionKey = new PartitionKey(_offsetsTopic.Name, partitionId);
+
+                var baseOffset = _latestOffsets[partitionKey]; // throws exception
+                
+                var batchItems = new LogMessageBatchItem<LogCommitKey, LogCommitValue>[request.OffsetItems.Length];
+        
+                var minTimestamp = request.OffsetItems.Min(o => o.Timestamp);
+                var maxTimestamp = request.OffsetItems.Max(o => o.Timestamp);
+
+                for (int i = 0, delta = 0; i < request.OffsetItems.Length; i++)
+                {
+                    // TODO: offset delta logic
+                    batchItems[i] = BuildItem(request.OffsetItems[i], delta, request.GroupId, minTimestamp);
+                }
+
+                var batch = new LogMessageBatch<LogCommitKey, LogCommitValue>
+                {
+                    BatchLength = 0, // TBD
+                    Attributes = 0, // TBD
+                    BaseOffset = baseOffset,
+                    LastOffsetDelta = batchItems[^1].OffsetDelta,
+                    MinTimestamp = minTimestamp,
+                    MaxTimestamp = maxTimestamp,
+                    Version = 0, // TBD
+                    Checksum = 0, // TBD
+                    Payload = batchItems,
+                };
+                
+                // TODO: serialize
+                var segment = _activeSegments[partitionKey]; // throws exception
+
+                
+                _latestOffsets[partitionKey] = baseOffset + batch.LastOffsetDelta + 1;
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            
+        }
+        
+        static LogMessageBatchItem<LogCommitKey, LogCommitValue> BuildItem(CommitOffsetItem offsetItem, int offsetDelta, string groupId, long minTimestamp)
+        {
+            var commitKey = new LogCommitKey(offsetItem.Topic, groupId, offsetItem.Partition);
+            var commitValue = new LogCommitValue(offsetItem.Offset, offsetItem.Timestamp);
+
+            return new LogMessageBatchItem<LogCommitKey, LogCommitValue>
+            {
+                RecordLength = 0, // TBD
+                Attributes = 0, // TBD
+                OffsetDelta = offsetDelta,
+                TimestampDelta = offsetItem.Timestamp - minTimestamp,
+                KeyLength = 0, // TBD
+                Key = commitKey,
+                PayloadLength = 0, // TBD
+                Payload = commitValue,
+                MetadataLength = 0, // TBD
+                Metadata = null // TBD
+            };
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    { 
+        try
+        {
+            await _offsetsCts.CancelAsync();
+            await _processOffsetsCompletionTask;
+        }
+        finally
+        {
+            _offsetsCts.Dispose();
+        }
+    }
 }
 
 public interface IFileLogCleaner : IEventLogLite
@@ -755,4 +801,3 @@ public readonly record struct ConsumerGroupMemberKey(ConsumerGroupId GroupId, Co
 public readonly record struct ConsumerGroupIdKey(string MemberId, string GroupName, string TopicName);
 
 public readonly record struct PartitionId(byte Value);
-

@@ -4,7 +4,9 @@ using FluentAssertions.Execution;
 using Odyssey.HRMS.EventLogLite.Base;
 using Odyssey.HRMS.EventLogLite.Entities;
 using Odyssey.HRMS.EventLogLite.Tests.Tool;
+using System.Buffers;
 using System.Diagnostics.CodeAnalysis;
+using System.IO.MemoryMappedFiles;
 
 namespace Odyssey.HRMS.EventLogLite.Tests;
 
@@ -319,6 +321,55 @@ public sealed class JsonFileEventLoggerTests : IAsyncLifetime, IClassFixture<Fil
         // position.Next.Should().Be(size + 1);
         // linesCount.Should().Be(2);
 
+    }
+
+    [Theory, AutoData]
+    public async Task WriteMessagesUsingJsonRowSerializer(string key, TestEvent payload, int randomNumber)
+    {
+        // Arrange
+        const byte partition = 131;
+        var itemsCount = randomNumber + 124 % 42;
+        long wantedItemOffset = itemsCount % 3 + itemsCount % 4;
+        var wantedItemsCount = 22;
+        
+        var cts = new CancellationTokenSource();
+        var request = new LogRequest<TestEvent> { Key = key, Payload = payload };
+        var logSegment = FileLogSegment.New(partition, _fixture.CreateSegmentRoot(partition));
+        var logMessages = Enumerable.Range(0, itemsCount).Select(v => LogMessage<TestEvent>.Create(request, v)).ToArray();
+        var sharedBuffer = new ArrayBufferWriter<byte>();
+        var path = logSegment.GetLogFilePath();
+        // Act
+        foreach (var item in logMessages)
+        {
+            var size = LogSerializer.SerializeAsJsonRow(sharedBuffer, item);
+            // _= await _logger.Write(item, logSegment, cts.Token);
+        }
+        
+        var dataToWrite = sharedBuffer.WrittenSpan;
+        var length = dataToWrite.Length;
+        var capacity = 1 * 1024 * 1024; // 1Mb
+        
+        var currentFileOffset = 0;
+        using var mmf = MemoryMappedFile.CreateFromFile(path, FileMode.Create, null, capacity);
+        using var accessor = mmf.CreateViewAccessor(offset:0, size: length, access: MemoryMappedFileAccess.ReadWrite);
+        
+        unsafe
+        {
+            byte* ptr = null;
+            accessor.SafeMemoryMappedViewHandle.AcquirePointer(ref ptr);
+            try
+            {
+                var destSpan = new Span<byte>(ptr + accessor.PointerOffset + currentFileOffset, length);
+                dataToWrite.CopyTo(destSpan);
+            }
+            finally
+            {
+                accessor.SafeMemoryMappedViewHandle.ReleasePointer();
+                sharedBuffer.Clear();
+            }
+        }
+
+        currentFileOffset += length;
     }
     
     public Task InitializeAsync()

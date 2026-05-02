@@ -250,7 +250,10 @@ public sealed class FileEventLogBrokerTests : IAsyncLifetime, IClassFixture<File
             new CommitOffsetItem(topic1Name, 1, 102,commit2Time), 
             new CommitOffsetItem(topic2Name, 2, 93,commit3Time)
         };
-        var commitRequest = new CommitOffsetRequest(groupId, memberId, consumerGeneration, offsets);
+        var commitRequest = new CommitOffsetRequest
+        {
+            GroupId = groupId, MemberId = memberId, ConsumerGeneration = consumerGeneration, OffsetItems = offsets,
+        };
 
         var result = await broker.CommitOffset(commitRequest, cts.Token);
 

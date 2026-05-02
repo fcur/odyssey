@@ -13,7 +13,6 @@ public sealed class JsonFileEventLogger : IFileEventLogger
 {
     // log divider symbol, equals to '\n'
     private const byte EventLogDivider = 10;
-    public static readonly JsonSerializerOptions SerializerOptions = new() { WriteIndented = false };
     private readonly ConcurrentDictionary<byte, long> _lastPosition = new();
 
     public async Task<PositionPair> WriteBatch<TEvent>(IReadOnlyCollection<LogMessage<TEvent>> logMessages, FileLogSegment segment,
@@ -26,7 +25,7 @@ public sealed class JsonFileEventLogger : IFileEventLogger
 
         foreach (var payload in logMessages)
         {
-            await JsonSerializer.SerializeAsync(fs, payload, SerializerOptions, cancellationToken);
+            await JsonSerializer.SerializeAsync(fs, payload, LogSerializer.JsonOptions, cancellationToken);
             await fs.WriteAsync(new[] { EventLogDivider }, cancellationToken);
         }
 
@@ -236,7 +235,7 @@ public sealed class JsonFileEventLogger : IFileEventLogger
         fs.Seek(0, SeekOrigin.End);
 
         var startPosition = fs.Position;
-        await JsonSerializer.SerializeAsync(fs, payload, SerializerOptions, cancellationToken);
+        await JsonSerializer.SerializeAsync(fs, payload, LogSerializer.JsonOptions, cancellationToken);
         await fs.WriteAsync(new[] { EventLogDivider }, cancellationToken);
 
         return new PositionPair(startPosition, fs.Position);

@@ -5,22 +5,16 @@ using System.Text.Json.Serialization;
 
 namespace Odyssey.HRMS.EventLogLite.Entities;
 
-public sealed record LogMessage<TEvent> where TEvent : class
+public record LogMessage
 {
     [JsonConverter(typeof(Int32CustomConverter))]
     public int RecordLength { get; set; }
-    
     [JsonConverter(typeof(Int32CustomConverter))]
     public int KeyLength { get; set; }
-    public string Key { get; set; }
-    
     [JsonConverter(typeof(Int32CustomConverter))]
     public int PayloadLength { get; set; }
-    public TEvent Payload { get; set; }
-    
     [JsonConverter(typeof(Int32CustomConverter))]
     public int MetadataLength { get; set; }
-    public Dictionary<string, object> Metadata { get; set; }
     
     [JsonConverter(typeof(Int64CustomConverter))]
     public long Timestamp { get; set; } // => Timestamp delta
@@ -29,6 +23,13 @@ public sealed record LogMessage<TEvent> where TEvent : class
     /// </summary>
     [JsonConverter(typeof(Int64CustomConverter))]
     public long Offset { get; set; } // => Offset delta
+}
+
+public sealed record LogMessage<TEvent> : LogMessage where TEvent : class
+{
+    public string Key { get; set; }
+    public TEvent Payload { get; set; }
+    public Dictionary<string, object>? Metadata { get; set; }
     
     public static LogMessage<TEvent> Create(LogRequest<TEvent> request, long offset)
     {
@@ -60,7 +61,7 @@ public sealed record LogMessage<TEvent> where TEvent : class
     
     public static LogMessage<TEvent> CreateForJson(LogRequest<TEvent> request, long offset)
     {
-        var serializerOptions = JsonFileEventLogger.SerializerOptions;
+        var serializerOptions = LogSerializer.JsonOptions;
         var timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         var msg = new  LogMessage<TEvent>
         {
