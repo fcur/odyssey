@@ -322,11 +322,10 @@ public sealed class JsonFileEventLoggerTests : IAsyncLifetime, IClassFixture<Fil
         // position.Start.Should().Be(0);
         // position.Next.Should().Be(size + 1);
         // linesCount.Should().Be(2);
-
     }
 
     [Theory, AutoData]
-    public async Task WriteMessagesUsingJsonRowSerializer(string key, TestEvent payload, int randomNumber)
+    public void WriteMessagesUsingJsonRowSerializer(string key, TestEvent payload, int randomNumber)
     {
         // Arrange
         const byte partition = 131;
@@ -342,6 +341,64 @@ public sealed class JsonFileEventLoggerTests : IAsyncLifetime, IClassFixture<Fil
         var path = logSegment.GetLogFilePath();
         var bufferSize = 0;
         foreach (var item in logMessages)
+        {
+            bufferSize += LogSerializer.SerializeAsJsonRow(sharedBuffer, item);
+        }
+        
+        // Act
+        var segmentLength = _fixture.SaveBuffer(path, sharedBuffer);
+        _fixture.CutAndCloseSegment(path, segmentLength);
+        
+        using var scope = new AssertionScope();
+        bufferSize.Should().Be(segmentLength);
+    }
+    
+    [Theory, AutoData]
+    public void WriteMessagesBatchUsingJsonRowSerializer(string key, TestEvent payload, int randomNumber)
+    {
+        // Arrange
+        const byte partition = 131;
+        var itemsCount = randomNumber + 124 % 42;
+        var request = new LogRequest<TestEvent> { Key = key, Payload = payload };
+        var logSegment = FileLogSegment.New(partition, _fixture.CreateSegmentRoot(partition));
+
+        var logMessages = Enumerable.Range(0, itemsCount).Select(v => LogMessage<TestEvent>.Create(request, v)).ToArray();
+        var sharedBuffer = new ArrayBufferWriter<byte>();
+        var path = logSegment.GetLogFilePath();
+        var bufferSize = 0;
+
+        var batchSize = 33;
+        int totalMessages = logMessages.Length;
+        var batchesCount = (logMessages.Length + batchSize -1)/batchSize;
+        var batches = new  List<LogMessageBatch<string, TestEvent>>(batchesCount);
+        
+        for (var i = 0; i < totalMessages; i += batchSize)
+        {
+            var currentBatchSize = Math.Min(batchSize, totalMessages - i);
+            var batchBaseOffset = logMessages[i].Offset;
+    
+            var items = new LogMessageBatchItem<string, TestEvent>[currentBatchSize];
+    
+            for (var j = 0; j < currentBatchSize; j++)
+            {
+                var msg = logMessages[i + j];
+                items[j] = new LogMessageBatchItem<string, TestEvent>
+                {
+                    Key = msg.Key,
+                    Payload = msg.Payload,
+                    OffsetDelta = msg.Offset - batchBaseOffset
+                };
+            }
+
+            batches.Add(new LogMessageBatch<string, TestEvent>
+            {
+                BaseOffset = batchBaseOffset,
+                Items = items,
+                ItemsCount = items.Length
+            });
+        }
+        
+        foreach (var item in batches)
         {
             bufferSize += LogSerializer.SerializeAsJsonRow(sharedBuffer, item);
         }

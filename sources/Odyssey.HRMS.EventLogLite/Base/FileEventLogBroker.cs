@@ -688,13 +688,13 @@ public sealed class FileEventLogBroker : IEventBroker, IAsyncDisposable
                 
                 var batchItems = new LogMessageBatchItem<LogCommitKey, LogCommitValue>[request.OffsetItems.Length];
         
-                var minTimestamp = request.OffsetItems.Min(o => o.Timestamp);
+                var firstTimestamp = request.OffsetItems[0].Timestamp;
                 var maxTimestamp = request.OffsetItems.Max(o => o.Timestamp);
 
                 for (int i = 0, delta = 0; i < request.OffsetItems.Length; i++)
                 {
                     // TODO: offset delta logic
-                    batchItems[i] = BuildItem(request.OffsetItems[i], delta, request.GroupId, minTimestamp);
+                    batchItems[i] = BuildItem(request.OffsetItems[i], delta, request.GroupId, firstTimestamp);
                 }
 
                 var batch = new LogMessageBatch<LogCommitKey, LogCommitValue>
@@ -703,11 +703,11 @@ public sealed class FileEventLogBroker : IEventBroker, IAsyncDisposable
                     Attributes = 0, // TBD
                     BaseOffset = baseOffset,
                     LastOffsetDelta = batchItems[^1].OffsetDelta,
-                    MinTimestamp = minTimestamp,
+                    FirstTimestamp = firstTimestamp,
                     MaxTimestamp = maxTimestamp,
                     Version = 0, // TBD
                     Checksum = 0, // TBD
-                    Payload = batchItems,
+                    Items = batchItems,
                 };
                 
                 // TODO: serialize
@@ -722,7 +722,7 @@ public sealed class FileEventLogBroker : IEventBroker, IAsyncDisposable
             
         }
         
-        static LogMessageBatchItem<LogCommitKey, LogCommitValue> BuildItem(CommitOffsetItem offsetItem, int offsetDelta, string groupId, long minTimestamp)
+        static LogMessageBatchItem<LogCommitKey, LogCommitValue> BuildItem(CommitOffsetItem offsetItem, int offsetDelta, string groupId, long firstTimestamp)
         {
             var commitKey = new LogCommitKey(offsetItem.Topic, groupId, offsetItem.Partition);
             var commitValue = new LogCommitValue(offsetItem.Offset, offsetItem.Timestamp);
@@ -732,7 +732,7 @@ public sealed class FileEventLogBroker : IEventBroker, IAsyncDisposable
                 RecordLength = 0, // TBD
                 Attributes = 0, // TBD
                 OffsetDelta = offsetDelta,
-                TimestampDelta = offsetItem.Timestamp - minTimestamp,
+                TimestampDelta = offsetItem.Timestamp - firstTimestamp,
                 KeyLength = 0, // TBD
                 Key = commitKey,
                 PayloadLength = 0, // TBD

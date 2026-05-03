@@ -24,13 +24,13 @@ public record LogMessage
     /// </summary>
     [JsonConverter(typeof(Int64JsonConverter))]
     public long Offset { get; set; } // => Offset delta
+    public Dictionary<string, object>? Metadata { get; set; }
 }
 
 public sealed record LogMessage<TEvent> : LogMessage where TEvent : class
 {
     public string Key { get; set; }
     public TEvent Payload { get; set; }
-    public Dictionary<string, object>? Metadata { get; set; }
     
     public static LogMessage<TEvent> Create(LogRequest<TEvent> request, long offset)
     {
@@ -239,8 +239,15 @@ public sealed record LogCommitKey(string Topic, string GroupId, byte PartitionId
 public sealed record LogCommitValue(long Offset, long Timestamp);
 
 
-public sealed record LogMessageBatch<TKey, TData> where TKey : class where TData: class
+
+public record LogMessageBatch
 {
+    /// <summary>
+    /// Base offset for whole batch. Equals to the 1st item's offset.
+    /// </summary>
+    [JsonConverter(typeof(Int64JsonConverter))]
+    public long BaseOffset{ get; init; }
+    
     /// <summary>
     /// Total batch size in bytes.
     /// </summary>
@@ -250,11 +257,6 @@ public sealed record LogMessageBatch<TKey, TData> where TKey : class where TData
     [JsonConverter(typeof(ByteJsonConverter))]
     public byte Attributes { get; set; }
     
-    /// <summary>
-    /// Base offset for whole batch. Equals to the 1st item's offset.
-    /// </summary>
-    [JsonConverter(typeof(Int64JsonConverter))]
-    public long BaseOffset{ get; init; }
     
     /// <summary>
     /// Relative offset of the last item in batch.
@@ -263,7 +265,7 @@ public sealed record LogMessageBatch<TKey, TData> where TKey : class where TData
     public long LastOffsetDelta{ get; init; }
     
     [JsonConverter(typeof(Int64JsonConverter))]
-    public long MinTimestamp { get; set; }
+    public long FirstTimestamp { get; set; }
     
     [JsonConverter(typeof(Int64JsonConverter))]
     public long MaxTimestamp { get; set; }
@@ -275,13 +277,33 @@ public sealed record LogMessageBatch<TKey, TData> where TKey : class where TData
     public byte Version { get; set; }
     
     /// <summary>
-    /// Batch items.
+    /// Unique producer ID for idempotence.
     /// </summary>
-    public LogMessageBatchItem<TKey, TData>[] Payload { get; init; } = [];
+    [JsonConverter(typeof(Int64JsonConverter))]
+    public long ProducerId { get; set; }
+    
+    [JsonConverter(typeof(ByteJsonConverter))]
+    public byte ProducerEpoch { get; set; }
+    
+    [JsonConverter(typeof(Int32JsonConverter))]
+    public int BatchOrder { get; set; }
+    
+    /// <summary>
+    /// Compaction might delete old records.
+    /// </summary>
+    [JsonConverter(typeof(Int32JsonConverter))]
+    public int ItemsCount { get; set; }
 }
 
+public sealed record LogMessageBatch<TKey, TData>: LogMessageBatch where TKey : class where TData: class
+{
+    /// <summary>
+    /// Batch items.
+    /// </summary>
+    public LogMessageBatchItem<TKey, TData>[] Items { get; init; } = [];
+}
 
-public sealed record LogMessageBatchItem<TKey, TData> where TKey : class where TData: class
+public record LogMessageBatchItem
 {
     /// <summary>
     /// Batch item size in bytes.
@@ -304,21 +326,25 @@ public sealed record LogMessageBatchItem<TKey, TData> where TKey : class where T
     [JsonConverter(typeof(Int32JsonConverter))]
     public int KeyLength { get; set; }
     /// <summary>
-    /// Key data.
-    /// </summary>
-    public TKey Key { get; init; } = null!;
-
-    /// <summary>
     /// Payload size in bytes.
     /// </summary>
     [JsonConverter(typeof(Int32JsonConverter))]
     public int PayloadLength { get; set; }
+    
+    [JsonConverter(typeof(Int32JsonConverter))]
+    public int MetadataLength { get; set; }
+    public Dictionary<string, object>? Metadata { get; set; }
+}
+
+public sealed record LogMessageBatchItem<TKey, TData>: LogMessageBatchItem  where TKey : class where TData: class
+{
+    /// <summary>
+    /// Key data.
+    /// </summary>
+    public TKey Key { get; init; } = null!;
+    
     /// <summary>
     /// Payload data.
     /// </summary>
     public TData Payload { get; set; } = null!;
-
-    [JsonConverter(typeof(Int32JsonConverter))]
-    public int MetadataLength { get; set; }
-    public Dictionary<string, object>? Metadata { get; set; }
 }
