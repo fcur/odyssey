@@ -3,8 +3,9 @@ using System.Buffers;
 using System.Buffers.Text;
 using System.Runtime.InteropServices;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
-namespace Odyssey.HRMS.EventLogLite;
+namespace Odyssey.HRMS.EventLogLite.Serializer;
 
 public static class LogSerializer
 {
@@ -110,5 +111,77 @@ public static class LogSerializer
         {
             throw new InvalidOperationException($"Could not format value {value} into the span at offset {offset}");
         }
+    }
+}
+
+
+
+
+public sealed class Int32JsonConverter : JsonConverter<int>
+{
+    public override int Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        if (reader.TokenType == JsonTokenType.Number)
+        {
+            return reader.GetInt32();
+        }
+
+        if (reader.TokenType == JsonTokenType.String)
+        {
+            return int.Parse(reader.GetString()!);
+        }
+        
+        throw new JsonException();
+    }
+
+    public override void Write(Utf8JsonWriter writer, int value, JsonSerializerOptions options)
+    {
+        writer.WriteStringValue(value.ToString("D10"));
+    }
+}
+
+public sealed class Int64JsonConverter : JsonConverter<long>
+{
+    public override long Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        if (reader.TokenType == JsonTokenType.Number)
+        {
+            return reader.GetInt64();
+        }
+
+        if (reader.TokenType == JsonTokenType.String)
+        {
+            return long.Parse(reader.GetString()!);
+        }
+        
+        throw new JsonException();
+    }
+
+    public override void Write(Utf8JsonWriter writer, long value, JsonSerializerOptions options)
+    {
+        writer.WriteStringValue(value.ToString("D20"));
+    }
+}
+
+public sealed class ByteJsonConverter : JsonConverter<byte>
+{
+    public override byte Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        if (reader.TokenType == JsonTokenType.Number)
+        {
+            return reader.GetByte();
+        }
+
+        if (reader.TokenType == JsonTokenType.String)
+        {
+            return byte.Parse(reader.GetString()!);
+        }
+        
+        throw new JsonException();
+    }
+
+    public override void Write(Utf8JsonWriter writer, byte value, JsonSerializerOptions options)
+    {
+        writer.WriteStringValue(value.ToString("D3"));
     }
 }

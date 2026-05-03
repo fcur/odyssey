@@ -1,4 +1,5 @@
 using Odyssey.HRMS.EventLogLite.Entities;
+using Odyssey.HRMS.EventLogLite.Serializer;
 using System.Collections.Concurrent;
 using System.IO.MemoryMappedFiles;
 using System.Runtime.CompilerServices;
@@ -276,73 +277,3 @@ public sealed class JsonFileEventLogger : IFileEventLogger
 /// <param name="Position">position in bytes</param>
 public record struct LogIndex(long Index, long Position);
 
-
-
-public sealed class Int32CustomConverter : JsonConverter<int>
-{
-    public override int Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
-    {
-        if (reader.TokenType == JsonTokenType.Number)
-        {
-            return reader.GetInt32();
-        }
-
-        if (reader.TokenType == JsonTokenType.String)
-        {
-            return int.Parse(reader.GetString()!);
-        }
-        
-        throw new JsonException();
-    }
-
-    public override void Write(Utf8JsonWriter writer, int value, JsonSerializerOptions options)
-    {
-        writer.WriteStringValue(value.ToString("D10"));
-    }
-}
-
-public sealed class Int64CustomConverter : JsonConverter<long>
-{
-    public override long Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
-    {
-        if (reader.TokenType == JsonTokenType.Number)
-        {
-            return reader.GetInt64();
-        }
-
-        if (reader.TokenType == JsonTokenType.String)
-        {
-            return long.Parse(reader.GetString()!);
-        }
-        
-        throw new JsonException();
-    }
-
-    public override void Write(Utf8JsonWriter writer, long value, JsonSerializerOptions options)
-    {
-        writer.WriteStringValue(value.ToString("D20"));
-    }
-}
-
-public sealed class ByteCustomConverter : JsonConverter<byte>
-{
-    public override byte Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
-    {
-        if (reader.TokenType == JsonTokenType.Number)
-        {
-            return reader.GetByte();
-        }
-
-        if (reader.TokenType == JsonTokenType.String)
-        {
-            return byte.Parse(reader.GetString()!);
-        }
-        
-        throw new JsonException();
-    }
-
-    public override void Write(Utf8JsonWriter writer, byte value, JsonSerializerOptions options)
-    {
-        writer.WriteStringValue(value.ToString("D3"));
-    }
-}

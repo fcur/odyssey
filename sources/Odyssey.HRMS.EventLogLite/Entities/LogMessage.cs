@@ -1,4 +1,5 @@
 using Odyssey.HRMS.EventLogLite.Base;
+using Odyssey.HRMS.EventLogLite.Serializer;
 using System.Runtime.InteropServices.ObjectiveC;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -7,21 +8,21 @@ namespace Odyssey.HRMS.EventLogLite.Entities;
 
 public record LogMessage
 {
-    [JsonConverter(typeof(Int32CustomConverter))]
+    [JsonConverter(typeof(Int32JsonConverter))]
     public int RecordLength { get; set; }
-    [JsonConverter(typeof(Int32CustomConverter))]
+    [JsonConverter(typeof(Int32JsonConverter))]
     public int KeyLength { get; set; }
-    [JsonConverter(typeof(Int32CustomConverter))]
+    [JsonConverter(typeof(Int32JsonConverter))]
     public int PayloadLength { get; set; }
-    [JsonConverter(typeof(Int32CustomConverter))]
+    [JsonConverter(typeof(Int32JsonConverter))]
     public int MetadataLength { get; set; }
     
-    [JsonConverter(typeof(Int64CustomConverter))]
+    [JsonConverter(typeof(Int64JsonConverter))]
     public long Timestamp { get; set; } // => Timestamp delta
     /// <summary>
     /// Unique number inside partition 
     /// </summary>
-    [JsonConverter(typeof(Int64CustomConverter))]
+    [JsonConverter(typeof(Int64JsonConverter))]
     public long Offset { get; set; } // => Offset delta
 }
 
@@ -243,34 +244,34 @@ public sealed record LogMessageBatch<TKey, TData> where TKey : class where TData
     /// <summary>
     /// Total batch size in bytes.
     /// </summary>
-    [JsonConverter(typeof(Int32CustomConverter))]
+    [JsonConverter(typeof(Int32JsonConverter))]
     public int BatchLength { get; set; }
     
-    [JsonConverter(typeof(ByteCustomConverter))]
+    [JsonConverter(typeof(ByteJsonConverter))]
     public byte Attributes { get; set; }
     
     /// <summary>
     /// Base offset for whole batch. Equals to the 1st item's offset.
     /// </summary>
-    [JsonConverter(typeof(Int64CustomConverter))]
+    [JsonConverter(typeof(Int64JsonConverter))]
     public long BaseOffset{ get; init; }
     
     /// <summary>
     /// Relative offset of the last item in batch.
     /// </summary>
-    [JsonConverter(typeof(Int64CustomConverter))]
+    [JsonConverter(typeof(Int64JsonConverter))]
     public long LastOffsetDelta{ get; init; }
     
-    [JsonConverter(typeof(Int64CustomConverter))]
+    [JsonConverter(typeof(Int64JsonConverter))]
     public long MinTimestamp { get; set; }
     
-    [JsonConverter(typeof(Int64CustomConverter))]
+    [JsonConverter(typeof(Int64JsonConverter))]
     public long MaxTimestamp { get; set; }
     
-    [JsonConverter(typeof(Int32CustomConverter))]
+    [JsonConverter(typeof(Int32JsonConverter))]
     public int Checksum { get; set; }
     
-    [JsonConverter(typeof(ByteCustomConverter))]
+    [JsonConverter(typeof(ByteJsonConverter))]
     public byte Version { get; set; }
     
     /// <summary>
@@ -285,22 +286,22 @@ public sealed record LogMessageBatchItem<TKey, TData> where TKey : class where T
     /// <summary>
     /// Batch item size in bytes.
     /// </summary>
-    [JsonConverter(typeof(Int32CustomConverter))]
+    [JsonConverter(typeof(Int32JsonConverter))]
     public int RecordLength { get; set; }
     
-    [JsonConverter(typeof(ByteCustomConverter))]
+    [JsonConverter(typeof(ByteJsonConverter))]
     public byte Attributes { get; set; }
     
-    [JsonConverter(typeof(Int64CustomConverter))]
+    [JsonConverter(typeof(Int64JsonConverter))]
     public long OffsetDelta { get; set; }
     
-    [JsonConverter(typeof(Int64CustomConverter))]
+    [JsonConverter(typeof(Int64JsonConverter))]
     public long TimestampDelta { get; set; }
     
     /// <summary>
     /// Key size in bytes.
     /// </summary>
-    [JsonConverter(typeof(Int32CustomConverter))]
+    [JsonConverter(typeof(Int32JsonConverter))]
     public int KeyLength { get; set; }
     /// <summary>
     /// Key data.
@@ -310,14 +311,14 @@ public sealed record LogMessageBatchItem<TKey, TData> where TKey : class where T
     /// <summary>
     /// Payload size in bytes.
     /// </summary>
-    [JsonConverter(typeof(Int32CustomConverter))]
+    [JsonConverter(typeof(Int32JsonConverter))]
     public int PayloadLength { get; set; }
     /// <summary>
     /// Payload data.
     /// </summary>
     public TData Payload { get; set; } = null!;
 
-    [JsonConverter(typeof(Int32CustomConverter))]
+    [JsonConverter(typeof(Int32JsonConverter))]
     public int MetadataLength { get; set; }
     public Dictionary<string, object>? Metadata { get; set; }
 }
