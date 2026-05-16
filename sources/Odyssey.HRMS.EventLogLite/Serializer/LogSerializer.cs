@@ -117,12 +117,23 @@ public static class LogSerializer
         ArgumentNullException.ThrowIfNull(messageBatch);
         
         var startPosition = sharedBuffer.WrittenCount;
+        var messageItemsLength = new MessageItemLength[messageBatch.ItemsCount];
+        int batchLengthPosition, batchLength,
+            recordLengthPosition, recordLengthStart, recordLength,
+            keyLengthPosition, keyLengthStart, keyLength, 
+            payloadLengthPosition, payloadLengthStart, payloadLength,
+            metadataLengthPosition, metadataLengthStart, metadataLength;
         
         using (var writer = new Utf8JsonWriter(sharedBuffer, Utf8WriterOptions))
         {
             writer.WriteStartObject();
             writer.WriteString(nameof(messageBatch.BaseOffset), messageBatch.BaseOffset.ToString(JsonInt64Format));
-            writer.WriteString(nameof(messageBatch.BatchLength), EmptyRecordLength);
+            
+            // batch length mark
+            writer.WritePropertyName(nameof(messageBatch.BatchLength)); writer.Flush();
+            batchLengthPosition = sharedBuffer.WrittenCount + 1 - startPosition;
+            writer.WriteStringValue(EmptyRecordLength);
+            
             writer.WriteString(nameof(messageBatch.Version), messageBatch.Version.ToString(JsonByteFormat));
             writer.WriteString(nameof(messageBatch.Checksum), messageBatch.Checksum.ToString(JsonInt32Format));
             writer.WriteString(nameof(messageBatch.Attributes), messageBatch.Attributes.ToString(JsonByteFormat));
@@ -136,9 +147,83 @@ public static class LogSerializer
 
             if (messageBatch.ItemsCount > 0)
             {
+                
                 writer.WritePropertyName(nameof(messageBatch.Items));
                 writer.WriteStartArray();
+
+                for (var i = 0; i < messageBatch.ItemsCount; i++)
+                {
+                    recordLengthPosition = 0; recordLengthStart = 0;
+                    keyLengthPosition = 0; keyLength = 0; keyLengthStart = 0;
+                    payloadLengthPosition = 0; payloadLength = 0; payloadLengthStart = 0;
+                    metadataLengthPosition = 0; metadataLengthStart = 0; metadataLength = 0;
+                    
+                    var item = messageBatch.Items[i];
+                    
+                    writer.Flush();
+                    recordLengthStart = sharedBuffer.WrittenCount;
+                    
+                    writer.WriteStartObject();
+                    
+                    // record length mark
+                    writer.WritePropertyName(nameof(item.RecordLength)); writer.Flush();
+                    recordLengthPosition = sharedBuffer.WrittenCount + 1 - startPosition;
+                    writer.WriteStringValue(EmptyRecordLength);
+                    
+                    // writer.WriteString(nameof(item.RecordLength), EmptyRecordLength);
+                    
+                    writer.WriteString(nameof(item.Attributes), item.Attributes.ToString(JsonByteFormat));
+                    writer.WriteString(nameof(item.OffsetDelta), item.OffsetDelta.ToString(JsonInt64Format));
+                    writer.WriteString(nameof(item.TimestampDelta), item.TimestampDelta.ToString(JsonInt64Format));
+                    
+                    // key length mark
+                    writer.WritePropertyName(nameof(item.KeyLength)); writer.Flush();
+                    keyLengthPosition = sharedBuffer.WrittenCount + 1 - startPosition;
+                    writer.WriteStringValue(EmptyRecordLength);
+                    // key length
+                    writer.WritePropertyName(nameof(item.Key)); 
+                    writer.Flush();
+                    keyLengthStart = sharedBuffer.WrittenCount;
+                    JsonSerializer.Serialize(writer, item.Key, JsonOptions);
+                    keyLength = sharedBuffer.WrittenCount - keyLengthStart;
+                    
+                    // payload length mark
+                    writer.WritePropertyName(nameof(item.PayloadLength)); 
+                    writer.Flush();
+                    payloadLengthPosition = sharedBuffer.WrittenCount + 1- startPosition;
+                    writer.WriteStringValue(EmptyRecordLength);
+                    // payload length
+                    writer.WritePropertyName(nameof(item.Payload)); writer.Flush();
+                    payloadLengthStart = sharedBuffer.WrittenCount;
+                    JsonSerializer.Serialize(writer, item.Payload, JsonOptions);
+                    payloadLength = sharedBuffer.WrittenCount - payloadLengthStart;
+                    
+                    if (item.Metadata != null)
+                    {
+                        // metadata length mark
+                        writer.WritePropertyName(nameof(item.MetadataLength)); writer.Flush();
+                        metadataLengthPosition =  sharedBuffer.WrittenCount + 1 - startPosition;
+                        writer.WriteStringValue(EmptyRecordLength);
                 
+                        // metadata length
+                        writer.WritePropertyName(nameof(item.Metadata)); writer.Flush();
+                        metadataLengthStart = sharedBuffer.WrittenCount;
+                        JsonSerializer.Serialize(writer, item.Metadata, JsonOptions);
+                        metadataLength = sharedBuffer.WrittenCount - metadataLengthStart;
+                    }
+                    
+                    
+                    writer.WriteEndObject();
+                    writer.Flush();
+                    
+                    recordLength = sharedBuffer.WrittenCount - recordLengthStart;
+                    
+                    messageItemsLength[i] = new MessageItemLength(
+                        recordLengthPosition, recordLength, 
+                        keyLengthPosition, keyLength, 
+                        payloadLengthPosition,  payloadLength, 
+                        metadataLengthPosition, metadataLength);
+                }
                 
                 writer.WriteEndArray();
             }
@@ -152,15 +237,16 @@ public static class LogSerializer
         span[0] = JsonLineDivider;
         sharedBuffer.Advance(1);
         
-        var recordLength = sharedBuffer.WrittenCount - startPosition;
+        batchLength = sharedBuffer.WrittenCount - startPosition;
         
         var allWrittenSpan = sharedBuffer.WrittenSpan;
-        var messageSpan = allWrittenSpan.Slice(startPosition, recordLength);
-        var writableSpan = MemoryMarshal.CreateSpan(ref MemoryMarshal.GetReference(messageSpan), recordLength);
+        var messageSpan = allWrittenSpan.Slice(startPosition, batchLength);
+        var mutableSpan = MemoryMarshal.CreateSpan(ref MemoryMarshal.GetReference(messageSpan), batchLength);
         
+        UpdatePropertyLength(mutableSpan, batchLengthPosition, batchLength);
+
         
-        
-        return recordLength;
+        return batchLength;
     }
     
     /// <summary>

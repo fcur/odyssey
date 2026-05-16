@@ -255,8 +255,13 @@ public record LogMessageBatch
     public int BatchLength { get; set; }
     
     [JsonConverter(typeof(ByteJsonConverter))]
-    public byte Attributes { get; set; }
+    public byte Version { get; set; }
     
+    [JsonConverter(typeof(Int32JsonConverter))]
+    public int Checksum { get; set; }
+    
+    [JsonConverter(typeof(ByteJsonConverter))]
+    public byte Attributes { get; set; }
     
     /// <summary>
     /// Relative offset of the last item in batch.
@@ -269,12 +274,6 @@ public record LogMessageBatch
     
     [JsonConverter(typeof(Int64JsonConverter))]
     public long MaxTimestamp { get; set; }
-    
-    [JsonConverter(typeof(Int32JsonConverter))]
-    public int Checksum { get; set; }
-    
-    [JsonConverter(typeof(ByteJsonConverter))]
-    public byte Version { get; set; }
     
     /// <summary>
     /// Unique producer ID for idempotence.
@@ -302,6 +301,9 @@ public sealed record LogMessageBatch<TKey, TData>: LogMessageBatch where TKey : 
     /// </summary>
     public LogMessageBatchItem<TKey, TData>[] Items { get; init; } = [];
 }
+
+
+public readonly record struct MessageItemLength(int RecordPosition, int RecordLength, int KeyPosition, int KeyLength, int PayloadPosition, int PayloadLength, int MetadataPosition, int MetadataLength);
 
 public record LogMessageBatchItem
 {
