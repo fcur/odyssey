@@ -36,6 +36,11 @@ public sealed record LogMessage<TEvent> : LogMessage where TEvent : class
     {
         var timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         
+        return Create(request,offset, timestamp);
+    }
+    
+    public static LogMessage<TEvent> Create(LogRequest<TEvent> request, long offset, long timestamp)
+    {
         return new LogMessage<TEvent>
         {
             Key = request.Key!,

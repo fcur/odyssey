@@ -1,5 +1,4 @@
 using AutoFixture.Xunit2;
-using Castle.Core.Logging;
 using FluentAssertions;
 using FluentAssertions.Execution;
 using Odyssey.HRMS.EventLogLite.Base;
@@ -8,7 +7,6 @@ using Odyssey.HRMS.EventLogLite.Serializer;
 using Odyssey.HRMS.EventLogLite.Tests.Tool;
 using System.Buffers;
 using System.Diagnostics.CodeAnalysis;
-using System.IO.MemoryMappedFiles;
 
 namespace Odyssey.HRMS.EventLogLite.Tests;
 
@@ -354,15 +352,22 @@ public sealed class JsonFileEventLoggerTests : IAsyncLifetime, IClassFixture<Fil
     }
     
     [Theory, AutoData]
-    public void WriteMessagesBatchUsingJsonRowSerializer(string key, TestEvent payload, int randomNumber)
+    public async Task WriteMessagesBatchUsingJsonRowSerializer(string key, TestEvent payload, int randomNumber)
     {
         // Arrange
         const byte partition = 131;
         var itemsCount = randomNumber + 124 % 42;
         var request = new LogRequest<TestEvent> { Key = key, Payload = payload };
         var logSegment = FileLogSegment.New(partition, _fixture.CreateSegmentRoot(partition));
+        var metadataCounter = 331;
+        var timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
-        var logMessages = Enumerable.Range(0, itemsCount).Select(v => LogMessage<TestEvent>.Create(request, v)).ToArray();
+        var logMessages = Enumerable.Range(0, itemsCount).Select(v => LogMessage<TestEvent>.Create(request, v, timestamp+v)).ToArray();
+        Array.ForEach(logMessages, logMessage =>
+        {
+            logMessage.Metadata = new Dictionary<string, object> { { "counter", metadataCounter++.ToString(LogSerializer.JsonInt32Format) } };
+        });
+        
         var sharedBuffer = new ArrayBufferWriter<byte>();
         var path = logSegment.GetLogFilePath();
         var bufferSize = 0;
@@ -370,13 +375,15 @@ public sealed class JsonFileEventLoggerTests : IAsyncLifetime, IClassFixture<Fil
         var batchSize = 33;
         int totalMessages = logMessages.Length;
         var batchesCount = (logMessages.Length + batchSize -1)/batchSize;
-        var batches = new  List<LogMessageBatch<string, TestEvent>>(batchesCount);
+        var batchSources = new  List<LogMessageBatch<string, TestEvent>>(batchesCount);
         
         for (var i = 0; i < totalMessages; i += batchSize)
         {
             var currentBatchSize = Math.Min(batchSize, totalMessages - i);
-            var batchBaseOffset = logMessages[i].Offset;
-    
+            var firstBatchMsg = logMessages[i];
+            var batchBaseOffset = firstBatchMsg.Offset;
+            var firstTimestamp = firstBatchMsg.Timestamp;
+            
             var items = new LogMessageBatchItem<string, TestEvent>[currentBatchSize];
     
             for (var j = 0; j < currentBatchSize; j++)
@@ -384,21 +391,38 @@ public sealed class JsonFileEventLoggerTests : IAsyncLifetime, IClassFixture<Fil
                 var msg = logMessages[i + j];
                 items[j] = new LogMessageBatchItem<string, TestEvent>
                 {
+                    RecordLength = 0, // TBS
+                    Attributes = 0, // TBD
+                    OffsetDelta = msg.Offset - batchBaseOffset,
+                    TimestampDelta = msg.Timestamp - firstTimestamp,
+                    KeyLength = 0, // TBS
                     Key = msg.Key,
+                    PayloadLength = 0, // TBS
                     Payload = msg.Payload,
-                    OffsetDelta = msg.Offset - batchBaseOffset
+                    MetadataLength =  0, // TBS
+                    Metadata = msg.Metadata
                 };
             }
 
-            batches.Add(new LogMessageBatch<string, TestEvent>
+            batchSources.Add(new LogMessageBatch<string, TestEvent>
             {
                 BaseOffset = batchBaseOffset,
-                Items = items,
-                ItemsCount = items.Length
+                BatchLength = 0, // TBD
+                Version = 0, // TBD
+                Checksum = 0, // TBD
+                Attributes = 0, // TBD
+                LastOffsetDelta = items[^1].OffsetDelta,
+                FirstTimestamp = firstTimestamp,
+                MaxTimestamp = items.Max(v=>v.TimestampDelta) + firstTimestamp,
+                ProducerId = 0, // TBD
+                ProducerEpoch = 0, // TBD
+                BatchOrder = 0, // TBD
+                ItemsCount = items.Length,
+                Items = items
             });
         }
         
-        foreach (var item in batches)
+        foreach (var item in batchSources)
         {
             bufferSize += LogSerializer.SerializeAsJsonRow(sharedBuffer, item);
         }
@@ -407,8 +431,78 @@ public sealed class JsonFileEventLoggerTests : IAsyncLifetime, IClassFixture<Fil
         var segmentLength = _fixture.SaveBuffer(path, sharedBuffer);
         _fixture.CutAndCloseSegment(path, segmentLength);
         
+        var batchHeaders = _fixture.ReadHeaders(path).ToArray();
+        var batchResults = await _fixture.ReadFile<LogMessageBatch<string, TestEvent>>(path).ToArrayAsync();
+        
         using var scope = new AssertionScope();
         bufferSize.Should().Be(segmentLength);
+        
+        batchSources.Count.Should().Be(batchResults.Length);
+        batchSources.Count.Should().Be(batchHeaders.Length);
+
+        for (var i = 0; i < batchSources.Count; i++)
+        {
+            var sourceBatch = batchSources[i];
+            var destinationBatch = batchResults[i];
+            var batchHeader = batchHeaders[i];
+
+            sourceBatch.Should().NotBeNull();
+            destinationBatch.Should().NotBeNull();
+            batchHeader.Should().NotBeNull();
+            
+            sourceBatch.BaseOffset.Should().Be(destinationBatch.BaseOffset);
+            batchHeader.BaseOffset.Should().Be(destinationBatch.BaseOffset);
+            
+            sourceBatch.BatchLength.Should().Be(0);
+            destinationBatch.BatchLength.Should().BeGreaterThan(0);
+            batchHeader.BatchLength.Should().Be(destinationBatch.BatchLength);
+            
+            sourceBatch.LastOffsetDelta.Should().Be(destinationBatch.LastOffsetDelta);
+            batchHeader.LastOffsetDelta.Should().Be(destinationBatch.LastOffsetDelta);
+            
+            sourceBatch.FirstTimestamp.Should().Be(destinationBatch.FirstTimestamp);
+            batchHeader.FirstTimestamp.Should().Be(destinationBatch.FirstTimestamp);
+            
+            sourceBatch.MaxTimestamp.Should().Be(destinationBatch.MaxTimestamp);
+            batchHeader.MaxTimestamp.Should().Be(destinationBatch.MaxTimestamp);
+            
+            sourceBatch.ItemsCount.Should().Be(destinationBatch.ItemsCount);
+            batchHeader.ItemsCount.Should().Be(destinationBatch.ItemsCount);
+            
+            for(var j=0; j< batchSources[i].ItemsCount; j++)
+            {
+                var sourceItem = batchSources[i].Items[j];
+                var destinationItem = batchResults[i].Items[j];
+                
+                sourceItem.Should().NotBeNull();
+                destinationItem.Should().NotBeNull();
+
+                sourceItem.RecordLength.Should().Be(0);
+                destinationItem.RecordLength.Should().BeGreaterThan(0);
+                
+                sourceItem.OffsetDelta.Should().Be(destinationItem.OffsetDelta);
+                sourceItem.TimestampDelta.Should().Be(destinationItem.TimestampDelta);
+                
+                sourceItem.KeyLength.Should().Be(0);
+                destinationItem.KeyLength.Should().BeGreaterThan(0);
+
+                sourceItem.Key.Should().Be(destinationItem.Key);
+                
+                sourceItem.PayloadLength.Should().Be(0);
+                destinationItem.PayloadLength.Should().BeGreaterThan(0);
+                
+                sourceItem.Payload.Id.Should().Be(destinationItem.Payload.Id);
+                sourceItem.Payload.OccurredAt.Should().Be(destinationItem.Payload.OccurredAt);
+                sourceItem.Payload.Message.Should().Be(destinationItem.Payload.Message);
+                sourceItem.Payload.Skipped.Should().Be(destinationItem.Payload.Skipped);
+                
+                sourceItem.MetadataLength.Should().Be(0);
+                destinationItem.MetadataLength.Should().BeGreaterThan(0);
+                
+                sourceItem.Metadata?.Keys.Should().BeEquivalentTo(destinationItem.Metadata?.Keys);
+            }
+        }
+        
     }
     
     public Task InitializeAsync()
