@@ -27,16 +27,17 @@ public sealed class FileEventLogBroker : IEventBroker, IAsyncDisposable
     // private readonly ConcurrentQueue<IEventConsumer> _consumers;
     // private readonly ConcurrentBag<EventLogTopic> _activeTopics;
 
-    private readonly ConcurrentDictionary<ActiveTopicKey, ActiveTopicInfo> _activeTopicInfos;
+    private readonly ConcurrentDictionary<TopiсName, ActiveTopicInfo> _activeTopicInfos;
     private readonly ConcurrentDictionary<PartitionKey, FileLogSegment> _activeSegments;
     // private readonly ConcurrentDictionary<ActiveTopicKey, ConcurrentQueue<ConsumerGroupReplica>> _consumerGroupReplicasInfo;
     
     
-    private readonly ConcurrentDictionary<ActiveTopicKey, ConcurrentDictionary<ConsumerGroupMemberKey, long>> _consumerGroups;
+    private readonly ConcurrentDictionary<TopiсName, ConcurrentDictionary<ConsumerGroupMemberKey, long>> _consumerGroups;
     
     private readonly ConcurrentDictionary<ConsumerGroupIdKey, ConcurrentQueue<PartitionId>> _consumerGroupsAssignment;
     private readonly ConcurrentDictionary<PartitionKey, long> _latestOffsets; // latest active segment 
     private readonly ConcurrentDictionary<string, int> _consumerGenerations;
+    private readonly ConcurrentDictionary<TopiсName, TopicInfo> _topicsMetadata;
     
     // private byte _partitionsCount = 0;
     // private int _tempPartition = 0;
@@ -78,6 +79,7 @@ public sealed class FileEventLogBroker : IEventBroker, IAsyncDisposable
         _consumerGroups = [];
         _consumerGroupsAssignment = [];
         _consumerGenerations = [];
+        _topicsMetadata = [];
         // var opt = new BoundedChannelOptions(1000) { SingleReader = false, SingleWriter = true, FullMode = BoundedChannelFullMode.Wait };
         // _mainChannel = Channel.CreateBounded<LogResponse<TEvent>>(opt);
 
@@ -105,7 +107,7 @@ public sealed class FileEventLogBroker : IEventBroker, IAsyncDisposable
             }
 
             var topicName = topic.Name;
-            var topicKey = new ActiveTopicKey(topicName);
+            var topicKey = new TopiсName(topicName);
 
             if (!_consumerGroups.TryGetValue(topicKey, out var consumerGroupReplicasResult))
             {
@@ -137,6 +139,10 @@ public sealed class FileEventLogBroker : IEventBroker, IAsyncDisposable
                         var queue = _consumerGroupsAssignment.GetOrAdd(consumerGroupId, _ => new ConcurrentQueue<PartitionId>());
                         queue.Enqueue(new PartitionId(partition));
                     }
+
+                    var partitionsInfo = Enumerable.Range(0, partitionsCount).Select(v => new PartitionInfo((byte)v, 0, 0)).ToArray();
+                    var topicInfo = new TopicInfo(topicName, 0, partitionsInfo);
+                    _topicsMetadata.AddOrUpdate(topicKey, topicInfo, (k,v)=> topicInfo);
                 }
             }
 
@@ -468,7 +474,7 @@ public sealed class FileEventLogBroker : IEventBroker, IAsyncDisposable
         }
 
         byte result;
-        var key = new ActiveTopicKey(request.TopicName);
+        var key = new TopiсName(request.TopicName);
 
         while (true)
         {
@@ -609,7 +615,7 @@ public sealed class FileEventLogBroker : IEventBroker, IAsyncDisposable
 
         foreach (var config in producerBrokerConfigs)
         {
-            var key = new ActiveTopicKey(config.TopicName);
+            var key = new TopiсName(config.TopicName);
             var val = new ActiveTopicInfo(config.Partitions, 0);
             _activeTopicInfos.AddOrUpdate(key, val, (k, v) => val);
         }
@@ -639,7 +645,7 @@ public sealed class FileEventLogBroker : IEventBroker, IAsyncDisposable
 
     public JoinGroupResponse JoinGroup(JoinGroupRequest request)
     {
-        var topicKey = new ActiveTopicKey(request.TopicName);
+        var topicKey = new TopiсName(request.TopicName);
         var memberId = request.MemberId.IsNotSet? ConsumerMemberId.CreateNew() : request.MemberId;
 
         if (request.GroupId.IsSet && _consumerGenerations.TryGetValue(request.GroupId, out var generation) && generation > request.ConsumerGeneration)
@@ -755,6 +761,42 @@ public sealed class FileEventLogBroker : IEventBroker, IAsyncDisposable
             _offsetsCts.Dispose();
         }
     }
+
+    public MetadataResponse GetMetadata(MetadataRequest request)
+    {
+        var results = new List<TopicInfo>(request.Topics.Length);
+        foreach (var topic in request.Topics)
+        {
+            var topicName = new TopiсName(topic);
+
+            while (true)
+            {
+                if (_topicsMetadata.TryGetValue(topicName,  out var topicInfo))
+                {
+                    results.Add(topicInfo);
+                    break;
+                }
+                
+                // new topic
+                topicInfo = new TopicInfo(topic, 0, [new(0, 0, 0)]);
+
+                if (_topicsMetadata.TryUpdate(topicName, topicInfo, null))
+                {
+                    continue;
+                }
+            }
+
+            
+            
+             
+            
+            
+            
+        }
+        
+        return new MetadataResponse(results.ToArray());
+    }
+    
 }
 
 public interface IFileLogCleaner : IEventLogLite
@@ -784,7 +826,7 @@ public sealed record ProducerInfo(byte Id, string TopicName);
 
 public readonly record struct PartitionKey(string TopicName, byte PartitionId);
 
-public readonly record struct ActiveTopicKey(string TopicName);
+public readonly record struct TopiсName(string Value);
 
 public readonly record struct ActiveTopicInfo(byte PartitionsCount, byte TempPartition)
 {

@@ -15,6 +15,17 @@ public interface IEventProducer<TEvent> : IEventProducer where TEvent : class
     
 }
 
+public interface IEventProducerV2 : IEventProducer
+{
+    ValueTask Publish<TKey, TData>(LogRequest<TKey, TData> request, CancellationToken cancellationToken) where TKey : class where TData : class;
+    ValueTask Publish<TEvent>(string key, TEvent @event, CancellationToken cancellationToken) where TEvent : class
+    {
+        var request = new LogRequest<string, TEvent>() { Key = key, Payload = @event, PartitionId = 0 };
+        return Publish<string, TEvent>(request, cancellationToken);
+    }
+}
+
+
 public interface IEventProducer : IEventLogLite
 {
     EventProducerSettings GetSettings();

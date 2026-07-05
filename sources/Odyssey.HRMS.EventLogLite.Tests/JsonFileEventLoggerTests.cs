@@ -407,7 +407,7 @@ public sealed class JsonFileEventLoggerTests : IAsyncLifetime, IClassFixture<Fil
             batchSources.Add(new LogMessageBatch<string, TestEvent>
             {
                 BaseOffset = batchBaseOffset,
-                BatchLength = 0, // TBD
+                BatchLength = 0, // TBS
                 Version = 0, // TBD
                 Checksum = 0, // TBD
                 Attributes = 0, // TBD

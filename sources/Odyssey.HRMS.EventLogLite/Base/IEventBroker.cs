@@ -1,4 +1,5 @@
 using Odyssey.HRMS.EventLogLite.Entities;
+using Odyssey.HRMS.EventLogLite.Producer;
 using System.Threading.Tasks.Sources;
 
 namespace Odyssey.HRMS.EventLogLite.Base;
@@ -22,6 +23,8 @@ public interface IEventProducerBroker
 {
     Task<EventLogResult> LogEvent<TEvent>(LogRequest<TEvent> request, CancellationToken cancellationToken = default) where TEvent : class;
     void Join(params ProducerBrokerConfig[] producerBrokerConfigs);
+    
+    MetadataResponse GetMetadata(MetadataRequest request);
 }
 
 

@@ -160,7 +160,7 @@ public sealed class FileSegmentFixture : IAsyncLifetime
     
     public void CutAndCloseSegment(string path, int length)
     {
-        // release mmf
+        // release mmf during testing, do not use in production
         GC.Collect();
         GC.WaitForPendingFinalizers();
         

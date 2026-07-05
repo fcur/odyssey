@@ -15,3 +15,16 @@ public sealed class EventBrokerSettings : EventLogBaseSettings
     public byte Partitions { get; set; } = 50;
     public int DegreeOfParallelism { get; set; } = 16;
 }
+
+
+public sealed class ProducerSettings
+{
+    public string KeySerializer { get; set; }
+    public string ValueSerializer { get; set; }
+    public string Acks { get; set; }
+    public string[] TargetTopics { get; set; }
+    
+    public int BatchSize { get; set; } = 10_000;
+    public int BatchInterval { get;set; } = 100;
+    
+}
