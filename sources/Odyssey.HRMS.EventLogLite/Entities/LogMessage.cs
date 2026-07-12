@@ -340,7 +340,7 @@ public record LogMessageBatchItem
     
     [JsonConverter(typeof(Int32JsonConverter))]
     public int MetadataLength { get; set; }
-    public Dictionary<string, object>? Metadata { get; set; }
+    public Dictionary<string, object>? Metadata { get; set; } // Dictionary<string, byte[]>
 }
 
 public sealed record LogMessageBatchItem<TKey, TData>: LogMessageBatchItem  where TKey : class where TData: class

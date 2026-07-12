@@ -764,37 +764,27 @@ public sealed class FileEventLogBroker : IEventBroker, IAsyncDisposable
 
     public MetadataResponse GetMetadata(MetadataRequest request)
     {
-        var results = new List<TopicInfo>(request.Topics.Length);
-        foreach (var topic in request.Topics)
+        var results = new TopicInfo[request.Topics.Length];
+        for (var i = 0; i < request.Topics.Length; i++)
         {
+            var topic = request.Topics[i];
             var topicName = new TopiсName(topic);
 
             while (true)
             {
-                if (_topicsMetadata.TryGetValue(topicName,  out var topicInfo))
-                {
-                    results.Add(topicInfo);
-                    break;
-                }
-                
-                // new topic
-                topicInfo = new TopicInfo(topic, 0, [new(0, 0, 0)]);
+                var topicInfo = new TopicInfo(topic, 0, [new PartitionInfo(0, 0, 0)]);
 
-                if (_topicsMetadata.TryUpdate(topicName, topicInfo, null))
+                if (!_topicsMetadata.TryAdd(topicName, topicInfo) && !_topicsMetadata.TryGetValue(topicName, out topicInfo))
                 {
                     continue;
                 }
-            }
 
-            
-            
-             
-            
-            
-            
+                results[i] = topicInfo;
+                break;
+            }
         }
-        
-        return new MetadataResponse(results.ToArray());
+
+        return new MetadataResponse(results);
     }
     
 }
