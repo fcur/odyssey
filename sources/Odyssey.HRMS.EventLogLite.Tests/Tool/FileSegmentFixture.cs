@@ -214,7 +214,7 @@ public sealed class FileSegmentFixture : IAsyncLifetime
             {
                 BaseOffset = baseOffset, BatchLength = batchLength, Version = version, Checksum = checksum, Attributes = attributes,
                 LastOffsetDelta = lastOffsetDelta, FirstTimestamp = firstTimestamp, MaxTimestamp = maxTimestamp,
-                ProducerId = producerId, ProducerEpoch = producerEpoch, BatchOrder =  batchOrder, ItemsCount =  itemCount
+                ProducerId = producerId, ProducerEpoch = producerEpoch, BaseSequence =  batchOrder, ItemsCount =  itemCount
             };
 
             return headerItem;

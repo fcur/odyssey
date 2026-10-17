@@ -290,7 +290,7 @@ public record LogMessageBatch
     public byte ProducerEpoch { get; set; }
     
     [JsonConverter(typeof(Int32JsonConverter))]
-    public int BatchOrder { get; set; }
+    public int BaseSequence { get; set; }
     
     /// <summary>
     /// Compaction might delete old records.

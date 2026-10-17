@@ -113,7 +113,8 @@ public static class LogSerializer
         return recordLength;
     }
 
-    public static int SerializeAsJsonRow<TKey, TData>(ArrayBufferWriter<byte> sharedBuffer, LogMessageBatch<TKey, TData> messageBatch) where TKey : class where TData : class
+    public static int SerializeAsJsonRow<TKey, TData>(ArrayBufferWriter<byte> sharedBuffer, LogMessageBatch<TKey, TData> messageBatch)
+        where TKey : class where TData : class
     {
         ArgumentNullException.ThrowIfNull(sharedBuffer);
         ArgumentNullException.ThrowIfNull(messageBatch);
@@ -121,10 +122,18 @@ public static class LogSerializer
         var startPosition = sharedBuffer.WrittenCount;
         var messageItemsLength = new MessageItemLength[messageBatch.ItemsCount];
         int batchLength,
-            recordLengthPosition, recordLengthStart, recordLength,
-            keyLengthPosition, keyLengthStart, keyLength,
-            payloadLengthPosition, payloadLengthStart, payloadLength,
-            metadataLengthPosition, metadataLengthStart, metadataLength;
+            recordLengthPosition,
+            recordLengthStart,
+            recordLength,
+            keyLengthPosition,
+            keyLengthStart,
+            keyLength,
+            payloadLengthPosition,
+            payloadLengthStart,
+            payloadLength,
+            metadataLengthPosition,
+            metadataLengthStart,
+            metadataLength;
 
         using (var writer = new Utf8JsonWriter(sharedBuffer, Utf8WriterOptions))
         {
@@ -139,7 +148,7 @@ public static class LogSerializer
             writer.WriteString(nameof(messageBatch.MaxTimestamp), messageBatch.MaxTimestamp.ToString(JsonInt64Format));
             writer.WriteString(nameof(messageBatch.ProducerId), messageBatch.ProducerId.ToString(JsonInt64Format));
             writer.WriteString(nameof(messageBatch.ProducerEpoch), messageBatch.ProducerEpoch.ToString(JsonByteFormat));
-            writer.WriteString(nameof(messageBatch.BatchOrder), messageBatch.BatchOrder.ToString(JsonInt32Format));
+            writer.WriteString(nameof(messageBatch.BaseSequence), messageBatch.BaseSequence.ToString(JsonInt32Format));
             writer.WriteString(nameof(messageBatch.ItemsCount), messageBatch.ItemsCount.ToString(JsonInt32Format));
 
             if (messageBatch.ItemsCount > 0)
@@ -149,10 +158,17 @@ public static class LogSerializer
 
                 for (var i = 0; i < messageBatch.ItemsCount; i++)
                 {
-                    recordLengthPosition = 0; recordLengthStart = 0;
-                    keyLengthPosition = 0; keyLengthStart = 0; keyLength = 0; 
-                    payloadLengthPosition = 0; payloadLengthStart = 0; payloadLength = 0;
-                    metadataLengthPosition = 0; metadataLengthStart = 0; metadataLength = 0;
+                    recordLengthPosition = 0;
+                    recordLengthStart = 0;
+                    keyLengthPosition = 0;
+                    keyLengthStart = 0;
+                    keyLength = 0;
+                    payloadLengthPosition = 0;
+                    payloadLengthStart = 0;
+                    payloadLength = 0;
+                    metadataLengthPosition = 0;
+                    metadataLengthStart = 0;
+                    metadataLength = 0;
 
                     var item = messageBatch.Items[i];
 
@@ -287,6 +303,19 @@ public static class LogSerializer
 
         var position = markerAction(sharedBuffer.WrittenSpan);
         return position <= 0 ? throw new InvalidOperationException("Marker not found") : position;
+    }
+
+    public static int TrySerialize<TKey, TData>(IBufferWriter<byte> buffer, LogMessageBatchItem<TKey, TData> messageBatch)
+        where TKey : class where TData : class
+    {
+        ArgumentNullException.ThrowIfNull(buffer);
+        ArgumentNullException.ThrowIfNull(messageBatch);
+
+        // Span<byte> span = writer.GetSpan(sizeHint: 128);
+        // int bytesWritten = SerializeBatchItem(model, span);
+        // writer.Advance(bytesWritten);
+
+        return -1;
     }
 }
 

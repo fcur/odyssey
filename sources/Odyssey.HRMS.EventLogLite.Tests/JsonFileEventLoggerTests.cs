@@ -416,7 +416,7 @@ public sealed class JsonFileEventLoggerTests : IAsyncLifetime, IClassFixture<Fil
                 MaxTimestamp = items.Max(v=>v.TimestampDelta) + firstTimestamp,
                 ProducerId = 0, // TBD
                 ProducerEpoch = 0, // TBD
-                BatchOrder = 0, // TBD
+                BaseSequence = i, // TBD
                 ItemsCount = items.Length,
                 Items = items
             });

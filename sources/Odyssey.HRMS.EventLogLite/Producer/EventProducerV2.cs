@@ -1,12 +1,206 @@
 using Microsoft.Extensions.Logging;
 using Odyssey.HRMS.EventLogLite.Base;
 using Odyssey.HRMS.EventLogLite.Entities;
+using Odyssey.HRMS.EventLogLite.Serializer;
+using System.Buffers;
 using System.Collections.Concurrent;
-using System.Diagnostics.CodeAnalysis;
-using System.Runtime.Serialization;
+using System.Runtime.CompilerServices;
 using System.Text;
 
 namespace Odyssey.HRMS.EventLogLite.Producer;
+
+
+public sealed class EventLogKeyRaw: IDisposable
+{
+    private byte[]? _rentedArray;
+    public ReadOnlyMemory<byte> Memory { get; private set; } = ReadOnlyMemory<byte>.Empty;
+    
+    public byte[] RentMemory(int byteCount)
+    {
+        if (_rentedArray != null)
+        {
+            throw new InvalidOperationException("Buffer is already rent");
+        }
+
+        if (byteCount < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(byteCount), "ByteCount must be positive");
+        }
+
+        _rentedArray = ArrayPool<byte>.Shared.Rent(byteCount);
+        return _rentedArray;
+    }
+
+    public void Commit(int byteCount)
+    {
+        if (_rentedArray == null)
+        {
+            throw new InvalidOperationException("Cannot commit a unset array");
+        }
+        Memory = new ReadOnlyMemory<byte>(_rentedArray, 0, byteCount);
+    }
+    
+    public void Dispose()
+    {
+        var array = Interlocked.Exchange(ref _rentedArray, null);
+        if (array != null)
+        {
+            ArrayPool<byte>.Shared.Return(array);
+        }
+    }
+}
+
+public sealed class Partitioner
+{
+    private const uint PartitionIdSeed = 42;
+    public bool TryExtractPartition(byte? partitionId, out byte result)
+    {
+        if (!partitionId.HasValue)
+        {
+            result = 0;
+            return false;
+        }
+
+        result =  partitionId.Value;
+        return true;
+    }
+    
+    public bool TryCalculatePartition(ReadOnlyMemory<byte> serializedKey, int partitionsCount, out byte result)
+    {
+        if (serializedKey.Length == 0)
+        {
+            result = 0;
+            return false;
+        }
+        
+        // TODO: test MurmurHash3 X 
+        // partition = murmur2.hash(key) % numPartitions
+        var hash = MurmurHash2.Hash32(serializedKey, PartitionIdSeed);
+        result = Convert.ToByte(hash % partitionsCount);
+        return true;
+    }
+}
+
+public readonly struct EventLogUtf8StringKeySerializer : IEventLogKeySerializer
+{
+    private static readonly Type KeyStringType = typeof(string);
+    
+    public EventLogKeyRaw SerializeKey<TKey>(TKey key)
+    {
+        ArgumentNullException.ThrowIfNull(key);
+        
+        if (typeof(TKey) != KeyStringType)
+        {
+            throw new ArgumentException("TKey must be of type string");
+        }
+
+        var result = new EventLogKeyRaw();
+        var keyString = Unsafe.As<TKey, string>(ref key);
+        if (string.IsNullOrEmpty(keyString))
+        {
+            return result;
+        }
+        
+        var keyLength = Encoding.UTF8.GetByteCount(keyString);
+        var rentedArray = result.RentMemory(keyLength);
+        
+        Encoding.UTF8.GetBytes(keyString.AsSpan(), rentedArray.AsSpan(0, keyLength));
+        
+        result.Commit(keyLength);
+        
+        return result;
+    }
+}
+
+
+public sealed class EventLogSerializerBuilder
+{
+    private IEventLogKeySerializer _keySerializer = null!;
+    private IEventLogMessageSerializer _messageSerializer = null!;
+    
+
+    public EventLogSerializerBuilder WithMessageSerializer(IEventLogMessageSerializer serializer)
+    {
+        ArgumentNullException.ThrowIfNull(serializer);
+        _messageSerializer = serializer;
+        return this;
+    }
+
+    public EventLogSerializerBuilder WithKeySerializer(IEventLogKeySerializer serializer)
+    {
+        ArgumentNullException.ThrowIfNull(serializer);
+        _keySerializer = serializer;
+        return this;
+    }
+    
+    public IEventLogSerializer Build()
+    {
+        if (_keySerializer is null || _messageSerializer is null)
+        {
+            throw new InvalidOperationException();
+        }
+
+        return new CompositeEventLogSerializer(_keySerializer, _messageSerializer);
+    }
+}
+
+public sealed class CompositeEventLogSerializer: IEventLogSerializer
+{
+    private readonly IEventLogKeySerializer _keySerializer;
+    private readonly IEventLogMessageSerializer _messageSerializer;
+
+    public CompositeEventLogSerializer(IEventLogKeySerializer keySerializer, IEventLogMessageSerializer messageSerializer)
+    {
+        _keySerializer = keySerializer;
+        _messageSerializer = messageSerializer;
+    }
+
+    public EventLogKeyRaw SerializeKey<TKey>(TKey key)
+    {
+        return _keySerializer.SerializeKey(key);
+    }
+
+    public int TrySerializeBatchItem<TData>(LogMessageBatchItem<byte[], TData> item, BatchWriter writer) where TData : class
+    {
+        return _messageSerializer.TrySerializeBatchItem(item, writer);
+    }
+
+    public int TrySerializeBatchInfo<TData>(LogMessageBatch<byte[], TData> item, BatchWriter writer) where TData : class
+    {
+        return _messageSerializer.TrySerializeBatchInfo(item, writer);
+    }
+}
+
+
+public interface IEventLogSerializer : IEventLogKeySerializer, IEventLogMessageSerializer
+{
+    
+}
+
+public interface IEventLogKeySerializer
+{
+    EventLogKeyRaw SerializeKey<TKey> (TKey key);
+}
+
+public interface IEventLogMessageSerializer
+{
+    // message key is already serialized into array of bytes
+    int TrySerializeBatchItem<TData>(LogMessageBatchItem<byte[], TData> item, BatchWriter writer) where TData : class;
+    int TrySerializeBatchInfo<TData>(LogMessageBatch<byte[], TData> item, BatchWriter writer) where TData : class;
+}
+
+public readonly struct JsonEventLogMessageSerializer: IEventLogMessageSerializer
+{
+    public int TrySerializeBatchItem<TData>(LogMessageBatchItem<byte[], TData> item, BatchWriter writer) where TData : class
+    {
+        return LogSerializer.TrySerialize(writer, item);
+    }
+
+    public int TrySerializeBatchInfo<TData>(LogMessageBatch<byte[], TData> item, BatchWriter writer) where TData : class
+    {
+        throw new NotImplementedException();
+    }
+}
 
 public sealed class EventProducerV2 : IEventProducerV2, IDisposable
 {
@@ -15,11 +209,20 @@ public sealed class EventProducerV2 : IEventProducerV2, IDisposable
     private readonly ProducerSettings _settings;
     private readonly ConcurrentDictionary<TopicName, TopicInfo> _topics = [];
 
-    public EventProducerV2(ILogger<EventProducerV2> logger, IEventProducerBroker broker, ProducerSettings settings)
+    private readonly EventMemoryPool _memoryPool;
+    private readonly EventBuffer  _buffer;
+    private readonly IEventLogSerializer _serializer;
+    private readonly Partitioner _partitioner;
+    
+    public EventProducerV2(ILogger<EventProducerV2> logger, IEventProducerBroker broker, IEventLogSerializer serializer, ProducerSettings settings, Partitioner partitioner)
     {
         _logger = logger;
         _broker = broker;
         _settings = settings;
+        _memoryPool = new EventMemoryPool();
+        _buffer =  new EventBuffer(_memoryPool);
+        _serializer = serializer;
+        _partitioner = partitioner;
     }
 
     public void Dispose()
@@ -37,7 +240,7 @@ public sealed class EventProducerV2 : IEventProducerV2, IDisposable
             _topics.AddOrUpdate(key,info, (k, v) => info);
         }
         
-        throw new NotImplementedException();
+        return Task.CompletedTask;
     }
 
     public Task Stop(CancellationToken cancellationToken = default)
@@ -50,10 +253,14 @@ public sealed class EventProducerV2 : IEventProducerV2, IDisposable
         throw new NotImplementedException();
     }
 
-    public ValueTask Publish<TKey, TData>(LogRequest<TKey, TData> request, CancellationToken cancellationToken) where TKey : class where TData : class
+    public ValueTask Publish<TKey, TData>(LogRequest<TKey, TData> request, CancellationToken cancellationToken) where TKey : class where TData : BaseBatchItem
     {
         var topicName = request.TopicName;
-        var serializedKey = request.Key != null ? SerializeKey(request.Key) : null;
+        
+        using var ssKey = _serializer.SerializeKey(request.Key);
+        var serializedKey = ssKey.Memory;
+        
+        // var serializedKey = request.Key != null ? SerializeKey(request.Key) : null;
         var key = new TopicName(request.TopicName);
         
         if (!_topics.TryGetValue(key, out var topicInfo))
@@ -61,19 +268,20 @@ public sealed class EventProducerV2 : IEventProducerV2, IDisposable
             throw new ArgumentException($"No active topic '{request.TopicName}' found");
         }
         
-        var partitionId = TryGetPartition(request.PartitionId, out var idResult) switch
+        var partitionId = _partitioner.TryExtractPartition(request.PartitionId, out var idResult) switch
         {
             true => idResult,
-            false when TryGetPartition(serializedKey, topicInfo.PartitionsCount, out var keyResult) => keyResult,
-            _ => GetPartition(key, topicInfo)
+            false when _partitioner.TryCalculatePartition(serializedKey, topicInfo.PartitionsCount, out var keyResult) => keyResult,
+            _ => GetNextPartition(key, topicInfo) // TODO: Sticky Partitioning
         };
-        var accumulatorKey = new RecordAccumulatorKey(topicName, partitionId);
 
-
+        _buffer.Append(topicName, partitionId, serializedKey, request.Payload, request.Metadata, _serializer);
+        
+        
         throw new NotImplementedException();
     }
 
-    private const uint PartitionIdSeed = 42;
+    // private const uint PartitionIdSeed = 42;
 
     // public static byte GetPartition<TEvent>(LogRequest<TEvent> request, ActiveTopicInfo? topicInfo = null) where TEvent : class
     // {
@@ -115,66 +323,17 @@ public sealed class EventProducerV2 : IEventProducerV2, IDisposable
     //     return result;
     // }
 
-    private byte[] SerializeKey<TKey>(TKey key)
-    {
-        const string stringSerializerType = "StringSerializer";
-        return key switch
-        {
-            string keyStr when _settings.KeySerializer == stringSerializerType => Encoding.UTF8.GetBytes(keyStr),
-            _ => throw new SerializationException()
-        };
-    }
+    // private byte[] SerializeKey<TKey>(TKey key)
+    // {
+    //     const string stringSerializerType = "StringSerializer";
+    //     return key switch
+    //     {
+    //         string keyStr when _settings.KeySerializer == stringSerializerType => Encoding.UTF8.GetBytes(keyStr),
+    //         _ => throw new SerializationException()
+    //     };
+    // }
     
-    private bool TrySerializeKey<TKey>(TKey key, [NotNullWhen(true)] out byte[]? result)
-    {
-        const string stringSerializerType = "StringSerializer";
-
-        result = key switch
-        {
-            string keyStr when _settings.KeySerializer==stringSerializerType => Encoding.UTF8.GetBytes(keyStr),
-            _ => null
-        };
-
-        return result is not null;
-    }
-
-
-    private byte CalculatePartitionId(byte partitionsCount, byte[] serializedKey)
-    {
-        var hash = MurmurHash2.Hash32(serializedKey, PartitionIdSeed);
-        var result = Convert.ToByte(hash % partitionsCount);
-        return result;
-    }
-
-
-    private bool TryGetPartition(byte? partitionId, out byte result)
-    {
-        if (!partitionId.HasValue)
-        {
-            result = 0;
-            return false;
-        }
-
-        result =  partitionId.Value;
-        return true;
-    }
-
-    private bool TryGetPartition(byte[]? serializedKey, int partitionsCount, out byte result)
-    {
-        if (serializedKey is null || serializedKey.Length == 0)
-        {
-            result = 0;
-            return false;
-        }
-        
-        // TODO: test MurmurHash3 X 
-        // partition = murmur2.hash(key) % numPartitions
-        var hash = MurmurHash2.Hash32(serializedKey, PartitionIdSeed);
-        result = Convert.ToByte(hash % partitionsCount);
-        return true;
-    }
-
-    private byte GetPartition(TopicName key, TopicInfo topicInfo)
+    private byte GetNextPartition(TopicName key, TopicInfo topicInfo)
     {
         byte result;
         while (true)
@@ -232,7 +391,31 @@ public sealed class EventProducerV2 : IEventProducerV2, IDisposable
     //     }
     //
     //     return result;
-    // }
+    // }ʼ
+
+    private async Task StartSeeding(CancellationToken ct)
+    {
+        await foreach (var batch in _buffer.ReadyBatches.ReadAllAsync(ct))
+        {
+            if (batch.ItemsCount==0)
+            {
+                continue;
+            }
+
+            try
+            {
+                var writtenData = batch.GetWrittenData();
+                // save batch to file
+            }
+            finally
+            { 
+                // release memory 
+                // _memoryPool.ReturnSlice(writer.GetBuffer());
+
+            }
+            
+        }
+    }
 
     private readonly record struct TopicName(string Value);
 
@@ -246,7 +429,7 @@ public sealed class EventProducerV2 : IEventProducerV2, IDisposable
     
 }
 
-public readonly record struct RecordAccumulatorKey(string Topic, int Partition);
+public readonly record struct EventBatchKey(string Topic, int Partition);
 
 public sealed record MetadataRequest(string[] Topics);
 
@@ -267,12 +450,3 @@ public sealed record ProduceTopicRecord(int BatchOffset, ProduceTopicItem[] Reco
 public sealed record ProduceTopicItem(int KeyLength, byte[] Key, int ValueLength, byte[] Value, ProduceItemHeader[]? Headers );
 
 public sealed record ProduceItemHeader(string Key, byte[] Value);
-
-public sealed class RecordAccumulator : IAsyncDisposable
-{
-    // private readonly ConcurrentDictionary<RecordAccumulatorKey, >
-    public async ValueTask DisposeAsync()
-    {
-        // TODO release managed resources here
-    }
-}
