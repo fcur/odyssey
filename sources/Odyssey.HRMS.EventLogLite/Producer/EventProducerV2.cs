@@ -169,6 +169,11 @@ public sealed class CompositeEventLogSerializer: IEventLogSerializer
     {
         return _messageSerializer.TrySerializeBatchInfo(item, writer);
     }
+
+    public int TrySerialize<TData>(LogMessageBatchItem item, ReadOnlyMemory<byte> rawKey, TData payload, BatchWriter writer) where TData : class
+    {
+        return _messageSerializer.TrySerialize(item, rawKey, payload, writer);
+    }
 }
 
 
@@ -187,16 +192,23 @@ public interface IEventLogMessageSerializer
     // message key is already serialized into array of bytes
     int TrySerializeBatchItem<TData>(LogMessageBatchItem<byte[], TData> item, BatchWriter writer) where TData : class;
     int TrySerializeBatchInfo<TData>(LogMessageBatch<byte[], TData> item, BatchWriter writer) where TData : class;
+    int TrySerialize<TData>(LogMessageBatchItem item, ReadOnlyMemory<byte> rawKey, TData payload, BatchWriter writer) where TData : class;
+    
 }
 
-public readonly struct JsonEventLogMessageSerializer: IEventLogMessageSerializer
+public readonly struct JsonRowEventLogMessageSerializer: IEventLogMessageSerializer
 {
     public int TrySerializeBatchItem<TData>(LogMessageBatchItem<byte[], TData> item, BatchWriter writer) where TData : class
     {
-        return LogSerializer.TrySerialize(writer, item);
+        return LogSerializer.TrySerializeJsonRow(writer, item);
     }
 
     public int TrySerializeBatchInfo<TData>(LogMessageBatch<byte[], TData> item, BatchWriter writer) where TData : class
+    {
+        throw new NotImplementedException();
+    }
+
+    public int TrySerialize<TData>(LogMessageBatchItem item, ReadOnlyMemory<byte> rawKey, TData payload, BatchWriter writer) where TData : class
     {
         throw new NotImplementedException();
     }
@@ -257,8 +269,8 @@ public sealed class EventProducerV2 : IEventProducerV2, IDisposable
     {
         var topicName = request.TopicName;
         
-        using var ssKey = _serializer.SerializeKey(request.Key);
-        var serializedKey = ssKey.Memory;
+        using var rawKey = _serializer.SerializeKey(request.Key);
+        var serializedKey = rawKey.Memory;
         
         // var serializedKey = request.Key != null ? SerializeKey(request.Key) : null;
         var key = new TopicName(request.TopicName);

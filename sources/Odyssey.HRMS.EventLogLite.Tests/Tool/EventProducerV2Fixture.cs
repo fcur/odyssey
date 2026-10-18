@@ -55,7 +55,7 @@ public sealed class EventProducerV2Fixture : IAsyncLifetime
         };
         IEventLogMessageSerializer payloadSerializer = producerSettings.ValueSerializer switch
         {
-            ValueJsonSerializerType => new JsonEventLogMessageSerializer(),
+            ValueJsonSerializerType => new JsonRowEventLogMessageSerializer(),
             _ => throw new NotImplementedException()
         };
         

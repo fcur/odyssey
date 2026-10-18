@@ -343,7 +343,7 @@ public record LogMessageBatchItem
     public Dictionary<string, object>? Metadata { get; set; } // Dictionary<string, byte[]>
 }
 
-public sealed record LogMessageBatchItem<TKey, TData>: LogMessageBatchItem  where TKey : class where TData: class
+public sealed record LogMessageBatchItem<TKey, TData>: LogMessageBatchItem where TKey : class where TData: class
 {
     /// <summary>
     /// Key data.

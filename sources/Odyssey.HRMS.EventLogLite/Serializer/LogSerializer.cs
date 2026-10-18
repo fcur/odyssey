@@ -305,7 +305,7 @@ public static class LogSerializer
         return position <= 0 ? throw new InvalidOperationException("Marker not found") : position;
     }
 
-    public static int TrySerialize<TKey, TData>(IBufferWriter<byte> buffer, LogMessageBatchItem<TKey, TData> messageBatch)
+    public static int TrySerializeJsonRow<TKey, TData>(IBufferWriter<byte> buffer, LogMessageBatchItem<TKey, TData> messageBatch)
         where TKey : class where TData : class
     {
         ArgumentNullException.ThrowIfNull(buffer);

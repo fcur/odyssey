@@ -177,15 +177,19 @@ public sealed class PartitionBatch
     
     public Lock.Scope EnterLock() => _lock.EnterScope();
     public ReadOnlyMemory<byte>? GetWrittenData() => _items?.GetWrittenData();
-
     
     public void Update<TKey, TData>(LogMessageBatchItem<TKey, TData> data, long appendTime, int writtenCount) where TKey : class where TData: class
     {
-        LastOffsetDelta = data.OffsetDelta;
+        Update(data.OffsetDelta, appendTime, writtenCount);
+    }
+
+    public void Update(long offsetDelta, long appendTime, int writtenCount)
+    {
+        LastOffsetDelta = offsetDelta;
         ItemsCount++;
         MaxTimestamp = Math.Max(MaxTimestamp, appendTime);
     }
-
+    
     public BatchWriter GetOrAddWriter(Func<BatchWriter> writerFactory)
     {
         if (_items != null)
@@ -239,25 +243,23 @@ public sealed class EventBuffer: IAsyncDisposable
 
             var isNewBatch = startingWrittenCount == 0;
 
-            var batchItem = new LogMessageBatchItem<byte[], TData>
+            var batchItem = new LogMessageBatchItem
             {
                 RecordLength = 0, // TBS
                 Attributes = 0, // TBD
                 OffsetDelta = partitionBatch.LastOffsetDelta + 1,
                 TimestampDelta = partitionBatch.BaseTimestamp - appendTime,
                 KeyLength = serializedKey.Length,
-                Key = serializedKey.Span,
                 PayloadLength = 0, // TBS
-                Payload = data,
                 MetadataLength = 0, // TBS
                 Metadata = metadata
             };
 
             // 2. Serialize directly to the batch buffer
-            var bytesWritten = messageSerializer.TrySerializeBatchItem(batchItem, writer);
+            var bytesWritten = messageSerializer.TrySerialize(batchItem, serializedKey, data, writer);
             if (bytesWritten > 0)
             {
-                partitionBatch.Update(batchItem, appendTime, bytesWritten);
+                partitionBatch.Update(batchItem.OffsetDelta, appendTime, bytesWritten);
             }
             // 3. If it doesn't fit current buffer, we send the existing data
             else if (startingWrittenCount > 0)
@@ -271,10 +273,10 @@ public sealed class EventBuffer: IAsyncDisposable
 
             writer = WriterFactory();
             partitionBatch.Reset(appendTime, baseSequence + 1, writer);
-            bytesWritten = messageSerializer.TrySerializeBatchItem(batchItem, writer);
+            bytesWritten = messageSerializer.TrySerialize(batchItem, serializedKey, data, writer);;
             if (bytesWritten > 0)
             {
-                partitionBatch.Update(batchItem, appendTime, bytesWritten);
+                partitionBatch.Update(batchItem.OffsetDelta, appendTime, bytesWritten);
             }
             // 5. If it doesn't fit a new batch buffer again then throw an exception
             else
