@@ -1,4 +1,5 @@
 using Odyssey.HRMS.EventLogLite.Entities;
+using Odyssey.HRMS.EventLogLite.Serializer;
 using System.Buffers;
 using System.Collections.Concurrent;
 using System.Threading.Channels;

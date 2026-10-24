@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging;
 using Moq;
 using Odyssey.HRMS.EventLogLite.Base;
 using Odyssey.HRMS.EventLogLite.Producer;
+using Odyssey.HRMS.EventLogLite.Serializer;
 using Odyssey.HRMS.EventLogLite.Tests.Logging;
 using System.Diagnostics.CodeAnalysis;
 using Xunit.Abstractions;
