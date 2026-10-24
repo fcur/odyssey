@@ -10,6 +10,12 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Odyssey.HRMS.Benchmark.Test
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Odyssey.HRMS.MonoApp", "Odyssey.HRMS.MonoApp\Odyssey.HRMS.MonoApp.csproj", "{3092B79C-C288-4E8B-B894-90C6DA5A2CEB}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Odyssey.HRMS.Dal.SQLite", "Odyssey.HRMS.Dal.SQLite\Odyssey.HRMS.Dal.SQLite.csproj", "{8B42944C-CD0B-4D7F-8113-BE911E3C5F75}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Odyssey.HRMS.EventLogLite", "Odyssey.HRMS.EventLogLite\Odyssey.HRMS.EventLogLite.csproj", "{8F40A45E-FC60-425C-B5ED-8649877AD1E4}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Odyssey.HRMS.EventLogLite.Tests", "Odyssey.HRMS.EventLogLite.Tests\Odyssey.HRMS.EventLogLite.Tests.csproj", "{9109BCE5-1523-4713-9E6B-104FC6750013}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -36,5 +42,17 @@ Global
 		{3092B79C-C288-4E8B-B894-90C6DA5A2CEB}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{3092B79C-C288-4E8B-B894-90C6DA5A2CEB}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{3092B79C-C288-4E8B-B894-90C6DA5A2CEB}.Release|Any CPU.Build.0 = Release|Any CPU
+		{8B42944C-CD0B-4D7F-8113-BE911E3C5F75}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8B42944C-CD0B-4D7F-8113-BE911E3C5F75}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8B42944C-CD0B-4D7F-8113-BE911E3C5F75}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{8B42944C-CD0B-4D7F-8113-BE911E3C5F75}.Release|Any CPU.Build.0 = Release|Any CPU
+		{8F40A45E-FC60-425C-B5ED-8649877AD1E4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8F40A45E-FC60-425C-B5ED-8649877AD1E4}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8F40A45E-FC60-425C-B5ED-8649877AD1E4}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{8F40A45E-FC60-425C-B5ED-8649877AD1E4}.Release|Any CPU.Build.0 = Release|Any CPU
+		{9109BCE5-1523-4713-9E6B-104FC6750013}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9109BCE5-1523-4713-9E6B-104FC6750013}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9109BCE5-1523-4713-9E6B-104FC6750013}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9109BCE5-1523-4713-9E6B-104FC6750013}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

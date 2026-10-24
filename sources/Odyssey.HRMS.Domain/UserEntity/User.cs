@@ -3,7 +3,7 @@ using Odyssey.HRMS.Domain.Base;
 namespace Odyssey.HRMS.Domain.UserEntity;
 
 public sealed record User(UserId Id, UserName Name, Email Email,DateTimeOffset ChangedAt, DomainVersion Version, ulong RowVersion)
- : DomainEntity<UserId>(Id, ChangedAt, Version)
+ : DomainEntity<UserId, UserChangedEvent>(Id, ChangedAt, Version)
 {
     public static User Create(UserId id, UserName name, Email email)
     {
@@ -14,3 +14,7 @@ public sealed record User(UserId Id, UserName Name, Email Email,DateTimeOffset C
         return new User(id, name, email, changedAt, version, rowVersion);
     }
 }
+
+
+public sealed record UserChangedEvent(UserId Id, DateTimeOffset CreatedAt, DomainVersion Version)
+    : DomainEvent(CreatedAt, Version);

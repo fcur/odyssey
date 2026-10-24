@@ -33,7 +33,7 @@ public sealed class JourneyStory : AggregateRoot<JourneyStoryId, JourneyStorySta
             // TODO: handle timeout events like failure results
             FailJourneyActivityEventType => HandleFailureResultsAndMoveNext(storyEvent, context, atTime),
             ExitJourneyActivityEventType => HandleExitAndCompleteStory(storyEvent, context, atTime),
-            _ => JourneyStoryError.UnsupportedEvent(storyEvent.Name.Value, context.Type.Name)
+            _ => JourneyStoryError.UnsupportedEvent(storyEvent.Name.Value, context.Type.Value)
         };
 
         return maybeError;

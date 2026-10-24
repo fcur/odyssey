@@ -2,27 +2,27 @@ using System.Diagnostics.CodeAnalysis;
 
 namespace Odyssey.HRMS.Domain.Base;
 
-public abstract record DomainEntity<TId>()
+public abstract record DomainEntity<TId, TDomainEvent>()
 {
-    private readonly Queue<DomainEvent> _domainEvents;
+    private readonly Queue<TDomainEvent> _domainEvents;
     public TId Id { get; init; }
-    protected DateTimeOffset ChangedAt { get; set; }
-    protected DomainVersion Version { get; set; }
+    public DateTimeOffset ChangedAt { get; set; }
+    public DomainVersion Version { get; set; }
 
     protected DomainEntity(TId id, DateTimeOffset changedAt, DomainVersion version) : this()
     {
         Id = id;
         ChangedAt = changedAt;
         Version = version;
-        _domainEvents = new Queue<DomainEvent>();
+        _domainEvents = new Queue<TDomainEvent>();
     }
 
-    protected void EnqueueEvent(DomainEvent domainEvent)
+    protected void EnqueueEvent(TDomainEvent domainEvent)
     {
         _domainEvents.Enqueue(domainEvent);
     }
 
-    protected bool TryDequeueEvent([MaybeNullWhen(false)] out DomainEvent domainEvent)
+    public bool TryDequeueEvent([MaybeNullWhen(false)] out TDomainEvent domainEvent)
     {
         return _domainEvents.TryDequeue(out domainEvent);
     }

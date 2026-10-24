@@ -14,7 +14,7 @@ public sealed record Employee(
     DateTimeOffset ChangedAt,
     DomainVersion Version,
     ulong RowVersion)
-    : DomainEntity<EmployeeId>(Id, ChangedAt, Version)
+    : DomainEntity<EmployeeId, EmployeeChangedEvent>(Id, ChangedAt, Version)
 {
     public static Result<Employee> Create(
         EmployeeId id,

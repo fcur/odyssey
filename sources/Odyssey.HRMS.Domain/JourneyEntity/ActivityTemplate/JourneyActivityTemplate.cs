@@ -10,7 +10,7 @@ public record JourneyActivityTemplate(
     DateTimeOffset ChangedAt,
     DomainVersion Version,
     ulong RowVersion)
-    : DomainEntity<JourneyActivityName>(Name, ChangedAt, Version)
+    : DomainEntity<JourneyActivityName, JourneyActivityTemplateChangedEvent>(Name, ChangedAt, Version)
 {
     
     public static Result<JourneyActivityTemplate, JourneyActivityTemplateError> Create(
